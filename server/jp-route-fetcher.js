@@ -191,8 +191,9 @@ export async function fetchJpRoutes(quayCoordCache) {
       points = decodePolyline(s.pointsOnLinkEncoded);
     }
     if (points.length < 2) {
-      for (const qid of s.quayIds) {
-        const coords = quayCoordCache.get(qid);
+      for (const q of s.quayIds || []) {
+        const id = typeof q === 'object' ? q?.id : q;
+        const coords = id ? quayCoordCache.get(id) : null;
         if (coords) points.push(coords);
       }
     }

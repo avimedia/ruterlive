@@ -113,15 +113,59 @@ initLayers((visibleModes) => {
 
 updateVehicleCount(null, null, true);
 
-// Hent cached rutekart – retry ved 502/503 (cold start)
-const ROUTE_SHAPE_RETRIES = 4;
-const ROUTE_SHAPE_DELAYS = [2000, 4000, 8000, 12000];
+const POLL_MS = 30000;
+const RETRY_DELAYS = [2000, 4000, 8000, 12000];
+
+function shapeKey(s) {
+  return `${(s.mode || '').toLowerCase()}|${(s.line || '').toString()}|${(s.from || '')}|${(s.to || '')}`;
+}
+
+function mergeRouteShapes(newShapes, existingShapes) {
+  const byKey = new Map();
+  for (const s of existingShapes ?? []) byKey.set(shapeKey(s), s);
+  for (const s of newShapes ?? []) {
+    const k = shapeKey(s);
+    const existing = byKey.get(k);
+    const ptsNew = s.points?.length ?? 0;
+    const ptsOld = existing?.points?.length ?? 0;
+    if (!existing || ptsNew >= ptsOld) byKey.set(k, s);
+  }
+  return [...byKey.values()];
+}
+
+function applyInitialData(data) {
+  const vehicles = Array.isArray(data?.vehicles) ? data.vehicles : [];
+  const shapes = Array.isArray(data?.routeShapes) ? data.routeShapes : [];
+  graphqlVehicles = vehicles;
+  etVehicles = [];
+  routeShapes = mergeRouteShapes(shapes, routeShapes);
+  etLoaded = true;
+  mergeAndUpdate();
+}
+
+async function fetchInitialData(attempt = 0) {
+  try {
+    const res = await fetch('/api/initial-data');
+    if ((res.status === 502 || res.status === 503) && attempt < RETRY_DELAYS.length) {
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
+      return fetchInitialData(attempt + 1);
+    }
+    if (res.ok) {
+      const data = await res.json();
+      applyInitialData(data);
+      return true;
+    }
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('[RuterLive] initial-data:', err.message);
+  }
+  return false;
+}
 
 function loadRouteShapes(attempt = 0) {
   fetch('/api/route-shapes')
     .then((r) => {
-      if ((r.status === 502 || r.status === 503) && attempt < ROUTE_SHAPE_RETRIES) {
-        setTimeout(() => loadRouteShapes(attempt + 1), ROUTE_SHAPE_DELAYS[attempt] ?? 15000);
+      if ((r.status === 502 || r.status === 503) && attempt < RETRY_DELAYS.length) {
+        setTimeout(() => loadRouteShapes(attempt + 1), RETRY_DELAYS[attempt]);
         throw { _retryScheduled: true };
       }
       return r.ok ? r.json() : [];
@@ -135,74 +179,47 @@ function loadRouteShapes(attempt = 0) {
     })
     .catch((err) => {
       if (err?._retryScheduled) return;
-      if (attempt < ROUTE_SHAPE_RETRIES) {
-        setTimeout(() => loadRouteShapes(attempt + 1), ROUTE_SHAPE_DELAYS[attempt] ?? 15000);
+      if (attempt < RETRY_DELAYS.length) {
+        setTimeout(() => loadRouteShapes(attempt + 1), RETRY_DELAYS[attempt]);
       } else {
         etLoaded = true;
         mergeAndUpdate();
       }
     });
 }
-loadRouteShapes();
-
-connectVehicles(
-  null,
-  (vehicles) => {
-    if (Array.isArray(vehicles)) {
-      graphqlVehicles = vehicles;
-      mergeAndUpdate();
+fetchInitialData().then((ok) => {
+  if (ok) {
+    setInterval(() => fetchInitialData(), POLL_MS);
+  } else {
+    loadRouteShapes();
+    connectVehicles(null, (vehicles) => {
+      if (Array.isArray(vehicles)) {
+        graphqlVehicles = vehicles;
+        mergeAndUpdate();
+      }
+    }, (error) => {
+      const merged = graphqlVehicles.length
+        ? [...graphqlVehicles, ...etVehicles.filter((v) => !graphqlVehicles.some((g) => g.vehicleId === v.vehicleId))]
+        : etVehicles;
+      updateVehicleCount(getVehicleCounts(merged), error, !etLoaded);
+    });
+    async function pollEt() {
+      try {
+        const result = await fetchEstimatedVehicles();
+        const vehicles = result.vehicles ?? result;
+        const etShapes = result.routeShapes ?? [];
+        if (Array.isArray(vehicles)) etVehicles = vehicles;
+        if (Array.isArray(etShapes) && etShapes.length > 0) {
+          routeShapes = mergeRouteShapes(etShapes, routeShapes);
+        }
+        etLoaded = true;
+        mergeAndUpdate();
+      } catch (_) {
+        etLoaded = true;
+        mergeAndUpdate();
+      }
     }
-  },
-  (error) => {
-    const merged = graphqlVehicles.length
-      ? [...graphqlVehicles, ...etVehicles.filter((v) => !graphqlVehicles.some((g) => g.vehicleId === v.vehicleId))]
-      : etVehicles;
-    updateVehicleCount(getVehicleCounts(merged), error, !etLoaded);
+    pollEt();
+    setInterval(pollEt, POLL_MS);
   }
-);
-
-const ET_MODES = new Set(['bus', 'tram', 'metro', 'water']);
-const JP_MODES = new Set(['rail', 'flytog', 'flybuss']);
-
-function shapeKey(s) {
-  return `${(s.mode || '').toLowerCase()}|${(s.line || '').toString()}|${(s.from || '')}|${(s.to || '')}`;
-}
-
-/** Union av shapes – beholder alle ruter. Ved duplikat: behold den med flest punkter (mer komplett). */
-function mergeRouteShapes(newShapes, existingShapes) {
-  const byKey = new Map();
-  for (const s of existingShapes ?? []) {
-    byKey.set(shapeKey(s), s);
-  }
-  for (const s of newShapes ?? []) {
-    const k = shapeKey(s);
-    const existing = byKey.get(k);
-    const ptsNew = s.points?.length ?? 0;
-    const ptsOld = existing?.points?.length ?? 0;
-    if (!existing || ptsNew >= ptsOld) {
-      byKey.set(k, s);
-    }
-  }
-  return [...byKey.values()];
-}
-
-const ET_POLL_MS = 30000; // 30s – reduserer load mot Entur (429 rate limit)
-async function pollEt() {
-  try {
-    const result = await fetchEstimatedVehicles();
-    const vehicles = result.vehicles ?? result;
-    const etShapes = result.routeShapes ?? [];
-    if (Array.isArray(vehicles)) etVehicles = vehicles;
-    if (Array.isArray(etShapes) && etShapes.length > 0) {
-      routeShapes = mergeRouteShapes(etShapes, routeShapes);
-    }
-    etLoaded = true;
-    mergeAndUpdate();
-  } catch (err) {
-    if (import.meta.env.DEV) console.warn('[RuterLive] ET poll:', err.message);
-    etLoaded = true;
-    mergeAndUpdate();
-  }
-}
-pollEt();
-setInterval(pollEt, ET_POLL_MS);
+});

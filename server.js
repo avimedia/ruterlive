@@ -14,6 +14,7 @@ import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
 import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache } from './server/gtfs-stops-loader.js';
+import { getEtVehiclesAndShapes } from './server/et-vehicles-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -29,6 +30,61 @@ app.get('/health', (_req, res) => {
 app.get('/api/route-shapes', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=30');
   res.json(getCachedShapes());
+});
+
+function shapeKey(s) {
+  return `${(s.mode || '').toLowerCase()}|${(s.line || '').toString()}|${s.from || ''}|${s.to || ''}`;
+}
+
+function mergeShapes(a, b) {
+  const byKey = new Map();
+  for (const s of a || []) byKey.set(shapeKey(s), s);
+  for (const s of b || []) {
+    const k = shapeKey(s);
+    const ex = byKey.get(k);
+    const ptsNew = s.points?.length ?? 0;
+    const ptsOld = ex?.points?.length ?? 0;
+    if (!ex || ptsNew >= ptsOld) byKey.set(k, s);
+  }
+  return [...byKey.values()];
+}
+
+// Alt på en gang – kjøretøy + rutekart. Server beregner alt; klient får ferdig data.
+app.get('/api/initial-data', async (_req, res) => {
+  try {
+    const [vehiclesData, etResult, shapes] = await Promise.all([
+      getCachedVehicles(),
+      getEtVehiclesAndShapes(),
+      Promise.resolve(getCachedShapes()),
+    ]);
+    const graphqlVehicles = Array.isArray(vehiclesData?.data?.vehicles)
+      ? vehiclesData.data.vehicles
+      : [];
+    const etVehicles = etResult?.vehicles ?? [];
+    const etShapes = etResult?.shapes ?? [];
+
+    const etByid = new Map(etVehicles.map((v) => [v.vehicleId, v]));
+    const merged = [];
+    for (const v of graphqlVehicles) {
+      const et = etByid.get(v.vehicleId);
+      merged.push(
+        et
+          ? { ...v, from: v.from ?? et.from, to: v.to ?? et.to, via: v.via ?? et.via }
+          : v
+      );
+    }
+    const seen = new Set(graphqlVehicles.map((v) => v.vehicleId));
+    for (const v of etVehicles) {
+      if (!seen.has(v.vehicleId)) merged.push(v);
+    }
+
+    const routeShapes = mergeShapes(shapes, etShapes);
+
+    res.set('Cache-Control', 'public, max-age=15');
+    res.json({ vehicles: merged, routeShapes });
+  } catch (err) {
+    res.status(503).json({ vehicles: [], routeShapes: [] });
+  }
 });
 
 // Cached kjøretøy (GraphQL) – reduserer 502, 1 kall per 20s

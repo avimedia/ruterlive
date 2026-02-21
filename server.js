@@ -12,6 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
 import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
+import { getCachedVehicles } from './server/vehicles-cache.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -29,7 +30,18 @@ app.get('/api/route-shapes', (_req, res) => {
   res.json(getCachedShapes());
 });
 
-// Cached ET – unngår 429 rate limit (1 kall per 30s, ikke per bruker)
+// Cached kjøretøy (GraphQL) – reduserer 502, 1 kall per 20s
+app.get('/api/vehicles-cached', async (_req, res) => {
+  try {
+    const data = await getCachedVehicles();
+    res.set('Cache-Control', 'public, max-age=10');
+    res.json(data);
+  } catch (err) {
+    res.status(503).json({ errors: [{ message: err.message }] });
+  }
+});
+
+// Cached ET – unngår 429 rate limit (1 kall per 60s, ikke per bruker)
 app.get('/api/et-cached', async (_req, res) => {
   try {
     const xml = await ensureEtCache();
@@ -102,6 +114,7 @@ app.get('*', (req, res) => {
 app.listen(PORT, async () => {
   console.log(`RuterLive kjører på http://localhost:${PORT}`);
   startEtCachePoll();
+  getCachedVehicles().catch((e) => console.warn('[RuterLive] Vehicles cache prewarm:', e.message));
   refreshRouteShapes().then((shapes) => {
     console.log(`[RuterLive] Rutekart cache: ${shapes.length} linjer`);
   });

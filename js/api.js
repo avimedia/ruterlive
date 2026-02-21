@@ -1,30 +1,8 @@
-// Bruk alltid proxy (Vite i dev, Express i prod) – unngår CORS og hjelper med dårlig båndbredde
-const GRAPHQL_URL = '/api/entur/graphql';
-const CLIENT_NAME = 'ruterlive-web';
+const POLL_MS = 20000;
+const OSLO_BOUNDS = { minLat: 59.45, maxLat: 60.2, minLon: 10.15, maxLon: 11.25 };
 
-// Stor-Oslo: dekker Oslo, Akershus, Lillestrøm, Drammen-området, Ski, Nesodden
-const OSLO_BOUNDS = {
-  minLat: 59.45,
-  maxLat: 60.2,
-  minLon: 10.15,
-  maxLon: 11.25,
-};
-
-// Inline boundingBox (BoundingBoxInput type causes validation error)
-function buildVehiclesQuery(bounds) {
-  const b = bounds || OSLO_BOUNDS;
-  return `{
-  vehicles(boundingBox: { minLat: ${b.minLat}, maxLat: ${b.maxLat}, minLon: ${b.minLon}, maxLon: ${b.maxLon} }) {
-    vehicleId
-    lastUpdated
-    location { latitude longitude }
-    line { publicCode }
-    mode
-    bearing
-    destinationName
-  }
-}`;
-}
+// I prod: cached. I dev: direkte proxy (Vite har ikke cache)
+const VEHICLES_URL = import.meta.env.DEV ? '/api/entur/graphql' : '/api/vehicles-cached';
 
 let pollInterval = null;
 
@@ -33,22 +11,22 @@ function parseVehicles(data) {
   return Array.isArray(vehicles) ? vehicles : [vehicles];
 }
 
-async function fetchVehicles(boundingBox, onVehicles, onError) {
-  try {
-    const res = await fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'ET-Client-Name': CLIENT_NAME,
-      },
-      body: JSON.stringify({
-        query: buildVehiclesQuery(boundingBox),
-      }),
-    });
+function buildQuery(bounds) {
+  const b = bounds || OSLO_BOUNDS;
+  return `{ vehicles(boundingBox: { minLat: ${b.minLat}, maxLat: ${b.maxLat}, minLon: ${b.minLon}, maxLon: ${b.maxLon} }) { vehicleId lastUpdated location { latitude longitude } line { publicCode } mode bearing destinationName } }`;
+}
 
-    if (!res.ok) {
-      throw new Error(`API ${res.status}: ${res.statusText}`);
-    }
+async function fetchVehicles(bounds, onVehicles, onError) {
+  try {
+    const res = import.meta.env.DEV
+      ? await fetch(VEHICLES_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'ET-Client-Name': 'ruterlive-web' },
+          body: JSON.stringify({ query: buildQuery(bounds) }),
+        })
+      : await fetch(VEHICLES_URL);
+
+    if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
 
     const data = await res.json();
     if (data.errors) {
@@ -66,18 +44,10 @@ async function fetchVehicles(boundingBox, onVehicles, onError) {
 }
 
 export function connectVehicles(boundingBox, onVehicles, onError) {
-  // Stop existing connections
   disconnect();
-
   const bounds = boundingBox || OSLO_BOUNDS;
-
-  // HTTP polling every 10 seconds (reliable, avoids WebSocket issues)
   fetchVehicles(bounds, onVehicles, onError);
-  pollInterval = setInterval(
-    () => fetchVehicles(bounds, onVehicles, onError),
-    10000
-  );
-
+  pollInterval = setInterval(() => fetchVehicles(bounds, onVehicles, onError), POLL_MS);
   return () => disconnect();
 }
 

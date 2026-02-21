@@ -4,6 +4,7 @@
  */
 
 import { DOMParser } from '@xmldom/xmldom';
+import { MAX_ROUTE_SPAN_KM } from '../config.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { ensureEtCache } from './et-cache.js';
 import { fetchJpRoutes } from './jp-route-fetcher.js';
@@ -197,8 +198,8 @@ function haversineKm(a, b) {
   return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-/** Fjerner stopp med åpenbart feil koordinater. Forkaster også ruter med bare 2 punkter og urealistisk stor spennvidde (går over vann). */
-function removeGeoOutliers(points, maxNeighborDistKm = 25) {
+/** Fjerner stopp med feil koordinater. Forkaster ruter med 2 punkter og for stor spennvidde. */
+function removeGeoOutliers(points, maxNeighborDistKm = MAX_ROUTE_SPAN_KM) {
   if (!points || points.length < 2) return points;
 
   if (points.length === 2) {
@@ -307,6 +308,8 @@ export function isCacheFresh() {
 }
 
 export async function refreshRouteShapes() {
+  let shapes = [];
+
   try {
     const xml = await fetchEtXml();
     const journeys = parseSiriXml(xml);
@@ -334,21 +337,22 @@ export async function refreshRouteShapes() {
       .slice(0, MAX_QUAYS_TO_FETCH);
     await fetchQuayCoordsBatch(quayIds);
 
-    let shapes = buildRouteShapes(journeys);
+    shapes = buildRouteShapes(journeys);
     shapes = await enrichWithOsrm(shapes);
+  } catch (err) {
+    console.warn('[RuterLive] shape-service ET/OSRM:', err.message);
+  }
 
-    try {
-      const jpShapes = await fetchJpRoutes(quayCoordCache);
-      shapes = [...shapes, ...jpShapes];
-    } catch (err) {
-      console.warn('[RuterLive] JP routes fetch:', err.message);
-    }
+  try {
+    const jpShapes = await fetchJpRoutes(quayCoordCache);
+    shapes = [...shapes, ...jpShapes];
+  } catch (err) {
+    console.warn('[RuterLive] JP routes fetch:', err.message);
+  }
 
+  if (shapes.length > 0) {
     cachedShapes = shapes;
     lastFetch = Date.now();
-    return shapes;
-  } catch (err) {
-    console.warn('[RuterLive] shape-service refresh error:', err.message);
-    return cachedShapes;
   }
+  return cachedShapes;
 }

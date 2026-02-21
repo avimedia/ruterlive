@@ -49,6 +49,8 @@ const RAIL_TRIPS = [
 const FLYBUSS_TRIPS = [
   { from: 'NSR:StopPlace:6505', fromName: 'Oslo Bussterminal', to: 'NSR:StopPlace:269', toName: 'Oslo lufthavn' },
   { from: 'NSR:StopPlace:269', fromName: 'Oslo lufthavn', to: 'NSR:StopPlace:6505', toName: 'Oslo Bussterminal' },
+  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:269', toName: 'Oslo lufthavn' },
+  { from: 'NSR:StopPlace:269', fromName: 'Oslo lufthavn', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
 ];
 
 async function fetchJp(body) {

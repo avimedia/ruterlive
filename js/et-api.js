@@ -3,9 +3,10 @@
  * Ruter leverer ikke GPS til Entur, så vi interpolerer mellom stopp basert på avgangsdata.
  */
 
+import { MAX_ROUTE_SPAN_KM } from '../config.js';
 import { enrichShapesWithOSRM } from './osrm.js';
 
-const ET_URL = '/api/et-cached';
+const ET_URL = import.meta.env.DEV ? '/api/entur-et/et?datasetId=RUT&maxSize=3000' : '/api/et-cached';
 const JP_GRAPHQL_URL = '/api/entur-jp/graphql';
 const CLIENT_NAME = 'ruterlive-web';
 
@@ -330,8 +331,8 @@ function haversineKm(a, b) {
   return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-/** Fjerner stopp med feil koordinater. Forkaster ruter med 2 punkter og urealistisk stor spennvidde. */
-function removeGeoOutliers(points, maxNeighborDistKm = 25) {
+/** Fjerner stopp med feil koordinater. Forkaster ruter med 2 punkter og for stor spennvidde. */
+function removeGeoOutliers(points, maxNeighborDistKm = MAX_ROUTE_SPAN_KM) {
   if (!points || points.length < 2) return points;
 
   if (points.length === 2) {

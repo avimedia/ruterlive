@@ -38,9 +38,9 @@ let lastRenderedShapesKey = '';
 let lastRenderedModesKey = '';
 let lastSelectedVehicleKey = '';
 
-/** T-bane og jernbane vises alltid. Buss, trikk, båt, flybuss kun ved klikk på kjøretøy. */
-const ALWAYS_SHOWN_MODES = new Set(['metro', 'rail', 'flytog']);
-const VEHICLE_CLICK_MODES = new Set(['bus', 'tram', 'water', 'flybuss']);
+/** T-bane, jernbane, trikk og buss vises alltid. Båt og flybuss kun ved klikk på kjøretøy. */
+const ALWAYS_SHOWN_MODES = new Set(['metro', 'rail', 'flytog', 'tram', 'bus']);
+const VEHICLE_CLICK_MODES = new Set(['water', 'flybuss']);
 
 function vehicleMode(vehicle) {
   const m = (vehicle?.mode || '').toLowerCase();

@@ -44,8 +44,14 @@ let bboxFetchId = 0;
 /** Zoom-nivå før holdeplasser vises (med navn). */
 const ZOOM_STOPS_VISIBLE = 15;
 
-/** T-bane, jernbane og trikk vises alltid. Buss, båt og flybuss kun ved klikk på kjøretøy. */
-const ALWAYS_SHOWN_MODES = new Set(['metro', 'rail', 'flytog', 'tram']);
+function shapeModeForFilter(shape) {
+  const m = (shape.mode || '').toLowerCase();
+  if (m === 'coach') return 'flybuss';
+  return m || 'bus';
+}
+
+/** T-bane, trikk, regiontog og flytoget vises alltid. Øvrige ruter kun ved valgt kjøretøy. */
+const ALWAYS_SHOWN_MODES = new Set(['metro', 'tram', 'rail', 'flytog']);
 const VEHICLE_CLICK_MODES = new Set(['bus', 'water', 'flybuss']);
 
 function vehicleMode(vehicle) {
@@ -124,7 +130,7 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   let vehicleClickFallbacks = [];
   const selectedMatches = [];
   for (const shape of shapes) {
-    const mode = shape.mode?.toLowerCase();
+    const mode = shapeModeForFilter(shape);
     if (!visibleModes.has(mode)) continue;
     if (ALWAYS_SHOWN_MODES.has(mode)) {
       shapesToShow.push(shape);
@@ -135,7 +141,7 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
         selectedMatches.push(shape);
       } else if (
         normalizeLine(shape.line) === normalizeLine(selectedVehicle.line?.publicCode) &&
-        (shape.mode || '').toLowerCase() === vehicleMode(selectedVehicle)
+        mode === vehicleMode(selectedVehicle)
       ) {
         vehicleClickFallbacks.push(shape);
       }
@@ -157,9 +163,9 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
     addRoutePolyline(map, shape, drawn, true);
   }
 
-  // Holdeplasser vises for ALLE synlige transporttyper ved zoom 14+ – shapes + bbox
+  // Holdeplasser vises for ALLE synlige transporttyper ved zoom 15+
   if (map.getZoom() >= ZOOM_STOPS_VISIBLE) {
-    const shapesForStops = (shapes ?? []).filter((s) => visibleModes.has((s.mode || '').toLowerCase()));
+    const shapesForStops = (shapes ?? []).filter((s) => visibleModes.has(shapeModeForFilter(s)));
     addStopMarkers(map, shapesForStops, visibleModes);
   }
 }
@@ -255,6 +261,8 @@ function addStopMarkers(map, shapes, visibleModes) {
     .then((r) => r.ok ? r.json() : [])
     .then((bboxStops) => {
       if (thisFetchId !== bboxFetchId) return;
+      const savedCenter = map.getCenter();
+      const savedZoom = map.getZoom();
       const defaultColor = MODE_COLORS.bus;
       for (const s of bboxStops || []) {
         if (seen.has(s.id)) continue;
@@ -264,6 +272,17 @@ function addStopMarkers(map, shapes, visibleModes) {
         seen.add(key);
         createStopMarker(s.lat, s.lon, s.id, s.name, defaultColor, stopsLayer);
       }
+      requestAnimationFrame(() => {
+        const c = map.getCenter();
+        const z = map.getZoom();
+        if (
+          Math.abs(c.lat - savedCenter.lat) > 1e-6 ||
+          Math.abs(c.lng - savedCenter.lng) > 1e-6 ||
+          z !== savedZoom
+        ) {
+          map.setView(savedCenter, savedZoom, { animate: false });
+        }
+      });
     })
     .catch(() => {});
 }
@@ -357,7 +376,7 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
   const highlightColor = getRouteHighlightColor();
   const polyline = L.polyline(latlngs, {
     color: isHighlighted ? highlightColor : color,
-    weight: isHighlighted ? 5 : 3,
+    weight: isHighlighted ? 3 : 2,
     opacity: isHighlighted ? 1 : 0.9,
     className: 'route-line',
   });
@@ -379,13 +398,13 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
     L.DomEvent.stopPropagation(e);
     if (selectedPolyline && selectedPolyline !== polyline) {
       selectedPolyline.setStyle({
-        weight: 3,
+        weight: 2,
         opacity: 0.9,
         color: selectedPolyline._ruterOriginalColor,
       });
     }
     selectedPolyline = polyline;
-    polyline.setStyle({ weight: 5, opacity: 1, color: getRouteHighlightColor() });
+    polyline.setStyle({ weight: 3, opacity: 1, color: getRouteHighlightColor() });
     polyline.bringToFront();
   });
   polyline.addTo(map.routeLayerGroup);
@@ -426,7 +445,7 @@ export function isRoutesVisible() {
 export function clearRouteSelection() {
   if (selectedPolyline) {
     selectedPolyline.setStyle({
-      weight: 3,
+      weight: 2,
       opacity: 0.9,
       color: selectedPolyline._ruterOriginalColor,
     });

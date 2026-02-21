@@ -364,9 +364,15 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
   polyline._ruterOriginalColor = color;
 
   const line = shape.line || '?';
-  const from = shape.from || '—';
-  const to = shape.to || '—';
-  const tooltipText = `Linje ${line}: ${from} → ${to}`;
+  const from = (shape.from || '').trim() || '—';
+  const to = (shape.to || '').trim() || '—';
+  const via = (shape.via || '').trim();
+  const samePlace = from !== '—' && to !== '—' && from.toLowerCase() === to.toLowerCase();
+  const tooltipText = samePlace && via
+    ? `Linje ${line}: ${from} – ${via}`
+    : samePlace
+      ? `Linje ${line}: ${from}`
+      : `Linje ${line}: ${from} → ${to}`;
 
   polyline.bindTooltip(tooltipText, { permanent: false, direction: 'top', opacity: 0.95 });
   polyline.on('click', (e) => {

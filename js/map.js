@@ -45,12 +45,15 @@ export function initMap() {
   map.createPane('vehiclePane');
   map.getPane('vehiclePane').style.zIndex = 750;
 
-  // Rute-tooltip (Linje X: Fra→Til) over kjøretøy, slik at den vises når den overlapper
+  // Rute-tooltip (Linje X: Fra→Til) over kjøretøy
   map.getPane('tooltipPane').style.zIndex = 800;
+
+  // Popup (kjøretøy-info) over kjøretøypunktene
+  map.getPane('popupPane').style.zIndex = 900;
 
   // Søkeresultat-marker (vedvarer til neste søk)
   map.searchResultLayer = L.layerGroup().addTo(map);
-  map.searchResultLayer.setZIndex(850);
+  map.searchResultLayer.setZIndex(950);
 
   // Klikk på kartet (ikke på rute) fjerner uthevelse
   map.on('click', clearRouteSelection);

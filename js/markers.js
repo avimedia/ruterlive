@@ -130,10 +130,31 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
     const dest = v.destinationName || '';
     const title = `${lineCode} → ${dest}`.trim();
     const popupParts = [`<strong>Linje ${lineCode}</strong>`];
-    if (v.from) popupParts.push(`Fra: ${v.from}`);
-    if (v.to) popupParts.push(`Til: ${v.to}`);
-    else if (dest) popupParts.push(`Til: ${dest}`);
-    if (v.via) popupParts.push(`Via: ${v.via}`);
+    const from = (v.from || '').trim();
+    const to = (v.to || '').trim();
+    const via = (v.via || '').trim();
+    const destNorm = (dest || '').toLowerCase();
+    const samePlace = from && to && from.toLowerCase() === to.toLowerCase();
+    if (samePlace && via) {
+      const fromNorm = from.toLowerCase();
+      const viaNorm = via.toLowerCase();
+      const towardVia = viaNorm && destNorm.includes(viaNorm);
+      const towardFrom = fromNorm && destNorm.includes(fromNorm);
+      if (towardVia && !towardFrom) {
+        popupParts.push(`${from} – ${via}`);
+      } else if (towardFrom && !towardVia) {
+        popupParts.push(`${via} – ${from}`);
+      } else {
+        popupParts.push(`${from} – ${via}`);
+      }
+    } else if (samePlace) {
+      popupParts.push(from);
+    } else {
+      if (from) popupParts.push(`Fra: ${from}`);
+      if (to) popupParts.push(`Til: ${to}`);
+      else if (dest) popupParts.push(`Til: ${dest}`);
+      if (via) popupParts.push(`Via: ${via}`);
+    }
     const popupHtml = popupParts.join('<br>');
 
     let marker = vehicleMarkers.get(v.vehicleId);

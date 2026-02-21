@@ -110,10 +110,14 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, async () => {
   console.log(`RuterLive kjører på http://localhost:${PORT}`);
-  startEtCachePoll();
   getCachedVehicles().catch((e) => console.warn('[RuterLive] Vehicles cache prewarm:', e.message));
-  refreshRouteShapes().then((shapes) => {
-    console.log(`[RuterLive] Rutekart cache: ${shapes.length} linjer`);
-  });
-  setInterval(refreshRouteShapes, 15 * 60 * 1000); // Hvert 15. min
+  setTimeout(() => {
+    startEtCachePoll();
+    setTimeout(() => {
+      refreshRouteShapes().then((shapes) => {
+        console.log(`[RuterLive] Rutekart cache: ${shapes.length} linjer`);
+      });
+      setInterval(refreshRouteShapes, 15 * 60 * 1000);
+    }, 5000);
+  }, 3000);
 });

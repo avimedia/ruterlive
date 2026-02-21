@@ -49,17 +49,31 @@ function vehicleMode(vehicle) {
   return m || 'bus';
 }
 
+function normalizeLine(s) {
+  return (s || '').toString().replace(/^0+/, '') || '0';
+}
+
+function destMatchesNorm(dest, toName) {
+  if (!dest) return true;
+  const d = dest.replace(/\s+/g, ' ').trim();
+  const t = (toName || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!t) return true;
+  if (d.includes('gardermoen') || d.includes('lufthavn') || d.includes('osl'))
+    return t.includes('lufthavn') || t.includes('gardermoen') || t.includes('osl');
+  if (d.includes('oslo') && !d.includes('lufthavn'))
+    return t.includes('oslo') && !t.includes('lufthavn');
+  return d.includes(t) || t.includes(d);
+}
+
 function shapeMatchesVehicle(shape, vehicle) {
   if (!vehicle) return false;
-  const sLine = (shape.line || '').toString();
-  const vLine = vehicle.line?.publicCode || '';
-  if (sLine !== vLine) return false;
+  if (normalizeLine(shape.line) !== normalizeLine(vehicle.line?.publicCode)) return false;
   const mode = vehicleMode(vehicle);
   const sMode = (shape.mode || '').toLowerCase();
   if (sMode !== mode) return false;
   const dest = (vehicle.destinationName || '').toLowerCase();
-  const sTo = (shape.to || '').toLowerCase();
-  if (dest && sTo && !dest.includes(sTo) && !sTo.includes(dest)) return false;
+  const sTo = shape.to || '';
+  if (dest && sTo && !destMatchesNorm(dest, sTo)) return false;
   return true;
 }
 
@@ -88,51 +102,81 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   if (!routesVisible || !shapes?.length) return;
 
   const shapesToShow = [];
+  let vehicleClickFallbacks = [];
+  const selectedMatches = [];
   for (const shape of shapes) {
     const mode = shape.mode?.toLowerCase();
     if (!visibleModes.has(mode)) continue;
     if (ALWAYS_SHOWN_MODES.has(mode)) {
       shapesToShow.push(shape);
-    } else if (VEHICLE_CLICK_MODES.has(mode) && selectedVehicle && shapeMatchesVehicle(shape, selectedVehicle)) {
-      shapesToShow.push(shape);
+      if (selectedVehicle && shapeMatchesVehicle(shape, selectedVehicle)) selectedMatches.push(shape);
+    } else if (VEHICLE_CLICK_MODES.has(mode) && selectedVehicle) {
+      if (shapeMatchesVehicle(shape, selectedVehicle)) {
+        shapesToShow.push(shape);
+        selectedMatches.push(shape);
+      } else if (
+        normalizeLine(shape.line) === normalizeLine(selectedVehicle.line?.publicCode) &&
+        (shape.mode || '').toLowerCase() === vehicleMode(selectedVehicle)
+      ) {
+        vehicleClickFallbacks.push(shape);
+      }
     }
   }
-
-  for (const shape of shapesToShow) {
-    const mode = shape.mode?.toLowerCase();
-
-    const latlngs = shape.points.map(([lat, lon]) => [lat, lon]);
-    const color = getShapeColor(mode, shape.line + (shape.from || ''));
-    const polyline = L.polyline(latlngs, {
-      color,
-      weight: 5,
-      opacity: 0.9,
-      className: 'route-line',
-    });
-    polyline._ruterOriginalColor = color;
-
-    const line = shape.line || '?';
-    const from = shape.from || '—';
-    const to = shape.to || '—';
-    const tooltipText = `Linje ${line}: ${from} → ${to}`;
-
-    polyline.bindTooltip(tooltipText, { permanent: false, direction: 'top', opacity: 0.95 });
-    polyline.on('click', (e) => {
-      L.DomEvent.stopPropagation(e);
-      if (selectedPolyline && selectedPolyline !== polyline) {
-        selectedPolyline.setStyle({
-          weight: 5,
-          opacity: 0.9,
-          color: selectedPolyline._ruterOriginalColor,
-        });
-      }
-      selectedPolyline = polyline;
-      polyline.setStyle({ weight: 8, opacity: 1, color: '#fff' });
-      polyline.bringToFront();
-    });
-    polyline.addTo(map.routeLayerGroup);
-    routeLayers.push(polyline);
+  if (shapesToShow.length === 0 && vehicleClickFallbacks.length > 0) {
+    shapesToShow.push(vehicleClickFallbacks[0]);
+    selectedMatches.push(vehicleClickFallbacks[0]);
+  } else if (selectedMatches.length === 0 && vehicleClickFallbacks.length > 0) {
+    selectedMatches.push(vehicleClickFallbacks[0]);
   }
+
+  const drawn = new Set();
+  for (const shape of shapesToShow) {
+    if (selectedMatches.includes(shape)) continue;
+    addRoutePolyline(map, shape, drawn, false);
+  }
+  for (const shape of selectedMatches) {
+    addRoutePolyline(map, shape, drawn, true);
+  }
+}
+
+function addRoutePolyline(map, shape, drawn, isHighlighted) {
+  const key = `${shape.mode}|${shape.line}|${shape.from}|${shape.to}`;
+  if (drawn.has(key)) return;
+  drawn.add(key);
+
+  const mode = shape.mode?.toLowerCase();
+  const latlngs = shape.points.map(([lat, lon]) => [lat, lon]);
+  const color = getShapeColor(mode, shape.line + (shape.from || ''));
+  const polyline = L.polyline(latlngs, {
+    color: isHighlighted ? '#fff' : color,
+    weight: isHighlighted ? 8 : 5,
+    opacity: isHighlighted ? 1 : 0.9,
+    className: 'route-line',
+  });
+  polyline._ruterOriginalColor = color;
+
+  const line = shape.line || '?';
+  const from = shape.from || '—';
+  const to = shape.to || '—';
+  const tooltipText = `Linje ${line}: ${from} → ${to}`;
+
+  polyline.bindTooltip(tooltipText, { permanent: false, direction: 'top', opacity: 0.95 });
+  polyline.on('click', (e) => {
+    L.DomEvent.stopPropagation(e);
+    if (selectedPolyline && selectedPolyline !== polyline) {
+      selectedPolyline.setStyle({
+        weight: 5,
+        opacity: 0.9,
+        color: selectedPolyline._ruterOriginalColor,
+      });
+    }
+    selectedPolyline = polyline;
+    polyline.setStyle({ weight: 8, opacity: 1, color: '#fff' });
+    polyline.bringToFront();
+  });
+  polyline.addTo(map.routeLayerGroup);
+  routeLayers.push(polyline);
+  if (isHighlighted) polyline.bringToFront();
 }
 
 

@@ -33,21 +33,26 @@ async function doRefresh() {
 }
 
 async function refresh() {
-  try {
-    const result = await doRefresh();
-    return result;
-  } catch (err) {
-    if (cachedXml) {
-      if (Date.now() - last429LoggedAt > BACKOFF_AFTER_429_MS) {
-        last429LoggedAt = Date.now();
-        console.warn('[RuterLive] ET 429 – bruker cache, venter 5 min');
+  if (refreshPromise) return refreshPromise;
+  const p = (async () => {
+    try {
+      const result = await doRefresh();
+      return result;
+    } catch (err) {
+      if (cachedXml) {
+        if (Date.now() - last429LoggedAt > BACKOFF_AFTER_429_MS) {
+          last429LoggedAt = Date.now();
+          console.warn('[RuterLive] ET refresh failed, using cache:', err.message);
+        }
+        return cachedXml;
       }
-      return cachedXml;
+      throw err;
+    } finally {
+      refreshPromise = null;
     }
-    throw err;
-  } finally {
-    refreshPromise = null;
-  }
+  })();
+  refreshPromise = p;
+  return p;
 }
 
 export function getCachedEt() {
@@ -58,14 +63,18 @@ export function getEtAge() {
   return lastFetch ? Date.now() - lastFetch : null;
 }
 
+/** Returnerer ET-XML. Ved utløpt cache: returnerer stale umiddelbart og revaliderer i bakgrunnen. */
 export async function ensureEtCache() {
   if (cachedXml && Date.now() - lastFetch <= REFRESH_MS) {
     return cachedXml;
   }
-  if (!refreshPromise) {
-    refreshPromise = refresh();
+  if (!refreshPromise) refreshPromise = refresh();
+  if (cachedXml) {
+    refreshPromise.finally(() => { refreshPromise = null; });
+    return cachedXml;
   }
   await refreshPromise;
+  refreshPromise = null;
   return cachedXml;
 }
 

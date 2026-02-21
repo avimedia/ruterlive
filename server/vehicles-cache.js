@@ -52,11 +52,17 @@ async function refresh() {
   }
 }
 
+/** Returnerer cachet data. Ved utløpt cache: returnerer stale umiddelbart og revaliderer i bakgrunnen. */
 export async function getCachedVehicles() {
   if (cachedData && Date.now() - lastFetch <= CACHE_MS) {
     return cachedData;
   }
   if (!fetchPromise) fetchPromise = refresh();
+  if (cachedData) {
+    fetchPromise.finally(() => { fetchPromise = null; });
+    return cachedData;
+  }
   await fetchPromise;
+  fetchPromise = null;
   return cachedData;
 }

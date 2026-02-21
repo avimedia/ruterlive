@@ -266,6 +266,10 @@ export function isCacheFresh() {
 
 export async function refreshRouteShapes() {
   let shapes = [];
+  const jpPromise = fetchJpRoutes(quayCoordCache).catch((err) => {
+    console.warn('[RuterLive] JP routes fetch:', err.message);
+    return [];
+  });
 
   await ensureGtfsStopsLoaded();
 
@@ -301,12 +305,8 @@ export async function refreshRouteShapes() {
     console.warn('[RuterLive] shape-service ET:', err.message);
   }
 
-  try {
-    const jpShapes = await fetchJpRoutes(quayCoordCache);
-    shapes = [...shapes, ...jpShapes];
-  } catch (err) {
-    console.warn('[RuterLive] JP routes fetch:', err.message);
-  }
+  const jpShapes = await jpPromise;
+  shapes = [...shapes, ...jpShapes];
 
   if (shapes.length > 0) {
     cachedShapes = shapes;

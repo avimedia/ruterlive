@@ -291,9 +291,8 @@ app.listen(PORT, async () => {
   console.log(`RuterLive kjører på http://localhost:${PORT}`);
   getCachedVehicles().catch((e) => console.warn('[RuterLive] Vehicles cache prewarm:', e.message));
   startEtCachePoll();
-  loadGtfsStops()
-    .then(() => refreshRouteShapes())
+  refreshRouteShapes()
     .then((shapes) => console.log(`[RuterLive] Rutekart cache: ${shapes?.length ?? 0} linjer (inkl. jernbane)`))
-    .catch((e) => console.warn('[RuterLive] Rutekart preload:', e.message))
-    .finally(() => setInterval(refreshRouteShapes, 15 * 60 * 1000));
+    .catch((e) => console.warn('[RuterLive] Rutekart preload:', e.message));
+  setInterval(refreshRouteShapes, 15 * 60 * 1000);
 });

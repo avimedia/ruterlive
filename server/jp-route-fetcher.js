@@ -3,7 +3,7 @@
  */
 
 import { fetchWithRetry } from './fetch-with-retry.js';
-import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
+import { getGtfsQuayCache } from './gtfs-stops-loader.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CLIENT_NAME = 'ruterlive-web';
@@ -170,7 +170,6 @@ async function fetchTripShapes(trips, modes, acceptAllBus = false) {
  * @param {Map} quayCoordCache - cache for quayId -> [lat, lon]
  */
 export async function fetchJpRoutes(quayCoordCache) {
-  await ensureGtfsStopsLoaded();
   const railShapes = await fetchTripShapes(RAIL_TRIPS, ['rail']);
   const flybussShapes = await fetchTripShapes(FLYBUSS_TRIPS, ['bus', 'coach'], true);
 

@@ -39,8 +39,8 @@ let lastRenderedModesKey = '';
 let lastSelectedVehicleKey = '';
 let lastRenderedStopsKey = '';
 
-/** Zoom-nivå før holdeplasser vises som små sirkler. */
-const ZOOM_STOPS_VISIBLE = 13;
+/** Zoom-nivå før holdeplasser vises (med navn). */
+const ZOOM_STOPS_VISIBLE = 14;
 
 /** T-bane, jernbane og trikk vises alltid. Buss, båt og flybuss kun ved klikk på kjøretøy. */
 const ALWAYS_SHOWN_MODES = new Set(['metro', 'rail', 'flytog', 'tram']);
@@ -98,6 +98,7 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   lastRenderedStopsKey = stopsVisibleKey;
 
   map.routeLayerGroup.clearLayers();
+  if (map.stopsLayerGroup) map.stopsLayerGroup.clearLayers();
   routeLayers = [];
   selectedPolyline = null;
 
@@ -144,9 +145,17 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
     addRoutePolyline(map, shape, drawn, true);
   }
 
+  // Holdeplasser vises for ALLE synlige transporttyper ved zoom 13+ – ikke bare for rutene som tegnes
   if (map.getZoom() >= ZOOM_STOPS_VISIBLE) {
-    addStopMarkers(map, shapesToShow);
+    const shapesForStops = (shapes ?? []).filter((s) => visibleModes.has((s.mode || '').toLowerCase()));
+    addStopMarkers(map, shapesForStops);
   }
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
 }
 
 function addStopMarkers(map, shapes) {
@@ -171,29 +180,48 @@ function addStopMarkers(map, shapes) {
       stopSources.push({ lat, lon, quayId, name, color });
     }
   }
+
+  const stopsLayer = map.stopsLayerGroup || map.routeLayerGroup;
+
   for (const { lat, lon, quayId, name, color } of stopSources) {
     const key = pointKey(lat, lon);
     if (seen.has(key)) continue;
     seen.add(key);
-    const circle = L.circleMarker([lat, lon], {
-      radius: quayId ? 7 : 4,
-      fillColor: color,
-      color: 'rgba(255,255,255,0.8)',
-      weight: 1,
-      fillOpacity: 0.7,
-      interactive: !!quayId,
-      zIndexOffset: quayId ? 500 : 0,
-    });
+
     if (quayId) {
-      const tooltipText = (name || 'Holdeplass').trim() ? `${(name || 'Holdeplass').trim()} · Klikk for avganger` : 'Klikk for avganger';
-      circle.bindTooltip(tooltipText, { permanent: false, direction: 'top', offset: [0, -6], opacity: 0.95 });
-      circle.on('click', (e) => {
-        L.DomEvent.stopPropagation(e);
-        showDepartureBoard(map, quayId, circle);
+      const label = (name || 'Holdeplass').trim();
+      const marker = L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: 'stop-marker',
+          html: `
+            <span class="stop-marker-dot" style="background:${color}"></span>
+            <span class="stop-marker-label">${escapeHtml(label)}</span>
+          `,
+          iconSize: [140, 24],
+          iconAnchor: [5, 12],
+        }),
+        zIndexOffset: 1000,
       });
-      circle.bringToFront();
+      marker._quayId = quayId;
+      const popup = L.popup({ className: 'departure-board-popup', maxWidth: 320 });
+      marker.bindPopup(popup, { autoClose: false, closeOnClick: false });
+      marker.on('click', (e) => L.DomEvent.stopPropagation(e));
+      marker.on('popupopen', () => {
+        showDepartureBoard(marker.getPopup(), quayId);
+      });
+      marker.bindTooltip(`${label} · Klikk for avganger`, { permanent: false, direction: 'top', offset: [0, -8] });
+      marker.addTo(stopsLayer);
+    } else {
+      const circle = L.circleMarker([lat, lon], {
+        radius: 4,
+        fillColor: color,
+        color: 'rgba(255,255,255,0.8)',
+        weight: 1,
+        fillOpacity: 0.7,
+        interactive: false,
+      });
+      circle.addTo(map.routeLayerGroup);
     }
-    circle.addTo(map.routeLayerGroup);
   }
 }
 
@@ -209,10 +237,8 @@ const MODE_COLORS_DEP = {
   flytog: '#e056fd',
 };
 
-async function showDepartureBoard(map, quayId, anchor) {
-  const popup = L.popup({ className: 'departure-board-popup', maxWidth: 320 }).setLatLng(anchor.getLatLng());
+async function showDepartureBoard(popup, quayId) {
   popup.setContent('<div class="departure-loading">Henter avganger…</div>');
-  popup.openOn(map);
 
   try {
     const res = await fetch(`/api/departures?quayId=${encodeURIComponent(quayId)}`);
@@ -258,14 +284,10 @@ async function showDepartureBoard(map, quayId, anchor) {
       </div>`;
     popup.setContent(html);
   } catch (err) {
-    popup.setContent(`<div class="departure-error">Kunne ikke hente avganger. ${escapeHtml(String(err.message))}</div>`);
+    popup.setContent(
+      `<div class="departure-error">Kunne ikke hente avganger. ${escapeHtml(String(err.message))}</div>`
+    );
   }
-}
-
-function escapeHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
 }
 
 function addRoutePolyline(map, shape, drawn, isHighlighted) {

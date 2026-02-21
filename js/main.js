@@ -1,4 +1,5 @@
 import { initMap, getMap } from './map.js';
+import { initTheme } from './theme.js';
 import { connectVehicles } from './api.js';
 import { fetchEstimatedVehicles } from './et-api.js';
 import { fetchLineRouteFromJp } from './jp-line-lookup.js';
@@ -93,6 +94,7 @@ function mergeAndUpdate() {
 }
 
 initMap();
+initTheme();
 const map = getMap();
 if (map) {
   map.on('click', () => {

@@ -4,8 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="Realtidskart over buss, T-bane, trikk, tog og båt i Stor-Oslo. Se hvor kjøretøyene er og følg rutene på kartet.">
-  <meta name="theme-color" content="#1a1a1a">
+  <meta name="theme-color" content="#1a1a1a" id="theme-color-meta">
   <title>RuterLive – Realtidskart kollektivtransport</title>
+  <script>
+    (function(){
+      var s = localStorage.getItem('ruterlive-theme') || 'system';
+      var d = s === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : s;
+      document.documentElement.dataset.theme = d;
+    })();
+  </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="/css/style.css">
 </head>
@@ -13,6 +20,14 @@
   <div id="app">
     <header>
       <h1>RuterLive</h1>
+      <div class="theme-select-wrap">
+        <label for="theme-select" class="theme-label">Tema</label>
+        <select id="theme-select" aria-label="Velg fargebruk">
+          <option value="light">Lys</option>
+          <option value="dark">Mørk</option>
+          <option value="system">Følg system</option>
+        </select>
+      </div>
     </header>
 
     <main id="map-container">

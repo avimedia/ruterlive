@@ -67,7 +67,7 @@ function mergeAndUpdate() {
   for (const v of graphqlVehicles) {
     const et = etByid.get(v.vehicleId);
     const enhanced = et
-      ? { ...v, from: v.from ?? et.from, to: v.to ?? et.to, via: v.via ?? et.via }
+      ? { ...v, from: v.from ?? et.from, to: v.to ?? et.to, nextStop: v.nextStop ?? et.nextStop, via: v.via ?? et.via }
       : enrichVehicleWithRouteShape(v, routeShapes);
     merged.push(enhanced);
   }
@@ -75,7 +75,7 @@ function mergeAndUpdate() {
   for (const v of etVehicles) {
     if (!seenIds.has(v.vehicleId)) {
       seenIds.add(v.vehicleId);
-      merged.push(enrichVehicleWithRouteShape(v, routeShapes));
+      merged.push({ ...enrichVehicleWithRouteShape(v, routeShapes), nextStop: v.nextStop });
     }
   }
   const visibleModes = getVisibleModes();

@@ -133,6 +133,8 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
     const from = (v.from || '').trim();
     const to = (v.to || '').trim();
     const via = (v.via || '').trim();
+    const nextStop = (v.nextStop || '').trim();
+    const endStation = (dest || to || '').trim();
     const destNorm = (dest || '').toLowerCase();
     const samePlace = from && to && from.toLowerCase() === to.toLowerCase();
     if (samePlace && via) {
@@ -147,12 +149,20 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
       } else {
         popupParts.push(`${from} – ${via}`);
       }
+      if (nextStop && nextStop.toLowerCase() !== viaNorm && nextStop.toLowerCase() !== fromNorm) {
+        popupParts.push(`Neste: ${nextStop}`);
+      }
     } else if (samePlace) {
       popupParts.push(from);
+      if (nextStop && nextStop.toLowerCase() !== from.toLowerCase()) {
+        popupParts.push(`Neste: ${nextStop}`);
+      }
     } else {
       if (from) popupParts.push(`Fra: ${from}`);
-      if (to) popupParts.push(`Til: ${to}`);
-      else if (dest) popupParts.push(`Til: ${dest}`);
+      if (endStation) popupParts.push(`Til: ${endStation}`);
+      if (nextStop && nextStop.toLowerCase() !== endStation.toLowerCase()) {
+        popupParts.push(`Neste: ${nextStop}`);
+      }
       if (via) popupParts.push(`Via: ${via}`);
     }
     const popupHtml = popupParts.join('<br>');

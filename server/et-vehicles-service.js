@@ -224,6 +224,8 @@ function buildVehiclesAndShapes(journeys, quayCoordCache) {
       const first = allCalls[0];
       const last = allCalls[allCalls.length - 1];
       const midIdx = Math.floor(allCalls.length / 2);
+      const endStation = j.destinationName || last?.name || null;
+      const nextStop = toCall?.name && toCall.name !== endStation ? toCall.name : null;
       vehicles.push({
         vehicleId: j.vehicleId,
         mode: j.mode,
@@ -233,6 +235,7 @@ function buildVehiclesAndShapes(journeys, quayCoordCache) {
         bearing: null,
         from: fromCall?.name || first?.name || null,
         to: toCall?.name || last?.name || j.destinationName || null,
+        nextStop,
         via: allCalls.length > 2 ? allCalls[midIdx]?.name : null,
       });
     }

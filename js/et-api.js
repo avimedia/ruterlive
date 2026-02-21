@@ -332,6 +332,8 @@ export async function fetchEstimatedVehicles(onProgress) {
         const last = allCalls[allCalls.length - 1];
         const midIdx = Math.floor(allCalls.length / 2);
         const viaStop = allCalls.length > 2 ? allCalls[midIdx]?.name : null;
+        const endStation = j.destinationName || last?.name || null;
+        const nextStop = toCall?.name && toCall.name !== endStation ? toCall.name : null;
         vehicles.push({
           vehicleId: j.vehicleId,
           mode: j.mode,
@@ -341,6 +343,7 @@ export async function fetchEstimatedVehicles(onProgress) {
           bearing: null,
           from: fromCall?.name || first?.name || null,
           to: toCall?.name || last?.name || j.destinationName || null,
+          nextStop,
           via: viaStop || null,
         });
       }

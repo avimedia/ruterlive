@@ -115,27 +115,8 @@ if (map) {
 }
 
 initLayers((visibleModes) => {
-  const m = getMap();
-  const savedCenter = m ? m.getCenter() : null;
-  const savedZoom = m ? m.getZoom() : null;
-
   applyFilter(visibleModes);
   updateRouteLines(routeShapes, visibleModes, selectedVehicleForRoute);
-
-  // Gjenopprett kartvisning hvis den ble endret av lagoppdateringen
-  if (m && savedCenter && savedZoom != null) {
-    requestAnimationFrame(() => {
-      const c = m.getCenter();
-      const z = m.getZoom();
-      if (
-        Math.abs(c.lat - savedCenter.lat) > 1e-6 ||
-        Math.abs(c.lng - savedCenter.lng) > 1e-6 ||
-        z !== savedZoom
-      ) {
-        m.setView(savedCenter, savedZoom, { animate: false });
-      }
-    });
-  }
 });
 
 updateVehicleCount(null, null, true);

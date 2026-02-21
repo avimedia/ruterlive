@@ -2,7 +2,7 @@ import L from 'leaflet';
 import { clearRouteSelection } from './routes.js';
 
 const OSLO_CENTER = [59.9110, 10.7525]; // Oslo S / Jernbanetorget
-const DEFAULT_ZOOM = 15;
+const DEFAULT_ZOOM = 14;
 
 const TILE_URLS = {
   dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',

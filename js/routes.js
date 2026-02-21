@@ -261,8 +261,6 @@ function addStopMarkers(map, shapes, visibleModes) {
     .then((r) => r.ok ? r.json() : [])
     .then((bboxStops) => {
       if (thisFetchId !== bboxFetchId) return;
-      const savedCenter = map.getCenter();
-      const savedZoom = map.getZoom();
       const defaultColor = MODE_COLORS.bus;
       for (const s of bboxStops || []) {
         if (seen.has(s.id)) continue;
@@ -272,17 +270,6 @@ function addStopMarkers(map, shapes, visibleModes) {
         seen.add(key);
         createStopMarker(s.lat, s.lon, s.id, s.name, defaultColor, stopsLayer);
       }
-      requestAnimationFrame(() => {
-        const c = map.getCenter();
-        const z = map.getZoom();
-        if (
-          Math.abs(c.lat - savedCenter.lat) > 1e-6 ||
-          Math.abs(c.lng - savedCenter.lng) > 1e-6 ||
-          z !== savedZoom
-        ) {
-          map.setView(savedCenter, savedZoom, { animate: false });
-        }
-      });
     })
     .catch(() => {});
 }

@@ -214,8 +214,6 @@ export function applyFilter(visibleModes) {
   const map = getMap();
   if (!map) return;
 
-  const savedCenter = map.getCenter();
-  const savedZoom = map.getZoom();
   lastVisibleModes = new Set(visibleModes);
   const showLine = shouldShowLineOnMarker();
 
@@ -236,18 +234,6 @@ export function applyFilter(visibleModes) {
       }
     }
   }
-
-  requestAnimationFrame(() => {
-    const c = map.getCenter();
-    const z = map.getZoom();
-    if (
-      Math.abs(c.lat - savedCenter.lat) > 1e-6 ||
-      Math.abs(c.lng - savedCenter.lng) > 1e-6 ||
-      z !== savedZoom
-    ) {
-      map.setView(savedCenter, savedZoom, { animate: false });
-    }
-  });
 }
 
 function countByMode(vehicles, filterMode) {

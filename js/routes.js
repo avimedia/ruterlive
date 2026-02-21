@@ -357,8 +357,18 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
   if (drawn.has(key)) return;
   drawn.add(key);
 
+  const pts = shape.points;
+  if (!Array.isArray(pts) || pts.length < 2) return;
+  const latlngs = pts
+    .map((p) => {
+      if (Array.isArray(p)) return [Number(p[0]), Number(p[1])];
+      if (p && typeof p.lat === 'number' && typeof p.lon === 'number') return [p.lat, p.lon];
+      return null;
+    })
+    .filter((x) => x && !isNaN(x[0]) && !isNaN(x[1]));
+  if (latlngs.length < 2) return;
+
   const mode = shape.mode?.toLowerCase();
-  const latlngs = shape.points.map((p) => [Number(p[0]), Number(p[1])]);
   const color = getShapeColor(mode, shape.line + (shape.from || ''));
   const highlightColor = getRouteHighlightColor();
   const polyline = L.polyline(latlngs, {

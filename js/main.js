@@ -149,6 +149,21 @@ function applyInitialData(data) {
   routeShapes = mergeRouteShapes(shapes, routeShapes);
   etLoaded = true;
   mergeAndUpdate();
+  function tryRailShapes() {
+    fetch('/api/rail-shapes')
+      .then((r) => r.ok && r.json())
+      .then((rail) => {
+        if (Array.isArray(rail) && rail.length > 0) {
+          const hadRail = routeShapes.some((s) => (s.mode || '').toLowerCase() === 'rail' || (s.mode || '').toLowerCase() === 'flytog');
+          routeShapes = mergeRouteShapes(rail, routeShapes);
+          if (!hadRail) mergeAndUpdate();
+        }
+      })
+      .catch(() => {});
+  }
+  tryRailShapes();
+  setTimeout(tryRailShapes, 8000);
+  setTimeout(tryRailShapes, 25000);
   const hasRail = shapes.some((s) => (s.mode || '').toLowerCase() === 'rail' || (s.mode || '').toLowerCase() === 'flytog');
   if (!hasRail && shapes.length > 0) {
     [5000, 15000, 45000].forEach((delay) => {

@@ -47,6 +47,12 @@ app.get('/api/route-shapes', (_req, res) => {
   res.json(mergeShapes(getCachedShapes(), railShapesCache));
 });
 
+// Kun jernbaneruter – for å sikre at strekninger alltid lastes
+app.get('/api/rail-shapes', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.json(railShapesCache);
+});
+
 function shapeKey(s) {
   return `${(s.mode || '').toLowerCase()}|${(s.line || '').toString()}|${s.from || ''}|${s.to || ''}`;
 }

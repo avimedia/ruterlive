@@ -65,6 +65,24 @@ const ROUTE_HUBS = [
   { id: 'NSR:StopPlace:6505', name: 'Oslo Bussterminal', modes: ['bus', 'coach'] },
 ];
 
+/** Fallback når avgangstavle-API returnerer tomt (f.eks. timeout, schema-endring). */
+const FALLBACK_RAIL_TRIPS = [
+  { from: 'NSR:StopPlace:12497', fromName: 'Skien', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
+  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:12497', toName: 'Skien' },
+  { from: 'NSR:StopPlace:11', fromName: 'Drammen stasjon', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
+  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:11', toName: 'Drammen stasjon' },
+  { from: 'NSR:StopPlace:6234', fromName: 'Lillestrøm', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
+  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:6234', toName: 'Lillestrøm' },
+  { from: 'NSR:StopPlace:6010', fromName: 'Ski', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
+  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:6010', toName: 'Ski' },
+  { from: 'NSR:StopPlace:236', fromName: 'Eidsvoll', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
+  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:236', toName: 'Eidsvoll' },
+  { from: 'NSR:StopPlace:222', fromName: 'Kongsberg', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
+  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:222', toName: 'Kongsberg' },
+  { from: 'NSR:StopPlace:269', fromName: 'Oslo lufthavn', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
+  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:269', toName: 'Oslo lufthavn' },
+];
+
 /**
  * Henter unike (linje, destinasjon)-par fra avgangstavler.
  * @returns {{ rail: Array<{from,fromName,to,toName}>, flybuss: Array<{from,fromName,to,toName}> }}
@@ -89,10 +107,23 @@ async function discoverTripsFromDepartureBoards() {
                 }
               }
             }
+            quays {
+              estimatedCalls(timeRange: ${timeRange}, numberOfDepartures: 20) {
+                destinationDisplay { frontText }
+                serviceJourney {
+                  journeyPattern {
+                    line { publicCode transportMode }
+                  }
+                }
+              }
+            }
           }
         }`,
       });
-        const calls = data?.stopPlace?.estimatedCalls || [];
+      let calls = data?.stopPlace?.estimatedCalls || [];
+      if (calls.length === 0 && data?.stopPlace?.quays?.length) {
+        calls = data.stopPlace.quays.flatMap((q) => q.estimatedCalls || []);
+      }
       for (const c of calls) {
         const line = c?.serviceJourney?.journeyPattern?.line;
         const mode = (line?.transportMode || '').toLowerCase();
@@ -189,16 +220,17 @@ function buildPlaceArg(placeId, name) {
 
 async function fetchTripShapes(trips, modes, acceptAllBus = false) {
   const allShapes = [];
-  const modesArg = modes.map((m) => `{ transportMode: ${m} }`).join(', ');
-
   const dateTime = new Date().toISOString().slice(0, 19);
+  const useModes = modes.length > 0 && !modes.includes('rail');
+  const modesStr = useModes ? `, modes: { transportModes: [${modes.map((m) => `{ transportMode: ${m} }`).join(', ')}] }` : '';
+
   for (const trip of trips) {
     const { from, fromName, to, toName } = trip;
     const fromArg = buildPlaceArg(from, fromName);
     const toArg = buildPlaceArg(to, toName);
     try {
       const data = await fetchJp({
-        query: `{ trip(from: ${fromArg}, to: ${toArg}, dateTime: "${dateTime}", numTripPatterns: 10, modes: { transportModes: [${modesArg}] }) {
+        query: `{ trip(from: ${fromArg}, to: ${toArg}, dateTime: "${dateTime}", numTripPatterns: 10${modesStr}) {
           tripPatterns {
             legs {
               mode
@@ -215,12 +247,15 @@ async function fetchTripShapes(trips, modes, acceptAllBus = false) {
       });
 
       const patterns = data?.trip?.tripPatterns || [];
-      const useTripEndpoints = modes.includes('rail'); // Bruk hele ruten (fromName/toName) for tog
+      const useTripEndpoints = modes.includes('rail');
+      const wantRail = modes.includes('rail');
       for (const p of patterns) {
         for (const leg of p.legs || []) {
           const lineCode = leg?.line?.publicCode || '';
           if (!lineCode) continue;
-          if (!modes.includes('rail') && !acceptAllBus && !/^(FB|NW)\d*$/i.test(lineCode)) continue;
+          const legMode = (leg.mode || '').toLowerCase();
+          if (wantRail && legMode !== 'rail') continue;
+          if (!wantRail && !acceptAllBus && !/^(FB|NW)\d*$/i.test(lineCode)) continue;
 
           const quayIds = [];
           const fromQ = leg.fromEstimatedCall?.quay;
@@ -264,8 +299,8 @@ async function fetchTripShapes(trips, modes, acceptAllBus = false) {
  * @param {Map} quayCoordCache - cache for quayId -> [lat, lon]
  */
 export async function fetchJpRoutes(quayCoordCache) {
-  const { rail: railTrips, flybuss: flybussTrips } = await discoverTripsFromDepartureBoards();
-  const railShapes = railTrips.length > 0 ? await fetchTripShapes(railTrips, ['rail']) : [];
+  const { flybuss: flybussTrips } = await discoverTripsFromDepartureBoards();
+  const railShapes = await fetchTripShapes(FALLBACK_RAIL_TRIPS, ['rail']);
   const flybussShapes = flybussTrips.length > 0 ? await fetchTripShapes(flybussTrips, ['bus', 'coach'], true) : [];
 
   const railCount = railShapes.filter((s) => s.mode === 'flytog').length;
@@ -319,12 +354,10 @@ export async function fetchJpRoutes(quayCoordCache) {
   return shapes;
 }
 
-/** Henter kun jernbaneruter (regiontog, flytoget). Krever ikke GTFS. Brukes for rask preload ved oppstart. */
+/** Henter kun jernbaneruter (regiontog, flytoget). Bruker NSR StopPlace-IDer – avgangstavle-navn gir 0 resultater i trip-søk. */
 export async function fetchRailShapesOnly() {
   const quayCoordCache = new Map();
-  const { rail: railTrips } = await discoverTripsFromDepartureBoards();
-  const railShapes = railTrips.length > 0 ? await fetchTripShapes(railTrips, ['rail']) : [];
-  if (railShapes.length === 0) return [];
+  const railShapes = await fetchTripShapes(FALLBACK_RAIL_TRIPS, ['rail']);
   const allQuayIds = [...new Set(railShapes.flatMap((s) => s.quayIds?.map((q) => (typeof q === 'object' ? q?.id : q)).filter(Boolean) ?? []))];
   await fetchQuayCoords(allQuayIds, quayCoordCache);
   const shapes = [];

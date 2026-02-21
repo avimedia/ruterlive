@@ -105,8 +105,8 @@ app.get('/api/departures', async (req, res) => {
     return res.status(400).json({ error: 'Mangler eller ugyldig quayId' });
   }
   try {
-    const timeRange = 72000; // ~20t frem i tid
-    const numberOfDepartures = 15;
+    const timeRange = 21600; // 6t frem – raskere respons
+    const numberOfDepartures = 12;
     const resJp = await fetch('https://api.entur.io/journey-planner/v3/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ET-Client-Name': 'ruterlive-web' },

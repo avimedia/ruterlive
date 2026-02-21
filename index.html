@@ -20,23 +20,23 @@
   <div id="app">
     <header>
       <h1>RuterLive</h1>
-      <div class="theme-select-wrap">
-        <label for="theme-select" class="theme-label">Tema</label>
-        <select id="theme-select" aria-label="Velg fargebruk">
-          <option value="light">Lys</option>
-          <option value="dark">Mørk</option>
-          <option value="system">Følg system</option>
-        </select>
-      </div>
     </header>
 
     <main id="map-container">
       <aside id="layers-panel">
         <div class="panel-header">
-          <h2>Vis lag</h2>
+          <h2 class="panel-title">Lagvelger</h2>
           <button type="button" class="panel-toggle" id="panel-toggle" title="Minimer/utvid" aria-label="Minimer panel" aria-expanded="true">−</button>
         </div>
         <div class="panel-body">
+        <div class="theme-select-wrap">
+          <label for="theme-select" class="theme-label">Tema</label>
+          <select id="theme-select" aria-label="Velg fargebruk">
+            <option value="light">Lys</option>
+            <option value="dark">Mørk</option>
+            <option value="system">Følg system</option>
+          </select>
+        </div>
         <div class="layer-controls">
           <span class="layer-row">
             <label><span class="layer-color-dot bus" aria-hidden="true"></span><input type="checkbox" data-mode="bus" checked> Buss</label>

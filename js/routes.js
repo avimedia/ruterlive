@@ -203,7 +203,7 @@ function addStopMarkers(map, shapes) {
         zIndexOffset: 1000,
       });
       marker._quayId = quayId;
-      const popup = L.popup({ className: 'departure-board-popup', maxWidth: 320 });
+      const popup = L.popup({ className: 'departure-board-popup', maxWidth: 460 });
       marker.bindPopup(popup, { autoClose: false, closeOnClick: false });
       marker.on('click', (e) => L.DomEvent.stopPropagation(e));
       marker.on('popupopen', () => {
@@ -244,14 +244,23 @@ async function showDepartureBoard(popup, quayId) {
     const res = await fetch(`/api/departures?quayId=${encodeURIComponent(quayId)}`);
     const data = await res.json();
     const name = data?.name || 'Holdeplass';
-    const calls = (data?.estimatedCalls ?? [])
+    const allCalls = (data?.estimatedCalls ?? [])
       .map((c) => {
         const time = c.expectedDepartureTime || c.aimedDepartureTime || '';
         return { ...c, depTime: time ? new Date(time).getTime() : 0 };
       })
       .filter((c) => c.depTime > 0)
-      .sort((a, b) => a.depTime - b.depTime)
-      .slice(0, 12);
+      .sort((a, b) => a.depTime - b.depTime);
+
+    const MAX_PER_MODE = 3;
+    const byMode = new Map();
+    for (const c of allCalls) {
+      const mode = (c.serviceJourney?.journeyPattern?.line?.transportMode || 'bus')?.toLowerCase();
+      const list = byMode.get(mode) ?? [];
+      if (list.length < MAX_PER_MODE) list.push(c);
+      byMode.set(mode, list);
+    }
+    const calls = [...byMode.values()].flat().sort((a, b) => a.depTime - b.depTime).slice(0, 10);
 
     const now = Date.now();
     const rows = calls.map((c) => {
@@ -263,7 +272,7 @@ async function showDepartureBoard(popup, quayId) {
       const mode = (c.serviceJourney?.journeyPattern?.line?.transportMode || 'bus')?.toLowerCase();
       const lineColor = MODE_COLORS_DEP[mode] || MODE_COLORS_DEP.bus;
       let dest = (c.destinationDisplay?.frontText || '').trim();
-      if (dest.length > 28) dest = dest.slice(0, 26) + '…';
+      if (dest.length > 38) dest = dest.slice(0, 36) + '…';
       const isDelayed =
         c.realtime &&
         c.expectedDepartureTime &&

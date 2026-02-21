@@ -110,25 +110,30 @@ initLayers((visibleModes) => {
 
 updateVehicleCount(null, null, true);
 
-// Hent cached rutekart med en gang – klart før brukeren ser siden
-function loadRouteShapes(retries = 2) {
+// Hent cached rutekart – retry ved 502/503 (cold start)
+const ROUTE_SHAPE_RETRIES = 4;
+const ROUTE_SHAPE_DELAYS = [2000, 4000, 8000, 12000];
+
+function loadRouteShapes(attempt = 0) {
   fetch('/api/route-shapes')
-    .then((r) => (r.ok ? r.json() : []))
+    .then((r) => {
+      if ((r.status === 502 || r.status === 503) && attempt < ROUTE_SHAPE_RETRIES) {
+        setTimeout(() => loadRouteShapes(attempt + 1), ROUTE_SHAPE_DELAYS[attempt] ?? 15000);
+        throw { _retryScheduled: true };
+      }
+      return r.ok ? r.json() : [];
+    })
     .then((shapes) => {
       if (Array.isArray(shapes) && shapes.length > 0) {
         routeShapes = mergeRouteShapes(routeShapes, shapes);
-        etLoaded = true;
-        mergeAndUpdate();
-      } else if (retries > 0) {
-        setTimeout(() => loadRouteShapes(retries - 1), 3000);
-      } else {
-        etLoaded = true;
-        mergeAndUpdate();
       }
+      etLoaded = true;
+      mergeAndUpdate();
     })
-    .catch(() => {
-      if (retries > 0) {
-        setTimeout(() => loadRouteShapes(retries - 1), 3000);
+    .catch((err) => {
+      if (err?._retryScheduled) return;
+      if (attempt < ROUTE_SHAPE_RETRIES) {
+        setTimeout(() => loadRouteShapes(attempt + 1), ROUTE_SHAPE_DELAYS[attempt] ?? 15000);
       } else {
         etLoaded = true;
         mergeAndUpdate();

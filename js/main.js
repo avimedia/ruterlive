@@ -101,6 +101,9 @@ if (map) {
       updateRouteLines(routeShapes, getVisibleModes(), null);
     }
   });
+  map.on('zoomend', () => {
+    updateRouteLines(routeShapes, getVisibleModes(), selectedVehicleForRoute);
+  });
 }
 
 initLayers((visibleModes) => {

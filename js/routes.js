@@ -38,9 +38,12 @@ let lastRenderedShapesKey = '';
 let lastRenderedModesKey = '';
 let lastSelectedVehicleKey = '';
 
-/** T-bane, jernbane, trikk og buss vises alltid. Båt og flybuss kun ved klikk på kjøretøy. */
-const ALWAYS_SHOWN_MODES = new Set(['metro', 'rail', 'flytog', 'tram', 'bus']);
-const VEHICLE_CLICK_MODES = new Set(['water', 'flybuss']);
+/** Zoom-nivå før holdeplasser vises som små sirkler (gately nivå). */
+const ZOOM_STOPS_VISIBLE = 15;
+
+/** T-bane, jernbane og trikk vises alltid. Buss, båt og flybuss kun ved klikk på kjøretøy. */
+const ALWAYS_SHOWN_MODES = new Set(['metro', 'rail', 'flytog', 'tram']);
+const VEHICLE_CLICK_MODES = new Set(['bus', 'water', 'flybuss']);
 
 function vehicleMode(vehicle) {
   const m = (vehicle?.mode || '').toLowerCase();
@@ -136,6 +139,33 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   }
   for (const shape of selectedMatches) {
     addRoutePolyline(map, shape, drawn, true);
+  }
+
+  if (map.getZoom() >= ZOOM_STOPS_VISIBLE) {
+    addStopMarkers(map, shapesToShow);
+  }
+}
+
+function addStopMarkers(map, shapes) {
+  const seen = new Set();
+  const pointKey = (lat, lon) => `${lat.toFixed(5)},${lon.toFixed(5)}`;
+  for (const shape of shapes) {
+    const mode = shape.mode?.toLowerCase();
+    const color = getShapeColor(mode, shape.line + (shape.from || ''));
+    for (const [lat, lon] of shape.points ?? []) {
+      const key = pointKey(lat, lon);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const circle = L.circleMarker([lat, lon], {
+        radius: 4,
+        fillColor: color,
+        color: 'rgba(255,255,255,0.8)',
+        weight: 1,
+        fillOpacity: 0.7,
+        interactive: false,
+      });
+      circle.addTo(map.routeLayerGroup);
+    }
   }
 }
 

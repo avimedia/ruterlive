@@ -6,7 +6,6 @@
 import { enrichShapesWithOSRM } from './osrm.js';
 
 const ET_URL = '/api/entur-et/et?datasetId=RUT&maxSize=3000';
-const GEOCODER_URL = '/api/entur-geocoder/autocomplete';
 const JP_GRAPHQL_URL = '/api/entur-jp/graphql';
 const CLIENT_NAME = 'ruterlive-web';
 
@@ -40,8 +39,6 @@ function mapJpTransportMode(jpMode) {
   return null;
 }
 
-// Oslo sentrum – brukes for å prioritere Geocoder-treff
-const OSLO_FOCUS = { lat: 59.91, lon: 10.75 };
 const MAX_QUAYS_TO_FETCH = 500; // Flere holdeplasser = flere busser med beregnet posisjon
 
 const JP_BATCH_SIZE = 25; // Større batch = færre requests
@@ -75,53 +72,17 @@ async function fetchQuayCoordsFromJpBatch(quayIds) {
   }
 }
 
-async function getQuayCoords(quayId, stopName) {
+/** Henter koordinater for holdeplass – kun ID-basert (JP). Ingen navnesøk (Geocoder) siden mange stopp har samme navn. */
+async function getQuayCoords(quayId) {
   if (quayCoordCache.has(quayId)) {
     return quayCoordCache.get(quayId);
   }
-  // Fallback: Geocoder søk på holdeplassnavn
-  const OSLO_BBOX = { minLat: 59.5, maxLat: 60.3, minLon: 10.1, maxLon: 11.3 };
-  const searchConfigs = [
-    { text: stopName.includes('Oslo') ? stopName : `${stopName} Oslo`, tariffZone: true },
-    { text: stopName, tariffZone: true },
-    { text: stopName.includes('Oslo') ? stopName : `${stopName} Oslo`, tariffZone: false },
-    { text: stopName, tariffZone: false },
-  ];
-  for (const { text: searchText, tariffZone } of searchConfigs) {
-    if (!searchText?.trim()) continue;
-    try {
-      const params = new URLSearchParams({
-        text: searchText,
-        size: '5',
-        'boundary.country': 'NOR',
-        layers: 'venue',
-        'focus.point.lat': String(OSLO_FOCUS.lat),
-        'focus.point.lon': String(OSLO_FOCUS.lon),
-      });
-      if (tariffZone) params.set('tariff_zone_authorities', 'RUT');
-      const url = `${GEOCODER_URL}?${params}`;
-      const res = await fetch(url, { headers: { 'ET-Client-Name': CLIENT_NAME } });
-      const data = await res.json();
-      const features = data?.features || [];
-      for (const feat of features) {
-        const coords = feat?.geometry?.coordinates;
-        if (coords) {
-          const [lon, lat] = coords;
-          if (lat >= OSLO_BBOX.minLat && lat <= OSLO_BBOX.maxLat && lon >= OSLO_BBOX.minLon && lon <= OSLO_BBOX.maxLon) {
-            quayCoordCache.set(quayId, [lat, lon]);
-            return [lat, lon];
-          }
-        }
-      }
-      if (features[0]?.geometry?.coordinates) {
-        const [lon, lat] = features[0].geometry.coordinates;
-        if (lat >= OSLO_BBOX.minLat && lat <= OSLO_BBOX.maxLat && lon >= OSLO_BBOX.minLon && lon <= OSLO_BBOX.maxLon) {
-          quayCoordCache.set(quayId, [lat, lon]);
-          return [lat, lon];
-        }
-      }
-    } catch (_) {}
-  }
+  if (!/^NSR:Quay:\d+$/.test(quayId)) return null;
+  try {
+    const coords = await fetchQuayCoordsFromJpBatch([quayId]);
+    const c = coords.get(quayId);
+    if (c) return c;
+  } catch (_) {}
   return null;
 }
 
@@ -228,7 +189,7 @@ async function fetchQuayCoordsBatch(quays) {
   const CONCURRENCY = 4;
   for (let i = 0; i < remaining.length; i += CONCURRENCY) {
     const batch = remaining.slice(i, i + CONCURRENCY);
-    await Promise.all(batch.map(({ quayId, name }) => getQuayCoords(quayId, name)));
+    await Promise.all(batch.map(({ quayId }) => getQuayCoords(quayId)));
   }
 }
 
@@ -301,8 +262,8 @@ export async function fetchEstimatedVehicles(onProgress) {
         fromCall = lastRecorded;
       }
 
-      const fromCoords = fromCall ? quayCoordCache.get(fromCall.quayId) ?? await getQuayCoords(fromCall.quayId, fromCall.name) : null;
-      const toCoords = toCall ? quayCoordCache.get(toCall.quayId) ?? await getQuayCoords(toCall.quayId, toCall.name) : null;
+      const fromCoords = fromCall ? quayCoordCache.get(fromCall.quayId) ?? await getQuayCoords(fromCall.quayId) : null;
+      const toCoords = toCall ? quayCoordCache.get(toCall.quayId) ?? await getQuayCoords(toCall.quayId) : null;
 
       let lat = null;
       let lon = null;
@@ -322,6 +283,11 @@ export async function fetchEstimatedVehicles(onProgress) {
       }
 
       if (lat != null && lon != null) {
+        const allCalls = [...j.recordedCalls, ...j.estimatedCalls];
+        const first = allCalls[0];
+        const last = allCalls[allCalls.length - 1];
+        const midIdx = Math.floor(allCalls.length / 2);
+        const viaStop = allCalls.length > 2 ? allCalls[midIdx]?.name : null;
         vehicles.push({
           vehicleId: j.vehicleId,
           mode: j.mode,
@@ -329,6 +295,9 @@ export async function fetchEstimatedVehicles(onProgress) {
           line: { publicCode: getLinePublicCode(j.lineRef) },
           destinationName: j.destinationName,
           bearing: null,
+          from: fromCall?.name || first?.name || null,
+          to: toCall?.name || last?.name || j.destinationName || null,
+          via: viaStop || null,
         });
       }
     }
@@ -351,6 +320,43 @@ export async function fetchEstimatedVehicles(onProgress) {
   }
 }
 
+/** Fjerner stopp med åpenbart feil koordinater (f.eks. holdeplass som peker til annet land). */
+function removeGeoOutliers(points, maxNeighborDistKm = 25) {
+  if (!points || points.length < 3) return points;
+
+  const haversineKm = (a, b) => {
+    const R = 6371;
+    const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+    const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+    const x =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  };
+
+  let current = [...points];
+
+  while (current.length >= 3) {
+    let worstDist = 0;
+    let outlierIdx = -1;
+
+    for (let i = 0; i < current.length; i++) {
+      const dPrev = i > 0 ? haversineKm(current[i], current[i - 1]) : 0;
+      const dNext = i < current.length - 1 ? haversineKm(current[i], current[i + 1]) : 0;
+      const dMax = Math.max(dPrev, dNext);
+      if (dMax > worstDist) {
+        worstDist = dMax;
+        outlierIdx = i;
+      }
+    }
+
+    if (worstDist <= maxNeighborDistKm) break;
+    current.splice(outlierIdx, 1);
+  }
+
+  return current;
+}
+
 function buildRouteShapes(journeys) {
   const seen = new Set();
   const shapes = [];
@@ -359,13 +365,19 @@ function buildRouteShapes(journeys) {
     if (!routeModes.has(j.mode)) continue;
     const allCalls = [...j.recordedCalls, ...j.estimatedCalls];
     const points = [];
-    for (const c of allCalls) {
+    const firstQuayId = allCalls[0]?.quayId;
+    for (let i = 0; i < allCalls.length; i++) {
+      const c = allCalls[i];
       const coords = quayCoordCache.get(c.quayId);
-      if (coords) points.push(coords);
+      if (!coords) continue;
+      // Sirkelruter: ikke tegne linje tilbake til start – stopp ved siste stopp
+      if (i === allCalls.length - 1 && c.quayId === firstQuayId) break;
+      points.push(coords);
     }
-    const minPoints = j.mode === 'metro' ? 5 : 3; // T-bane trenger mange stopp – unngå strek mellom endepunktene
-    if (points.length < minPoints) continue;
-    const key = points.map((p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join('|');
+    const cleanedPoints = removeGeoOutliers(points);
+    const minPoints = j.mode === 'metro' ? 5 : 3; // T-bane: mange stopp; buss/trikk/båt: min 3 for å unngå rette streker
+    if (cleanedPoints.length < minPoints) continue;
+    const key = cleanedPoints.map((p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join('|');
     if (seen.has(key)) continue;
     seen.add(key);
 
@@ -380,7 +392,7 @@ function buildRouteShapes(journeys) {
       from: first?.name || '',
       to: last?.name || '',
       via: viaStop || null,
-      points,
+      points: cleanedPoints,
     });
   }
   if (import.meta.env.DEV && shapes.length > 0) {

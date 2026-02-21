@@ -1,6 +1,7 @@
 import { initMap } from './map.js';
 import { connectVehicles } from './api.js';
 import { fetchEstimatedVehicles } from './et-api.js';
+import { fetchLineRouteFromJp } from './jp-line-lookup.js';
 import { updateMarkers, applyFilter, getVehicleCounts } from './markers.js';
 import { initLayers, getVisibleModes, updateVehicleCount } from './layers.js';
 import { updateRouteLines } from './routes.js';
@@ -10,13 +11,68 @@ let etVehicles = [];
 let routeShapes = [];
 let etLoaded = false;
 
+const jpLineResults = new Map(); // "line|dest" -> { from, to, via }
+
+function getJpLineKey(lineCode, dest) {
+  return `${(lineCode || '').toUpperCase()}|${(dest || '').toLowerCase().slice(0, 40)}`;
+}
+
+function enrichVehicleWithRouteShape(vehicle, shapes) {
+  if (vehicle.from != null && vehicle.to != null) return vehicle;
+  const line = vehicle.line?.publicCode || '';
+  const dest = (vehicle.destinationName || '').toLowerCase();
+  const mode = (vehicle.mode || '').toLowerCase();
+
+  const jpKey = getJpLineKey(line, vehicle.destinationName);
+  const jpResult = jpLineResults.get(jpKey);
+  if (jpResult) {
+    return { ...vehicle, from: jpResult.from, to: jpResult.to, via: jpResult.via ?? vehicle.via };
+  }
+
+  if (shapes?.length) {
+    const match =
+      shapes.find((s) => {
+        const sLine = (s.line || '').toString();
+        const sTo = (s.to || '').toLowerCase();
+        const sMode = (s.mode || '').toLowerCase();
+        return sLine === line && (sMode === mode || !sMode) && (dest.includes(sTo) || sTo.includes(dest) || dest === '');
+      }) ||
+      shapes.find((s) => (s.line || '').toString() === line && ((s.mode || '').toLowerCase() === mode || !s.mode));
+    if (match) {
+      return { ...vehicle, from: vehicle.from ?? match.from, to: vehicle.to ?? match.to, via: vehicle.via ?? match.via };
+    }
+  }
+
+  const isExternalLine = line?.toUpperCase().startsWith('FB'); // Flybuss m.m. utenfor RUT ET
+  const needsJpLookup = isExternalLine && vehicle.destinationName && !jpLineResults.has(jpKey);
+  if (needsJpLookup) {
+    const lat = vehicle.location?.latitude;
+    const lon = vehicle.location?.longitude;
+    fetchLineRouteFromJp(line, vehicle.destinationName, { lat, lon }).then((result) => {
+      if (result) {
+        jpLineResults.set(jpKey, result);
+        mergeAndUpdate();
+      }
+    });
+  }
+  return vehicle;
+}
+
 function mergeAndUpdate() {
-  const merged = [...graphqlVehicles];
+  const merged = [];
+  const etByid = new Map(etVehicles.map((v) => [v.vehicleId, v]));
+  for (const v of graphqlVehicles) {
+    const et = etByid.get(v.vehicleId);
+    const enhanced = et
+      ? { ...v, from: v.from ?? et.from, to: v.to ?? et.to, via: v.via ?? et.via }
+      : enrichVehicleWithRouteShape(v, routeShapes);
+    merged.push(enhanced);
+  }
   const seenIds = new Set(graphqlVehicles.map((v) => v.vehicleId));
   for (const v of etVehicles) {
     if (!seenIds.has(v.vehicleId)) {
       seenIds.add(v.vehicleId);
-      merged.push(v);
+      merged.push(enrichVehicleWithRouteShape(v, routeShapes));
     }
   }
   const visibleModes = getVisibleModes();
@@ -39,7 +95,7 @@ fetch('/api/route-shapes')
   .then((shapes) => {
     if (Array.isArray(shapes) && shapes.length > 0) {
       routeShapes = shapes;
-      updateRouteLines(routeShapes, getVisibleModes());
+      mergeAndUpdate(); // Re-enrich kjøretøy med from/to/via fra rutekart
     }
   })
   .catch(() => {});
@@ -47,21 +103,43 @@ fetch('/api/route-shapes')
 connectVehicles(
   null,
   (vehicles) => {
-    graphqlVehicles = vehicles;
-    mergeAndUpdate();
+    if (Array.isArray(vehicles)) {
+      graphqlVehicles = vehicles;
+      mergeAndUpdate();
+    }
   },
   (error) => {
-    updateVehicleCount(null, error, false);
+    const merged = graphqlVehicles.length
+      ? [...graphqlVehicles, ...etVehicles.filter((v) => !graphqlVehicles.some((g) => g.vehicleId === v.vehicleId))]
+      : etVehicles;
+    updateVehicleCount(getVehicleCounts(merged), error, !etLoaded);
   }
 );
 
-// Hent beregnede posisjoner og rutelinjer fra SIRI ET hvert 30. sekund
+const ET_MODES = new Set(['bus', 'tram', 'metro', 'water']);
+const JP_MODES = new Set(['rail', 'flytog', 'flybuss']);
+
+function mergeRouteShapes(etShapes, existingShapes) {
+  const fromEt = (etShapes ?? []).filter((s) => ET_MODES.has((s.mode || '').toLowerCase()));
+  const fromExisting = (existingShapes ?? []).filter((s) => JP_MODES.has((s.mode || '').toLowerCase()));
+  return [...fromEt, ...fromExisting];
+}
+
+const ET_POLL_MS = 10000;
 async function pollEt() {
-  const result = await fetchEstimatedVehicles();
-  etVehicles = result.vehicles ?? result;
-  routeShapes = result.routeShapes ?? [];
-  etLoaded = true;
-  mergeAndUpdate();
+  try {
+    const result = await fetchEstimatedVehicles();
+    const vehicles = result.vehicles ?? result;
+    const etShapes = result.routeShapes ?? [];
+    if (Array.isArray(vehicles)) etVehicles = vehicles;
+    if (Array.isArray(etShapes) && etShapes.length > 0) {
+      routeShapes = mergeRouteShapes(etShapes, routeShapes);
+    }
+    etLoaded = true;
+    mergeAndUpdate();
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('[RuterLive] ET poll:', err.message);
+  }
 }
 pollEt();
-setInterval(pollEt, 30000);
+setInterval(pollEt, ET_POLL_MS);

@@ -4,6 +4,7 @@
  */
 
 import { DOMParser } from '@xmldom/xmldom';
+import { fetchJpRoutes } from './jp-route-fetcher.js';
 
 const ET_URL = 'https://api.entur.io/realtime/v1/rest/et?datasetId=RUT&maxSize=3000';
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
@@ -183,6 +184,43 @@ function getLinePublicCode(lineRef) {
   return m ? m[1] : '?';
 }
 
+/** Fjerner stopp med åpenbart feil koordinater (f.eks. holdeplass som peker til annet land). */
+function removeGeoOutliers(points, maxNeighborDistKm = 25) {
+  if (!points || points.length < 3) return points;
+
+  const haversineKm = (a, b) => {
+    const R = 6371;
+    const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+    const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+    const x =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  };
+
+  let current = [...points];
+
+  while (current.length >= 3) {
+    let worstDist = 0;
+    let outlierIdx = -1;
+
+    for (let i = 0; i < current.length; i++) {
+      const dPrev = i > 0 ? haversineKm(current[i], current[i - 1]) : 0;
+      const dNext = i < current.length - 1 ? haversineKm(current[i], current[i + 1]) : 0;
+      const dMax = Math.max(dPrev, dNext);
+      if (dMax > worstDist) {
+        worstDist = dMax;
+        outlierIdx = i;
+      }
+    }
+
+    if (worstDist <= maxNeighborDistKm) break;
+    current.splice(outlierIdx, 1);
+  }
+
+  return current;
+}
+
 function buildRouteShapes(journeys) {
   const seen = new Set();
   const shapes = [];
@@ -192,13 +230,19 @@ function buildRouteShapes(journeys) {
     if (!routeModes.has(j.mode)) continue;
     const allCalls = [...j.recordedCalls, ...j.estimatedCalls];
     const points = [];
-    for (const c of allCalls) {
+    const firstQuayId = allCalls[0]?.quayId;
+    for (let i = 0; i < allCalls.length; i++) {
+      const c = allCalls[i];
       const coords = quayCoordCache.get(c.quayId);
-      if (coords) points.push(coords);
+      if (!coords) continue;
+      // Sirkelruter: ikke tegne linje tilbake til start – stopp ved siste stopp
+      if (i === allCalls.length - 1 && c.quayId === firstQuayId) break;
+      points.push(coords);
     }
-    const minPoints = j.mode === 'metro' ? 5 : 3; // T-bane: krever nok stopp – unngå strek mellom endepunktene
-    if (points.length < minPoints) continue;
-    const key = points.map((p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join('|');
+    const cleanedPoints = removeGeoOutliers(points);
+    const minPoints = j.mode === 'metro' ? 5 : 3; // T-bane: mange stopp; buss/trikk/båt: min 3 for å unngå rette streker
+    if (cleanedPoints.length < minPoints) continue;
+    const key = cleanedPoints.map((p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join('|');
     if (seen.has(key)) continue;
     seen.add(key);
 
@@ -213,7 +257,7 @@ function buildRouteShapes(journeys) {
       from: first?.name || '',
       to: last?.name || '',
       via: viaStop || null,
-      points,
+      points: cleanedPoints,
     });
   }
   return shapes;
@@ -280,6 +324,13 @@ export async function refreshRouteShapes() {
 
     let shapes = buildRouteShapes(journeys);
     shapes = await enrichWithOsrm(shapes);
+
+    try {
+      const jpShapes = await fetchJpRoutes(quayCoordCache);
+      shapes = [...shapes, ...jpShapes];
+    } catch (err) {
+      console.warn('[RuterLive] JP routes fetch:', err.message);
+    }
 
     cachedShapes = shapes;
     lastFetch = Date.now();

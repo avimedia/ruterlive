@@ -31,7 +31,12 @@
             <button type="button" class="info-btn" data-info="tram" title="Mer info" aria-label="Mer info om Trikk">ⓘ</button>
           </span>
           <label><span class="layer-color-dot water" aria-hidden="true"></span><input type="checkbox" data-mode="water" checked> Båt</label>
-          <label><span class="layer-color-dot rail" aria-hidden="true"></span><input type="checkbox" data-mode="rail" checked> Tog</label>
+          <span class="layer-row">
+            <label><span class="layer-color-dot rail" aria-hidden="true"></span><input type="checkbox" data-mode="rail" checked> Regiontog</label>
+          </span>
+          <span class="layer-row">
+            <label><span class="layer-color-dot flytog" aria-hidden="true"></span><input type="checkbox" data-mode="flytog" checked> Flytoget</label>
+          </span>
         </div>
         <label class="routes-toggle"><input type="checkbox" id="routes-toggle" checked> Rutelinjer</label>
         <div id="vehicle-count">Henter kjøretøy og rutelinjer fra Entur…</div>

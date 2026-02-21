@@ -6,7 +6,8 @@ const MODE_CONFIG = {
   metro: { label: 'T-bane', key: 'metro' },
   tram: { label: 'Trikk', key: 'tram' },
   water: { label: 'Båt', key: 'water' },
-  rail: { label: 'Tog', key: 'rail' },
+  rail: { label: 'Regiontog', key: 'rail' },
+  flytog: { label: 'Flytoget', key: 'flytog' },
 };
 
 const INFO_TEXTS = {
@@ -91,15 +92,13 @@ export function updateVehicleCount(counts, error, routesLoading = false) {
   const el = document.getElementById('vehicle-count');
   if (!el) return;
 
-  if (error) {
+  el.title = error ? 'Sjekk nettleserkonsollen (F12) for detaljer' : '';
+  if (error && (!counts || (counts.total ?? 0) === 0)) {
     el.textContent = `Feil: ${error}`;
-    el.title = 'Sjekk nettleserkonsollen (F12) for detaljer';
     return;
   }
-
-  el.title = '';
-  if (!counts) {
-    el.textContent = 'Henter kjøretøy og rutelinjer fra Entur…';
+  if (!counts || (counts.total ?? 0) === 0) {
+    el.textContent = error ? `Feil: ${error}` : 'Henter kjøretøy og rutelinjer fra Entur…';
     return;
   }
 
@@ -110,9 +109,11 @@ export function updateVehicleCount(counts, error, routesLoading = false) {
   if (counts.metro > 0) parts.push(`${counts.metro} T-bane`);
   if (counts.tram > 0) parts.push(`${counts.tram} trikk`);
   if (counts.water > 0) parts.push(`${counts.water} båt`);
-  if (counts.rail > 0) parts.push(`${counts.rail} tog`);
+  if (counts.rail > 0) parts.push(`${counts.rail} regiontog`);
+  if (counts.flytog > 0) parts.push(`${counts.flytog} flytog`);
 
   let text = parts.length > 0 ? `${total} kjøretøy: ${parts.join(', ')}` : `${total} kjøretøy`;
   if (routesLoading) text += ' · Rutelinjer lastes…';
+  if (error) text += ' · Oppdatering feilet';
   el.textContent = text;
 }

@@ -53,16 +53,14 @@ async function fetchVehicles(boundingBox, onVehicles, onError) {
     const data = await res.json();
     if (data.errors) {
       console.error('GraphQL errors:', data.errors);
-      onVehicles([]);
       onError?.(data.errors[0]?.message || 'API-feil');
       return;
     }
     const vehicles = parseVehicles(data);
     onVehicles(vehicles);
-    onError?.(null); // Clear error on success
+    onError?.(null);
   } catch (err) {
     console.error('Fetch vehicles error:', err);
-    onVehicles([]);
     onError?.(err.message);
   }
 }

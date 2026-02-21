@@ -177,7 +177,7 @@ function removeGeoOutliers(points, maxNeighborDistKm = MAX_ROUTE_SPAN_KM) {
   if (!points || points.length < 2) return points;
 
   if (points.length === 2) {
-    const dist = haversineKm(points[0], points[1]);
+    const dist = haversineKm([points[0][0], points[0][1]], [points[1][0], points[1][1]]);
     if (dist > maxNeighborDistKm) return []; // Ingen mellomstopp, urealistisk – trolig feil data
     return points;
   }
@@ -189,8 +189,9 @@ function removeGeoOutliers(points, maxNeighborDistKm = MAX_ROUTE_SPAN_KM) {
     let outlierIdx = -1;
 
     for (let i = 0; i < current.length; i++) {
-      const dPrev = i > 0 ? haversineKm(current[i], current[i - 1]) : 0;
-      const dNext = i < current.length - 1 ? haversineKm(current[i], current[i + 1]) : 0;
+      const pi = [current[i][0], current[i][1]];
+      const dPrev = i > 0 ? haversineKm(pi, [current[i - 1][0], current[i - 1][1]]) : 0;
+      const dNext = i < current.length - 1 ? haversineKm(pi, [current[i + 1][0], current[i + 1][1]]) : 0;
       const dMax = Math.max(dPrev, dNext);
       if (dMax > worstDist) {
         worstDist = dMax;
@@ -202,7 +203,7 @@ function removeGeoOutliers(points, maxNeighborDistKm = MAX_ROUTE_SPAN_KM) {
     current.splice(outlierIdx, 1);
   }
 
-  if (current.length === 2 && haversineKm(current[0], current[1]) > maxNeighborDistKm) {
+  if (current.length === 2 && haversineKm([current[0][0], current[0][1]], [current[1][0], current[1][1]]) > maxNeighborDistKm) {
     return [];
   }
   return current;
@@ -224,13 +225,13 @@ function buildRouteShapes(journeys) {
       if (!coords) continue;
       // Sirkelruter: ikke tegne linje tilbake til start – stopp ved siste stopp
       if (i === allCalls.length - 1 && c.quayId === firstQuayId) break;
-      points.push(coords);
+      points.push([coords[0], coords[1], c.quayId]);
     }
     const maxSpanKm = j.mode === 'bus' || j.mode === 'water' ? MAX_ROUTE_SPAN_KM_BUS : MAX_ROUTE_SPAN_KM;
     const cleanedPoints = removeGeoOutliers(points, maxSpanKm);
     const minPoints = j.mode === 'metro' ? 5 : 3; // T-bane: mange stopp; buss/trikk/båt: min 3 for å unngå rette streker
     if (cleanedPoints.length < minPoints) continue;
-    const key = cleanedPoints.map((p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join('|');
+    const key = cleanedPoints.map((p) => `${Number(p[0]).toFixed(4)},${Number(p[1]).toFixed(4)}`).join('|');
     if (seen.has(key)) continue;
     seen.add(key);
 

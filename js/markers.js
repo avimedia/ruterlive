@@ -52,7 +52,7 @@ function createIcon(mode, lineCode = '', showLine = false) {
   const show = showLine && line;
   return L.divIcon({
     className: 'vehicle-marker ' + cls + (show ? ' vehicle-marker-with-label' : ''),
-    html: show ? `<span class="vehicle-line-num">${escapeHtml(line)}</span>` : undefined,
+    html: show ? `<span class="vehicle-line-num">${escapeHtml(line)}</span>` : '',
     iconSize: show ? [28, 28] : [14, 14],
     iconAnchor: show ? [14, 14] : [7, 7],
   });

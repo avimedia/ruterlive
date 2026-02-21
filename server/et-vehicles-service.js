@@ -145,7 +145,9 @@ function haversineKm(a, b) {
 
 function removeGeoOutliers(points, maxNeighborDistKm = MAX_ROUTE_SPAN_KM) {
   if (!points || points.length < 2) return points;
-  if (points.length === 2 && haversineKm(points[0], points[1]) > maxNeighborDistKm) return [];
+  const p0 = [points[0][0], points[0][1]];
+  const p1 = [points[1][0], points[1][1]];
+  if (points.length === 2 && haversineKm(p0, p1) > maxNeighborDistKm) return [];
   if (points.length === 2) return points;
 
   let current = [...points];
@@ -249,7 +251,7 @@ function buildVehiclesAndShapes(journeys, quayCoordCache) {
       const coords = quayCoordCache.get(c.quayId);
       if (!coords) continue;
       if (i === allCalls.length - 1 && c.quayId === firstQuayId) break;
-      points.push(coords);
+      points.push([coords[0], coords[1], c.quayId]);
     }
     const maxSpanKm = j.mode === 'bus' || j.mode === 'water' ? MAX_ROUTE_SPAN_KM_BUS : MAX_ROUTE_SPAN_KM;
     const cleanedPoints = removeGeoOutliers(points, maxSpanKm);

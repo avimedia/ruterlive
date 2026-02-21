@@ -207,8 +207,14 @@ export async function fetchJpRoutes(quayCoordCache) {
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const { quayIds, ...rest } = s;
-    shapes.push({ ...rest, points });
+    const { quayIds = [], ...rest } = s;
+    const quayStops = quayIds
+      .map((id) => {
+        const c = quayCoordCache.get(id);
+        return c ? [c[0], c[1], id] : null;
+      })
+      .filter(Boolean);
+    shapes.push({ ...rest, points, quayStops });
   }
   return shapes;
 }

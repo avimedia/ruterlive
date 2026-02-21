@@ -98,6 +98,48 @@ app.get('/api/vehicles-cached', async (_req, res) => {
   }
 });
 
+// Avgangstavle for holdeplass – Entur Journey Planner quay.estimatedCalls
+app.get('/api/departures', async (req, res) => {
+  const quayId = (req.query.quayId || '').trim();
+  if (!/^NSR:Quay:\d+$/.test(quayId)) {
+    return res.status(400).json({ error: 'Mangler eller ugyldig quayId' });
+  }
+  try {
+    const timeRange = 72000; // ~20t frem i tid
+    const numberOfDepartures = 15;
+    const resJp = await fetch('https://api.entur.io/journey-planner/v3/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': 'ruterlive-web' },
+      body: JSON.stringify({
+        query: `query($id: String!) {
+          quay(id: $id) {
+            id
+            name
+            estimatedCalls(timeRange: ${timeRange}, numberOfDepartures: ${numberOfDepartures}) {
+              realtime
+              aimedDepartureTime
+              expectedDepartureTime
+              destinationDisplay { frontText }
+              serviceJourney {
+                journeyPattern {
+                  line { publicCode transportMode }
+                }
+              }
+            }
+          }
+        }`,
+        variables: { id: quayId },
+      }),
+    });
+    const data = await resJp.json();
+    const quay = data?.data?.quay;
+    res.set('Cache-Control', 'public, max-age=30');
+    res.json(quay || { id: quayId, name: null, estimatedCalls: [] });
+  } catch (err) {
+    res.status(503).json({ error: err.message, estimatedCalls: [] });
+  }
+});
+
 // Quay-koordinater fra GTFS – brukes av klient for buss-posisjoner
 app.post('/api/quay-coords', express.json({ limit: '100kb' }), async (req, res) => {
   try {

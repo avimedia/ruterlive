@@ -157,6 +157,7 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
       marker.bindPopup(popupHtml, { className: 'vehicle-popup' });
     } else {
       marker = L.marker([lat, lon], {
+        pane: 'vehiclePane',
         icon: createIcon(mode, lineCode, showLine),
       })
         .bindTooltip(title, {

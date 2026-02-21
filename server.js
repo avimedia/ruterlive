@@ -179,15 +179,42 @@ app.get('/api/stops-in-bbox', async (req, res) => {
   }
 });
 
-// Søk etter holdeplasser etter navn
+// Søk etter holdeplasser etter navn – beriker med retning fra Journey Planner
 app.get('/api/stops-search', async (req, res) => {
   try {
     await ensureGtfsStopsLoaded();
     const q = (req.query.q || '').toString().trim();
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
     const stops = searchStops(q, limit);
+    if (stops.length === 0) {
+      res.set('Cache-Control', 'public, max-age=300');
+      return res.json([]);
+    }
+    // Hent retning/description fra Journey Planner for å skille holdeplasser med samme navn
+    const ids = stops.slice(0, 15).map((s) => s.id);
+    const lines = ids.map((id, i) => `q${i}: quay(id: "${id}") { id name description publicCode }`).join('\n');
+    const jpRes = await fetch('https://api.entur.io/journey-planner/v3/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': 'ruterlive-web' },
+      body: JSON.stringify({ query: `query { ${lines} }` }),
+    });
+    const jpData = await jpRes.json();
+    const data = jpData?.data;
+    const enriched = stops.map((s, i) => {
+      const quay = data?.[`q${i}`];
+      let displayName = s.name;
+      if (quay?.description?.trim()) {
+        const desc = quay.description.trim();
+        if (!displayName.toLowerCase().includes(desc.toLowerCase())) {
+          displayName = `${s.name} (${desc})`;
+        }
+      } else if (quay?.publicCode?.trim()) {
+        displayName = `${s.name} – ${quay.publicCode}`;
+      }
+      return { ...s, displayName };
+    });
     res.set('Cache-Control', 'public, max-age=300');
-    res.json(stops);
+    res.json(enriched);
   } catch (err) {
     res.status(503).json([]);
   }

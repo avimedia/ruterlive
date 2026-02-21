@@ -23,8 +23,10 @@ export function initStopSearch() {
   function showResults(items) {
     resultsEl.innerHTML = items
       .map(
-        (s) =>
-          `<li role="option" tabindex="-1" data-id="${escapeAttr(s.id)}" data-lat="${s.lat}" data-lon="${s.lon}" data-name="${escapeAttr(s.name)}">${escapeHtml(s.name)}</li>`
+        (s) => {
+          const displayName = s.displayName ?? s.name;
+          return `<li role="option" tabindex="-1" data-id="${escapeAttr(s.id)}" data-lat="${s.lat}" data-lon="${s.lon}" data-name="${escapeAttr(displayName)}">${escapeHtml(displayName)}</li>`;
+        }
       )
       .join('');
     resultsEl.hidden = false;

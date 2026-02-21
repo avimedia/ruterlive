@@ -37,13 +37,17 @@ export function initMap() {
   map.routeLayerGroup = L.layerGroup().addTo(map);
   map.routeLayerGroup.setZIndex(500);
 
-  // Holdeplasser i egen pane over alt annet – sikrer at klikk fungerer
+  // Holdeplasser – z-index under kjøretøy slik at kjøretøy er klikkbart når det er på holdeplass
   map.stopsLayerGroup = L.layerGroup().addTo(map);
   map.stopsLayerGroup.setZIndex(700);
 
+  // Kjøretøy-egne pane over holdeplasser – prioritér klikk på kjøretøy
+  map.createPane('vehiclePane');
+  map.getPane('vehiclePane').style.zIndex = 750;
+
   // Søkeresultat-marker (vedvarer til neste søk)
   map.searchResultLayer = L.layerGroup().addTo(map);
-  map.searchResultLayer.setZIndex(750);
+  map.searchResultLayer.setZIndex(800);
 
   // Klikk på kartet (ikke på rute) fjerner uthevelse
   map.on('click', clearRouteSelection);

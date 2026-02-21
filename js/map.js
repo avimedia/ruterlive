@@ -41,6 +41,10 @@ export function initMap() {
   map.stopsLayerGroup = L.layerGroup().addTo(map);
   map.stopsLayerGroup.setZIndex(700);
 
+  // Søkeresultat-marker (vedvarer til neste søk)
+  map.searchResultLayer = L.layerGroup().addTo(map);
+  map.searchResultLayer.setZIndex(750);
+
   // Klikk på kartet (ikke på rute) fjerner uthevelse
   map.on('click', clearRouteSelection);
 

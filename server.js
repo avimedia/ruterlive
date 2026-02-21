@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
 import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
-import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache } from './server/gtfs-stops-loader.js';
+import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
 import { getEtVehiclesAndShapes } from './server/et-vehicles-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -156,6 +156,40 @@ app.post('/api/quay-coords', express.json({ limit: '100kb' }), async (req, res) 
     res.json(out);
   } catch (err) {
     res.status(503).json({});
+  }
+});
+
+// Holdeplasser innenfor kartutsnitt – for visning av alle stopp ved zoom
+app.get('/api/stops-in-bbox', async (req, res) => {
+  try {
+    await ensureGtfsStopsLoaded();
+    const minLat = parseFloat(req.query.minLat);
+    const maxLat = parseFloat(req.query.maxLat);
+    const minLon = parseFloat(req.query.minLon);
+    const maxLon = parseFloat(req.query.maxLon);
+    if (isNaN(minLat) || isNaN(maxLat) || isNaN(minLon) || isNaN(maxLon) || minLat >= maxLat || minLon >= maxLon) {
+      return res.status(400).json({ error: 'Ugyldig bbox' });
+    }
+    const limit = Math.min(parseInt(req.query.limit, 10) || 2000, 3000);
+    const stops = getStopsInBbox(minLat, maxLat, minLon, maxLon, limit);
+    res.set('Cache-Control', 'public, max-age=60');
+    res.json(stops);
+  } catch (err) {
+    res.status(503).json([]);
+  }
+});
+
+// Søk etter holdeplasser etter navn
+app.get('/api/stops-search', async (req, res) => {
+  try {
+    await ensureGtfsStopsLoaded();
+    const q = (req.query.q || '').toString().trim();
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+    const stops = searchStops(q, limit);
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json(stops);
+  } catch (err) {
+    res.status(503).json([]);
   }
 });
 

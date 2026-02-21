@@ -23,6 +23,11 @@
     </header>
 
     <main id="map-container">
+      <div id="stop-search-wrap" class="stop-search-wrap">
+        <label for="stop-search-input" class="visually-hidden">Søk etter holdeplass</label>
+        <input type="search" id="stop-search-input" class="stop-search-input" placeholder="Søk holdeplass…" autocomplete="off" aria-autocomplete="list" aria-controls="stop-search-results">
+        <ul id="stop-search-results" class="stop-search-results" role="listbox" aria-label="Søkeresultater" hidden></ul>
+      </div>
       <aside id="layers-panel">
         <div class="panel-header">
           <h2 class="panel-title">Lagvelger</h2>

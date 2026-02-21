@@ -16,7 +16,9 @@ let gtfsQuayCache = null;
 let lastLoadTime = 0;
 
 /**
- * Parser stops.txt CSV til Map<quayId, [lat, lon]>.
+ * Parser stops.txt CSV.
+ * Returnerer Map<quayId, { lat, lon, name }> for stops-in-bbox og søk.
+ * Fallback Map<quayId, [lat, lon]> for quay-coords (bakoverkompatibilitet).
  * Format: stop_id,stop_name,stop_lat,stop_lon,...
  * Entur bruker stop_id = NSR:Quay:XXXXX.
  */
@@ -27,6 +29,7 @@ function parseStopsTxt(content) {
 
   const header = lines[0].toLowerCase().split(',');
   const stopIdIdx = header.indexOf('stop_id');
+  const nameIdx = header.indexOf('stop_name');
   const latIdx = header.indexOf('stop_lat');
   const lonIdx = header.indexOf('stop_lon');
   if (stopIdIdx < 0 || latIdx < 0 || lonIdx < 0) return map;
@@ -36,11 +39,12 @@ function parseStopsTxt(content) {
     if (!line.trim()) continue;
     const cols = parseCsvLine(line);
     const stopId = cols[stopIdIdx]?.trim();
+    const name = (nameIdx >= 0 ? cols[nameIdx]?.trim() : '') || '';
     const lat = parseFloat(cols[latIdx]);
     const lon = parseFloat(cols[lonIdx]);
     if (!stopId || isNaN(lat) || isNaN(lon)) continue;
     if (!/^NSR:Quay:\d+$/.test(stopId)) continue;
-    map.set(stopId, [lat, lon]);
+    map.set(stopId, { lat, lon, name });
   }
   return map;
 }
@@ -105,9 +109,55 @@ export async function ensureGtfsStopsLoaded() {
 }
 
 /**
- * Returnerer GTFS quay-cache hvis tilgjengelig.
+ * Returnerer GTFS quay-cache. Formatert for quay-coords: Map<id, [lat,lon]>.
  * @returns {Map<string, [number, number]>|null}
  */
 export function getGtfsQuayCache() {
-  return gtfsQuayCache;
+  if (!gtfsQuayCache) return null;
+  const legacy = new Map();
+  for (const [id, v] of gtfsQuayCache) {
+    legacy.set(id, [v.lat, v.lon]);
+  }
+  return legacy;
+}
+
+/**
+ * Returnerer holdeplasser innenfor bbox.
+ * @param {number} minLat
+ * @param {number} maxLat
+ * @param {number} minLon
+ * @param {number} maxLon
+ * @param {number} [limit=2000]
+ * @returns {{ id: string, lat: number, lon: number, name: string }[]}
+ */
+export function getStopsInBbox(minLat, maxLat, minLon, maxLon, limit = 2000) {
+  if (!gtfsQuayCache) return [];
+  const out = [];
+  for (const [id, v] of gtfsQuayCache) {
+    if (v.lat >= minLat && v.lat <= maxLat && v.lon >= minLon && v.lon <= maxLon) {
+      out.push({ id, lat: v.lat, lon: v.lon, name: v.name || 'Holdeplass' });
+      if (out.length >= limit) break;
+    }
+  }
+  return out;
+}
+
+/**
+ * Søk etter holdeplasser etter navn.
+ * @param {string} q - Søkeord (minst 2 tegn)
+ * @param {number} [limit=20]
+ * @returns {{ id: string, lat: number, lon: number, name: string }[]}
+ */
+export function searchStops(q, limit = 20) {
+  if (!gtfsQuayCache || typeof q !== 'string') return [];
+  const term = q.trim().toLowerCase();
+  if (term.length < 2) return [];
+  const out = [];
+  for (const [id, v] of gtfsQuayCache) {
+    if ((v.name || '').toLowerCase().includes(term)) {
+      out.push({ id, lat: v.lat, lon: v.lon, name: v.name || 'Holdeplass' });
+      if (out.length >= limit) break;
+    }
+  }
+  return out;
 }

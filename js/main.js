@@ -33,6 +33,17 @@ initLayers((visibleModes) => {
 
 updateVehicleCount(null, null, true);
 
+// Hent cached rutekart med en gang – klart før brukeren ser siden
+fetch('/api/route-shapes')
+  .then((r) => (r.ok ? r.json() : []))
+  .then((shapes) => {
+    if (Array.isArray(shapes) && shapes.length > 0) {
+      routeShapes = shapes;
+      updateRouteLines(routeShapes, getVisibleModes());
+    }
+  })
+  .catch(() => {});
+
 connectVehicles(
   null,
   (vehicles) => {

@@ -10,11 +10,18 @@ import express from 'express';
 import proxy from 'express-http-proxy';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
 const app = express();
+
+// Cached rutekart – klart med en gang brukeren laster siden
+app.get('/api/route-shapes', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=30');
+  res.json(getCachedShapes());
+});
 
 app.use(
   '/api/entur',
@@ -74,6 +81,11 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`RuterLive kjører på http://localhost:${PORT}`);
+  // Bygg rutekart ved oppstart og én gang per døgn – ruter endrer seg sjelden
+  refreshRouteShapes().then((shapes) => {
+    console.log(`[RuterLive] Rutekart cache: ${shapes.length} linjer`);
+  });
+  setInterval(refreshRouteShapes, 24 * 60 * 60 * 1000); // 1x per døgn
 });

@@ -8,6 +8,7 @@ import { MAX_ROUTE_SPAN_KM } from '../config.js';
 const ET_URL = import.meta.env.DEV ? '/api/entur-et/et?datasetId=RUT&maxSize=3000' : '/api/et-cached';
 const JP_GRAPHQL_URL = '/api/entur-jp/graphql';
 const CLIENT_NAME = 'ruterlive-web';
+const RETRY_DELAYS = [2000, 4000, 8000]; // Backoff ved 502/503 (cold start)
 
 // Fallback ved manglende JP-data: T-bane 1–6, Trikk 11–19, resten buss (linjenummer er upålitelig for båt)
 const METRO_LINE_NUMS = new Set([1, 2, 3, 4, 5, 6]);
@@ -193,10 +194,22 @@ async function fetchQuayCoordsBatch(quays) {
   }
 }
 
+function delay(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export async function fetchEstimatedVehicles(onProgress) {
   try {
-    const res = await fetch(ET_URL, { headers: { 'ET-Client-Name': CLIENT_NAME } });
-    if (!res.ok) throw new Error(`ET API ${res.status}`);
+    let res;
+    for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+      res = await fetch(ET_URL, { headers: { 'ET-Client-Name': CLIENT_NAME } });
+      if (res.ok) break;
+      if ((res.status === 502 || res.status === 503) && attempt < RETRY_DELAYS.length) {
+        await delay(RETRY_DELAYS[attempt]);
+        continue;
+      }
+      throw new Error(`ET API ${res.status}`);
+    }
     const xml = await res.text();
     const journeys = parseSiriXml(xml);
 

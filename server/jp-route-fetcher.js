@@ -3,6 +3,7 @@
  */
 
 import { fetchWithRetry } from './fetch-with-retry.js';
+import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CLIENT_NAME = 'ruterlive-web';
@@ -36,7 +37,13 @@ function decodePolyline(encoded) {
 }
 
 async function fetchQuayCoords(quayIds, quayCoordCache) {
-  const ids = quayIds.filter((id) => /^NSR:Quay:\d+$/.test(id));
+  const gtfs = getGtfsQuayCache();
+  for (const id of quayIds) {
+    if (gtfs?.has(id) && !quayCoordCache.has(id)) {
+      quayCoordCache.set(id, gtfs.get(id));
+    }
+  }
+  const ids = quayIds.filter((id) => /^NSR:Quay:\d+$/.test(id) && !quayCoordCache.has(id));
   for (let i = 0; i < ids.length; i += JP_QUAY_BATCH) {
     const batch = ids.slice(i, i + JP_QUAY_BATCH);
     const lines = batch.map((id, j) => `q${j}: quay(id: "${id}") { latitude longitude }`).join('\n');
@@ -163,6 +170,7 @@ async function fetchTripShapes(trips, modes, acceptAllBus = false) {
  * @param {Map} quayCoordCache - cache for quayId -> [lat, lon]
  */
 export async function fetchJpRoutes(quayCoordCache) {
+  await ensureGtfsStopsLoaded();
   const railShapes = await fetchTripShapes(RAIL_TRIPS, ['rail']);
   const flybussShapes = await fetchTripShapes(FLYBUSS_TRIPS, ['bus', 'coach'], true);
 

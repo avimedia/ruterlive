@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@xmldom/xmldom": "^0.8.11",
+    "adm-zip": "^0.5.16",
     "express": "^4.21.0",
     "express-http-proxy": "^2.0.0",
     "leaflet": "^1.9.4"

@@ -7,6 +7,7 @@ import { DOMParser } from '@xmldom/xmldom';
 import { MAX_ROUTE_SPAN_KM } from '../config.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { ensureEtCache } from './et-cache.js';
+import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { fetchJpRoutes } from './jp-route-fetcher.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
@@ -61,11 +62,20 @@ async function fetchJpGraphql(query) {
 }
 
 async function fetchQuayCoordsBatch(quayIds) {
+  const gtfs = getGtfsQuayCache();
   const ids = quayIds.filter((id) => /^NSR:Quay:\d+$/.test(id)).slice(0, MAX_QUAYS_TO_FETCH);
-  if (ids.length === 0) return;
 
-  for (let i = 0; i < ids.length; i += JP_BATCH_SIZE) {
-    const batch = ids.slice(i, i + JP_BATCH_SIZE);
+  for (const id of ids) {
+    if (!quayCoordCache.has(id) && gtfs?.has(id)) {
+      quayCoordCache.set(id, gtfs.get(id));
+    }
+  }
+
+  const toFetch = ids.filter((id) => !quayCoordCache.has(id));
+  if (toFetch.length === 0) return;
+
+  for (let i = 0; i < toFetch.length; i += JP_BATCH_SIZE) {
+    const batch = toFetch.slice(i, i + JP_BATCH_SIZE);
     const lines = batch.map((id, j) => `q${j}: quay(id: "${id}") { latitude longitude }`).join('\n');
     const data = await fetchJpGraphql(`query { ${lines} }`);
     if (!data) continue;
@@ -254,6 +264,8 @@ export function isCacheFresh() {
 
 export async function refreshRouteShapes() {
   let shapes = [];
+
+  await ensureGtfsStopsLoaded();
 
   try {
     const xml = await fetchEtXml();

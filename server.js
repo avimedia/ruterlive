@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
 import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
+import { loadGtfsStops } from './server/gtfs-stops-loader.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -111,6 +112,7 @@ app.get('*', (req, res) => {
 app.listen(PORT, async () => {
   console.log(`RuterLive kjører på http://localhost:${PORT}`);
   getCachedVehicles().catch((e) => console.warn('[RuterLive] Vehicles cache prewarm:', e.message));
+  loadGtfsStops().catch((e) => console.warn('[RuterLive] GTFS preload:', e.message));
   setTimeout(() => {
     startEtCachePoll();
     setTimeout(() => {

@@ -4,7 +4,7 @@
  */
 
 import { DOMParser } from '@xmldom/xmldom';
-import { MAX_ROUTE_SPAN_KM } from '../config.js';
+import { MAX_ROUTE_SPAN_KM, MAX_ROUTE_SPAN_KM_BUS } from '../config.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { ensureEtCache } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
@@ -226,7 +226,8 @@ function buildRouteShapes(journeys) {
       if (i === allCalls.length - 1 && c.quayId === firstQuayId) break;
       points.push(coords);
     }
-    const cleanedPoints = removeGeoOutliers(points);
+    const maxSpanKm = j.mode === 'bus' || j.mode === 'water' ? MAX_ROUTE_SPAN_KM_BUS : MAX_ROUTE_SPAN_KM;
+    const cleanedPoints = removeGeoOutliers(points, maxSpanKm);
     const minPoints = j.mode === 'metro' ? 5 : 3; // T-bane: mange stopp; buss/trikk/båt: min 3 for å unngå rette streker
     if (cleanedPoints.length < minPoints) continue;
     const key = cleanedPoints.map((p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join('|');

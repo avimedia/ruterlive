@@ -179,7 +179,7 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
   const color = getShapeColor(mode, shape.line + (shape.from || ''));
   const polyline = L.polyline(latlngs, {
     color: isHighlighted ? '#fff' : color,
-    weight: isHighlighted ? 8 : 5,
+    weight: isHighlighted ? 5 : 3,
     opacity: isHighlighted ? 1 : 0.9,
     className: 'route-line',
   });
@@ -195,13 +195,13 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
     L.DomEvent.stopPropagation(e);
     if (selectedPolyline && selectedPolyline !== polyline) {
       selectedPolyline.setStyle({
-        weight: 5,
+        weight: 3,
         opacity: 0.9,
         color: selectedPolyline._ruterOriginalColor,
       });
     }
     selectedPolyline = polyline;
-    polyline.setStyle({ weight: 8, opacity: 1, color: '#fff' });
+    polyline.setStyle({ weight: 5, opacity: 1, color: '#fff' });
     polyline.bringToFront();
   });
   polyline.addTo(map.routeLayerGroup);
@@ -221,7 +221,7 @@ export function isRoutesVisible() {
 export function clearRouteSelection() {
   if (selectedPolyline) {
     selectedPolyline.setStyle({
-      weight: 5,
+      weight: 3,
       opacity: 0.9,
       color: selectedPolyline._ruterOriginalColor,
     });

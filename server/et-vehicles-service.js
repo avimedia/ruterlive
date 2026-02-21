@@ -5,7 +5,7 @@
  */
 
 import { DOMParser } from '@xmldom/xmldom';
-import { MAX_ROUTE_SPAN_KM } from '../config.js';
+import { MAX_ROUTE_SPAN_KM, MAX_ROUTE_SPAN_KM_BUS } from '../config.js';
 import { ensureEtCache } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
@@ -143,9 +143,9 @@ function haversineKm(a, b) {
   return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-function removeGeoOutliers(points) {
+function removeGeoOutliers(points, maxNeighborDistKm = MAX_ROUTE_SPAN_KM) {
   if (!points || points.length < 2) return points;
-  if (points.length === 2 && haversineKm(points[0], points[1]) > MAX_ROUTE_SPAN_KM) return [];
+  if (points.length === 2 && haversineKm(points[0], points[1]) > maxNeighborDistKm) return [];
   if (points.length === 2) return points;
 
   let current = [...points];
@@ -161,9 +161,10 @@ function removeGeoOutliers(points) {
         outlierIdx = i;
       }
     }
-    if (worstDist <= MAX_ROUTE_SPAN_KM) break;
+    if (worstDist <= maxNeighborDistKm) break;
     current.splice(outlierIdx, 1);
   }
+  if (current.length === 2 && haversineKm(current[0], current[1]) > maxNeighborDistKm) return [];
   return current;
 }
 
@@ -250,7 +251,8 @@ function buildVehiclesAndShapes(journeys, quayCoordCache) {
       if (i === allCalls.length - 1 && c.quayId === firstQuayId) break;
       points.push(coords);
     }
-    const cleanedPoints = removeGeoOutliers(points);
+    const maxSpanKm = j.mode === 'bus' || j.mode === 'water' ? MAX_ROUTE_SPAN_KM_BUS : MAX_ROUTE_SPAN_KM;
+    const cleanedPoints = removeGeoOutliers(points, maxSpanKm);
     const minPoints = j.mode === 'metro' ? 5 : 3;
     if (cleanedPoints.length < minPoints) continue;
     const key = cleanedPoints.map((p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join('|');

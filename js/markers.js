@@ -30,7 +30,18 @@ const markerAnimations = new Map(); // vehicleId -> { rafId }
 let lastVehicles = [];
 let lastVisibleModes = new Set();
 
-const ANIM_DURATION_MS = 8000; // Glatt bevegelse mellom oppdateringer (poll er 10s)
+const ANIM_DURATION_MS = 8000; // Glatt bevegelse mellom oppdateringer
+const ANIM_SKIP_THRESHOLD_KM = 2; // Ved sprang > 2 km: sett posisjon direkte (unngår «flyvende» flybuss m.m.)
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
 
 function createIcon(mode) {
   const cls = normalizeMode(mode);
@@ -112,7 +123,16 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
       const cur = marker.getLatLng();
       const moved = Math.abs(cur.lat - lat) > 1e-6 || Math.abs(cur.lng - lon) > 1e-6;
       if (moved) {
-        animateMarkerTo(marker, lat, lon, v.vehicleId);
+        const distKm = haversineKm(cur.lat, cur.lng, lat, lon);
+        if (distKm > ANIM_SKIP_THRESHOLD_KM) {
+          if (markerAnimations.has(v.vehicleId)) {
+            cancelAnimationFrame(markerAnimations.get(v.vehicleId));
+            markerAnimations.delete(v.vehicleId);
+          }
+          marker.setLatLng([lat, lon]);
+        } else {
+          animateMarkerTo(marker, lat, lon, v.vehicleId);
+        }
       }
       marker.setIcon(createIcon(mode));
       marker.getTooltip()?.setContent(title);

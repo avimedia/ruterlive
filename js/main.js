@@ -90,15 +90,22 @@ initLayers((visibleModes) => {
 updateVehicleCount(null, null, true);
 
 // Hent cached rutekart med en gang – klart før brukeren ser siden
-fetch('/api/route-shapes')
-  .then((r) => (r.ok ? r.json() : []))
-  .then((shapes) => {
-    if (Array.isArray(shapes) && shapes.length > 0) {
-      routeShapes = mergeRouteShapes(routeShapes, shapes);
-      mergeAndUpdate();
-    }
-  })
-  .catch(() => {});
+function loadRouteShapes(retries = 2) {
+  fetch('/api/route-shapes')
+    .then((r) => (r.ok ? r.json() : []))
+    .then((shapes) => {
+      if (Array.isArray(shapes) && shapes.length > 0) {
+        routeShapes = mergeRouteShapes(routeShapes, shapes);
+        mergeAndUpdate();
+      } else if (retries > 0) {
+        setTimeout(() => loadRouteShapes(retries - 1), 3000);
+      }
+    })
+    .catch(() => {
+      if (retries > 0) setTimeout(() => loadRouteShapes(retries - 1), 3000);
+    });
+}
+loadRouteShapes();
 
 connectVehicles(
   null,

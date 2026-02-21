@@ -115,5 +115,5 @@ app.listen(PORT, async () => {
   refreshRouteShapes().then((shapes) => {
     console.log(`[RuterLive] Rutekart cache: ${shapes.length} linjer`);
   });
-  setInterval(refreshRouteShapes, 24 * 60 * 60 * 1000); // 1x per døgn
+  setInterval(refreshRouteShapes, 15 * 60 * 1000); // Hvert 15. min
 });

@@ -75,7 +75,7 @@ async function fetchTripShapes(trips, modes) {
     const { from, fromName, to, toName } = trip;
     try {
       const data = await fetchJp({
-        query: `{ trip(from: { place: "${from}", name: "${fromName}" }, to: { place: "${to}", name: "${toName}" }, numTripPatterns: 5, modes: { transportModes: [${modesArg}] }) {
+        query: `{ trip(from: { place: "${from}", name: "${fromName}" }, to: { place: "${to}", name: "${toName}" }, numTripPatterns: 10, modes: { transportModes: [${modesArg}] }) {
           tripPatterns {
             legs {
               mode
@@ -95,7 +95,7 @@ async function fetchTripShapes(trips, modes) {
         for (const leg of p.legs || []) {
           const lineCode = leg?.line?.publicCode || '';
           if (!lineCode) continue;
-          if (!modes.includes('rail') && !/^FB\d*$/i.test(lineCode)) continue;
+          if (!modes.includes('rail') && !/^(FB|NW)\d*$/i.test(lineCode)) continue;
 
           const quayIds = [];
           const fromQ = leg.fromEstimatedCall?.quay;
@@ -134,6 +134,12 @@ async function fetchTripShapes(trips, modes) {
 export async function fetchJpRoutes(quayCoordCache) {
   const railShapes = await fetchTripShapes(RAIL_TRIPS, ['rail']);
   const flybussShapes = await fetchTripShapes(FLYBUSS_TRIPS, ['bus', 'coach']);
+
+  const railCount = railShapes.filter((s) => s.mode === 'flytog').length;
+  const flybussCount = flybussShapes.length;
+  if (railCount > 0 || flybussCount > 0) {
+    console.log(`[RuterLive] JP routes: ${railShapes.length} rail (${railCount} flytog), ${flybussCount} flybuss`);
+  }
 
   const allProto = [...railShapes, ...flybussShapes];
   const allQuayIds = [...new Set(allProto.flatMap((s) => s.quayIds).filter(Boolean))];

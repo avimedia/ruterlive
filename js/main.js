@@ -151,12 +151,15 @@ function applyInitialData(data) {
   mergeAndUpdate();
   const hasRail = shapes.some((s) => (s.mode || '').toLowerCase() === 'rail' || (s.mode || '').toLowerCase() === 'flytog');
   if (!hasRail && shapes.length > 0) {
-    setTimeout(() => fetch('/api/route-shapes').then((r) => r.ok && r.json()).then((more) => {
-      if (Array.isArray(more) && more.length > 0) {
-        routeShapes = mergeRouteShapes(more, routeShapes);
-        mergeAndUpdate();
-      }
-    }), 5000);
+    [5000, 15000, 45000].forEach((delay) => {
+      setTimeout(() => fetch('/api/route-shapes').then((r) => r.ok && r.json()).then((more) => {
+        if (Array.isArray(more) && more.length > 0) {
+          const hadRail = routeShapes.some((s) => (s.mode || '').toLowerCase() === 'rail' || (s.mode || '').toLowerCase() === 'flytog');
+          routeShapes = mergeRouteShapes(more, routeShapes);
+          if (!hadRail) mergeAndUpdate();
+        }
+      }), delay);
+    });
   }
 }
 

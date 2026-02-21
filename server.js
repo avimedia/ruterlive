@@ -11,6 +11,7 @@ import proxy from 'express-http-proxy';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
+import { fetchRailShapesOnly } from './server/jp-route-fetcher.js';
 import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
@@ -19,6 +20,20 @@ import { getEtVehiclesAndShapes } from './server/et-vehicles-service.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
+let railShapesCache = [];
+function loadRailShapes() {
+  fetchRailShapesOnly()
+    .then((shapes) => {
+      railShapesCache = shapes || [];
+      if (railShapesCache.length > 0) {
+        console.log(`[RuterLive] Jernbanekart: ${railShapesCache.length} linjer`);
+      }
+    })
+    .catch((e) => console.warn('[RuterLive] Jernbanekart:', e.message));
+}
+loadRailShapes();
+setInterval(loadRailShapes, 24 * 60 * 60 * 1000);
+
 const app = express();
 
 // Health check for Render – slik at deploy/rullende oppdateringer fungerer
@@ -26,10 +41,10 @@ app.get('/health', (_req, res) => {
   res.status(200).send('ok');
 });
 
-// Cached rutekart – klart med en gang brukeren laster siden
+// Cached rutekart – klart med en gang brukeren laster siden (inkl. jernbane fra egen preload)
 app.get('/api/route-shapes', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=30');
-  res.json(getCachedShapes());
+  res.json(mergeShapes(getCachedShapes(), railShapesCache));
 });
 
 function shapeKey(s) {
@@ -55,7 +70,7 @@ app.get('/api/initial-data', async (_req, res) => {
     const [vehiclesData, etResult, shapes] = await Promise.all([
       getCachedVehicles(),
       getEtVehiclesAndShapes(),
-      Promise.resolve(getCachedShapes()),
+      Promise.resolve(mergeShapes(getCachedShapes(), railShapesCache)),
     ]);
     const graphqlVehicles = Array.isArray(vehiclesData?.data?.vehicles)
       ? vehiclesData.data.vehicles

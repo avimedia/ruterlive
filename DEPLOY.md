@@ -1,4 +1,4 @@
-# Deploy RuterLive
+# Deploy livetrafikk.no (RuterLive)
 
 **Produksjon:** [livetrafikk.no](https://livetrafikk.no)
 

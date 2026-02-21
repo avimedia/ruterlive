@@ -1,6 +1,6 @@
 # RuterLive
 
-Realtidskart for kollektivtrafikk. Viser buss, T-bane, trikk, båt og tog basert på Entur API. Ruter leverer ikke GPS til Entur; buss/T-bane/trikk bruker beregnet posisjon fra avgangsdata.
+Realtidskart for kollektivtrafikk. **Live:** [livetrafikk.no](https://livetrafikk.no) Viser buss, T-bane, trikk, båt og tog basert på Entur API. Ruter leverer ikke GPS til Entur; buss/T-bane/trikk bruker beregnet posisjon fra avgangsdata.
 
 ## Transporttyper
 

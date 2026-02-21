@@ -2,7 +2,7 @@ import L from 'leaflet';
 import { clearRouteSelection } from './routes.js';
 
 const OSLO_CENTER = [59.9139, 10.7522];
-const DEFAULT_ZOOM = 12;
+const DEFAULT_ZOOM = 14;
 
 const TILE_URLS = {
   dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
@@ -41,13 +41,16 @@ export function initMap() {
   map.stopsLayerGroup = L.layerGroup().addTo(map);
   map.stopsLayerGroup.setZIndex(700);
 
-  // Kjøretøy-egne pane over holdeplasser – prioritér klikk på kjøretøy
+  // Kjøretøy over holdeplasser (så de er klikkbare)
   map.createPane('vehiclePane');
   map.getPane('vehiclePane').style.zIndex = 750;
 
+  // Rute-tooltip (Linje X: Fra→Til) over kjøretøy, slik at den vises når den overlapper
+  map.getPane('tooltipPane').style.zIndex = 800;
+
   // Søkeresultat-marker (vedvarer til neste søk)
   map.searchResultLayer = L.layerGroup().addTo(map);
-  map.searchResultLayer.setZIndex(800);
+  map.searchResultLayer.setZIndex(850);
 
   // Klikk på kartet (ikke på rute) fjerner uthevelse
   map.on('click', clearRouteSelection);

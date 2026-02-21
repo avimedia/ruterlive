@@ -1,5 +1,7 @@
 # Deploy RuterLive
 
+**Produksjon:** [livetrafikk.no](https://livetrafikk.no)
+
 Appen trenger en server som proxier API-kall til Entur (unngår CORS, bedre for brukere med dårlig båndbredde).
 
 ## Hurtigstart: Render (gratis)

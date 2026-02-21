@@ -24,6 +24,10 @@ Reklame vises nederst på siden. For å aktivere Google Ads:
 
 Det må være likt i både `script src=...?client=` og `data-ad-client=`.
 
+## ads.txt
+
+Filen `public/ads.txt` er konfigurert med utgiver-ID og kopieres til rot av nettstedet ved build. Sørg for at den er tilgjengelig på [livetrafikk.no/ads.txt](https://livetrafikk.no/ads.txt).
+
 ## Testing
 
 Før godkjenning viser AdSense ofte tomme felt eller testannonser. Ekte annonser vises når kontoen er godkjent og nettstedet er verifisert.

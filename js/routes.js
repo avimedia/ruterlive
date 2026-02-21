@@ -42,7 +42,7 @@ let lastRenderedBboxKey = '';
 let bboxFetchId = 0;
 
 /** Zoom-nivå før holdeplasser vises (med navn). */
-const ZOOM_STOPS_VISIBLE = 14;
+const ZOOM_STOPS_VISIBLE = 15;
 
 /** T-bane, jernbane og trikk vises alltid. Buss, båt og flybuss kun ved klikk på kjøretøy. */
 const ALWAYS_SHOWN_MODES = new Set(['metro', 'rail', 'flytog', 'tram']);

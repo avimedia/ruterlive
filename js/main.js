@@ -96,13 +96,22 @@ function loadRouteShapes(retries = 2) {
     .then((shapes) => {
       if (Array.isArray(shapes) && shapes.length > 0) {
         routeShapes = mergeRouteShapes(routeShapes, shapes);
+        etLoaded = true;
         mergeAndUpdate();
       } else if (retries > 0) {
         setTimeout(() => loadRouteShapes(retries - 1), 3000);
+      } else {
+        etLoaded = true;
+        mergeAndUpdate();
       }
     })
     .catch(() => {
-      if (retries > 0) setTimeout(() => loadRouteShapes(retries - 1), 3000);
+      if (retries > 0) {
+        setTimeout(() => loadRouteShapes(retries - 1), 3000);
+      } else {
+        etLoaded = true;
+        mergeAndUpdate();
+      }
     });
 }
 loadRouteShapes();
@@ -162,6 +171,8 @@ async function pollEt() {
     mergeAndUpdate();
   } catch (err) {
     if (import.meta.env.DEV) console.warn('[RuterLive] ET poll:', err.message);
+    etLoaded = true;
+    mergeAndUpdate();
   }
 }
 pollEt();

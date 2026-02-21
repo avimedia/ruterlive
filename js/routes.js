@@ -38,6 +38,8 @@ let lastRenderedShapesKey = '';
 let lastRenderedModesKey = '';
 let lastSelectedVehicleKey = '';
 let lastRenderedStopsKey = '';
+let lastRenderedBboxKey = '';
+let bboxFetchId = 0;
 
 /** Zoom-nivå før holdeplasser vises (med navn). */
 const ZOOM_STOPS_VISIBLE = 14;
@@ -88,10 +90,14 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   const selectedKey = selectedVehicle ? `${selectedVehicle.vehicleId}-${selectedVehicle.line?.publicCode}` : '';
   const shapesKey = shapes?.length ? `${shapes.length}-${shapes.slice(0, 5).map((s) => s.line + s.from).join('|')}` : '0';
   const modesKey = [...(visibleModes || [])].sort().join(',');
-  const stopsVisibleKey = map.getZoom() >= ZOOM_STOPS_VISIBLE ? '1' : '0';
-  if (shapesKey === lastRenderedShapesKey && modesKey === lastRenderedModesKey && selectedKey === lastSelectedVehicleKey && stopsVisibleKey === lastRenderedStopsKey) {
+  const zoom = map.getZoom();
+  const stopsVisibleKey = zoom >= ZOOM_STOPS_VISIBLE ? '1' : '0';
+  const b = map.getBounds();
+  const bboxKey = zoom >= ZOOM_STOPS_VISIBLE ? `${b.getSouth().toFixed(2)},${b.getNorth().toFixed(2)},${b.getWest().toFixed(2)},${b.getEast().toFixed(2)}` : '';
+  if (shapesKey === lastRenderedShapesKey && modesKey === lastRenderedModesKey && selectedKey === lastSelectedVehicleKey && stopsVisibleKey === lastRenderedStopsKey && bboxKey === lastRenderedBboxKey) {
     return;
   }
+  lastRenderedBboxKey = bboxKey;
   lastRenderedShapesKey = shapesKey;
   lastRenderedModesKey = modesKey;
   lastSelectedVehicleKey = selectedKey;
@@ -106,7 +112,13 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
     console.debug('[RuterLive] updateRouteLines:', { routesVisible, shapesCount: shapes?.length ?? 0, selectedVehicle: !!selectedVehicle });
   }
 
-  if (!routesVisible || !shapes?.length) return;
+  if (!routesVisible || !shapes?.length) {
+    // Tegn likevel bbox-holdeplasser ved høy zoom
+    if (map.getZoom() >= ZOOM_STOPS_VISIBLE) {
+      addStopMarkers(map, [], visibleModes);
+    }
+    return;
+  }
 
   const shapesToShow = [];
   let vehicleClickFallbacks = [];
@@ -145,10 +157,10 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
     addRoutePolyline(map, shape, drawn, true);
   }
 
-  // Holdeplasser vises for ALLE synlige transporttyper ved zoom 13+ – ikke bare for rutene som tegnes
+  // Holdeplasser vises for ALLE synlige transporttyper ved zoom 14+ – shapes + bbox
   if (map.getZoom() >= ZOOM_STOPS_VISIBLE) {
     const shapesForStops = (shapes ?? []).filter((s) => visibleModes.has((s.mode || '').toLowerCase()));
-    addStopMarkers(map, shapesForStops);
+    addStopMarkers(map, shapesForStops, visibleModes);
   }
 }
 
@@ -158,10 +170,36 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
-function addStopMarkers(map, shapes) {
+function createStopMarker(lat, lon, quayId, name, color, stopsLayer) {
+  const label = (name || 'Holdeplass').trim();
+  const marker = L.marker([lat, lon], {
+    icon: L.divIcon({
+      className: 'stop-marker',
+      html: `
+        <span class="stop-marker-dot" style="background:${color}"></span>
+        <span class="stop-marker-label">${escapeHtml(label)}</span>
+      `,
+      iconSize: [140, 24],
+      iconAnchor: [5, 12],
+    }),
+    zIndexOffset: 1000,
+  });
+  marker._quayId = quayId;
+  const popup = L.popup({ className: 'departure-board-popup', maxWidth: 460 });
+  marker.bindPopup(popup, { autoClose: true, closeOnClick: true });
+  marker.on('click', (e) => L.DomEvent.stopPropagation(e));
+  marker.on('popupopen', () => {
+    showDepartureBoard(marker.getPopup(), quayId);
+  });
+  marker.bindTooltip(`${label} · Klikk for avganger`, { permanent: false, direction: 'top', offset: [0, -8] });
+  marker.addTo(stopsLayer);
+}
+
+function addStopMarkers(map, shapes, visibleModes) {
   const seen = new Set();
   const pointKey = (lat, lon) => `${lat.toFixed(5)},${lon.toFixed(5)}`;
   const stopSources = [];
+  const defaultColor = MODE_COLORS.bus;
   for (const shape of shapes) {
     const mode = shape.mode?.toLowerCase();
     const color = getShapeColor(mode, shape.line + (shape.from || ''));
@@ -189,28 +227,8 @@ function addStopMarkers(map, shapes) {
     seen.add(key);
 
     if (quayId) {
-      const label = (name || 'Holdeplass').trim();
-      const marker = L.marker([lat, lon], {
-        icon: L.divIcon({
-          className: 'stop-marker',
-          html: `
-            <span class="stop-marker-dot" style="background:${color}"></span>
-            <span class="stop-marker-label">${escapeHtml(label)}</span>
-          `,
-          iconSize: [140, 24],
-          iconAnchor: [5, 12],
-        }),
-        zIndexOffset: 1000,
-      });
-      marker._quayId = quayId;
-      const popup = L.popup({ className: 'departure-board-popup', maxWidth: 460 });
-      marker.bindPopup(popup, { autoClose: false, closeOnClick: false });
-      marker.on('click', (e) => L.DomEvent.stopPropagation(e));
-      marker.on('popupopen', () => {
-        showDepartureBoard(marker.getPopup(), quayId);
-      });
-      marker.bindTooltip(`${label} · Klikk for avganger`, { permanent: false, direction: 'top', offset: [0, -8] });
-      marker.addTo(stopsLayer);
+      createStopMarker(lat, lon, quayId, name, color, stopsLayer);
+      seen.add(quayId);
     } else {
       const circle = L.circleMarker([lat, lon], {
         radius: 4,
@@ -223,6 +241,31 @@ function addStopMarkers(map, shapes) {
       circle.addTo(map.routeLayerGroup);
     }
   }
+
+  // Hent alle holdeplasser i synlig område fra GTFS
+  const bounds = map.getBounds();
+  const minLat = bounds.getSouth();
+  const maxLat = bounds.getNorth();
+  const minLon = bounds.getWest();
+  const maxLon = bounds.getEast();
+  const thisFetchId = ++bboxFetchId;
+  fetch(
+    `/api/stops-in-bbox?minLat=${minLat}&maxLat=${maxLat}&minLon=${minLon}&maxLon=${maxLon}&limit=1500`
+  )
+    .then((r) => r.ok ? r.json() : [])
+    .then((bboxStops) => {
+      if (thisFetchId !== bboxFetchId) return;
+      const defaultColor = MODE_COLORS.bus;
+      for (const s of bboxStops || []) {
+        if (seen.has(s.id)) continue;
+        const key = pointKey(s.lat, s.lon);
+        if (seen.has(key)) continue;
+        seen.add(s.id);
+        seen.add(key);
+        createStopMarker(s.lat, s.lon, s.id, s.name, defaultColor, stopsLayer);
+      }
+    })
+    .catch(() => {});
 }
 
 const MODE_COLORS_DEP = {
@@ -278,8 +321,8 @@ async function showDepartureBoard(popup, quayId) {
         c.expectedDepartureTime &&
         c.aimedDepartureTime &&
         new Date(c.expectedDepartureTime).getTime() > new Date(c.aimedDepartureTime).getTime() + 60000;
-      const delayBadge = isDelayed ? ' <span class="departure-delayed">forsinket</span>' : '';
-      const realtime = c.realtime && !isDelayed ? ' <span class="departure-realtime">sanntid</span>' : '';
+      const delayBadge = isDelayed ? ' <span class="departure-delayed">Forsinket</span>' : '';
+      const realtime = c.realtime && !isDelayed ? ' <span class="departure-realtime">Sanntid</span>' : '';
       return `<tr><td class="departure-line" style="color:${lineColor}">${escapeHtml(line)}</td><td class="departure-dest">${escapeHtml(dest)}</td><td class="departure-time">${dep}</td><td class="departure-mins">${minsText}</td><td class="departure-badges">${realtime}${delayBadge}</td></tr>`;
     });
     const html = `
@@ -299,6 +342,10 @@ async function showDepartureBoard(popup, quayId) {
   }
 }
 
+function getRouteHighlightColor() {
+  return getComputedStyle(document.documentElement).getPropertyValue('--route-highlight').trim() || '#fff';
+}
+
 function addRoutePolyline(map, shape, drawn, isHighlighted) {
   const key = `${shape.mode}|${shape.line}|${shape.from}|${shape.to}`;
   if (drawn.has(key)) return;
@@ -307,8 +354,9 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
   const mode = shape.mode?.toLowerCase();
   const latlngs = shape.points.map((p) => [Number(p[0]), Number(p[1])]);
   const color = getShapeColor(mode, shape.line + (shape.from || ''));
+  const highlightColor = getRouteHighlightColor();
   const polyline = L.polyline(latlngs, {
-    color: isHighlighted ? '#fff' : color,
+    color: isHighlighted ? highlightColor : color,
     weight: isHighlighted ? 5 : 3,
     opacity: isHighlighted ? 1 : 0.9,
     className: 'route-line',
@@ -331,7 +379,7 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
       });
     }
     selectedPolyline = polyline;
-    polyline.setStyle({ weight: 5, opacity: 1, color: '#fff' });
+    polyline.setStyle({ weight: 5, opacity: 1, color: getRouteHighlightColor() });
     polyline.bringToFront();
   });
   polyline.addTo(map.routeLayerGroup);
@@ -339,6 +387,27 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
   if (isHighlighted) polyline.bringToFront();
 }
 
+
+/** Fokuser på holdeplass fra søk – flyr til, legger til marker og åpner avgangstavle. */
+export function focusStopFromSearch(quayId, lat, lon, name) {
+  const map = getMap();
+  if (!map || !map.searchResultLayer || !map.stopsLayerGroup) return;
+  map.searchResultLayer.clearLayers();
+  const color = MODE_COLORS.bus;
+  createStopMarker(lat, lon, quayId, name || 'Holdeplass', color, map.searchResultLayer);
+  const layers = map.searchResultLayer.getLayers();
+  const marker = layers[0];
+  if (marker) {
+    marker.openPopup();
+    map.flyTo([lat, lon], 16, { duration: 0.5 });
+  }
+}
+
+/** Oppdater farge på valgt rutelinje ved temaendring. */
+export function refreshRouteHighlightTheme() {
+  if (!selectedPolyline) return;
+  selectedPolyline.setStyle({ color: getRouteHighlightColor() });
+}
 
 export function setRoutesVisible(visible) {
   routesVisible = visible;

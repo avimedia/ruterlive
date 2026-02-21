@@ -33,6 +33,9 @@ let lastVisibleModes = new Set();
 const ANIM_DURATION_MS = 8000; // Glatt bevegelse mellom oppdateringer
 const ANIM_SKIP_THRESHOLD_KM = 2; // Ved sprang > 2 km: sett posisjon direkte (unngår «flyvende» flybuss m.m.)
 
+/** Zoom-nivå før linjenummer vises på kjøretøymerkene. */
+const ZOOM_LINE_VISIBLE = 14;
+
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -43,13 +46,22 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-function createIcon(mode) {
+function createIcon(mode, lineCode = '', showLine = false) {
   const cls = normalizeMode(mode);
+  const line = (lineCode || '').toString().trim() || '?';
+  const show = showLine && line;
   return L.divIcon({
-    className: 'vehicle-marker ' + cls,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
+    className: 'vehicle-marker ' + cls + (show ? ' vehicle-marker-with-label' : ''),
+    html: show ? `<span class="vehicle-line-num">${escapeHtml(line)}</span>` : undefined,
+    iconSize: show ? [28, 28] : [14, 14],
+    iconAnchor: show ? [14, 14] : [7, 7],
   });
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
 }
 
 function animateMarkerTo(marker, targetLat, targetLon, vehicleId) {
@@ -77,6 +89,11 @@ function animateMarkerTo(marker, targetLat, targetLon, vehicleId) {
   requestAnimationFrame(tick);
 }
 
+function shouldShowLineOnMarker() {
+  const map = getMap();
+  return map ? map.getZoom() >= ZOOM_LINE_VISIBLE : false;
+}
+
 export function updateMarkers(vehicles, visibleModes, opts = {}) {
   const map = getMap();
   if (!map) return;
@@ -86,6 +103,7 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
   lastVisibleModes = new Set(visibleModes);
 
   const vehicleIds = new Set(vehicles.map((v) => v.vehicleId));
+  const showLine = shouldShowLineOnMarker();
 
   // Remove markers for vehicles no longer in data
   for (const [id, marker] of vehicleMarkers) {
@@ -134,12 +152,12 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
           animateMarkerTo(marker, lat, lon, v.vehicleId);
         }
       }
-      marker.setIcon(createIcon(mode));
+      marker.setIcon(createIcon(mode, lineCode, showLine));
       marker.getTooltip()?.setContent(title);
       marker.bindPopup(popupHtml, { className: 'vehicle-popup' });
     } else {
       marker = L.marker([lat, lon], {
-        icon: createIcon(mode),
+        icon: createIcon(mode, lineCode, showLine),
       })
         .bindTooltip(title, {
           permanent: false,
@@ -165,6 +183,7 @@ export function applyFilter(visibleModes) {
   if (!map) return;
 
   lastVisibleModes = new Set(visibleModes);
+  const showLine = shouldShowLineOnMarker();
 
   for (const v of lastVehicles) {
     const mode = normalizeMode(v);
@@ -175,7 +194,8 @@ export function applyFilter(visibleModes) {
       if (!map.hasLayer(marker)) {
         marker.addTo(map);
       }
-      marker.setIcon(createIcon(mode));
+      const lineCode = v.line?.publicCode || '?';
+      marker.setIcon(createIcon(mode, lineCode, showLine));
     } else {
       if (map.hasLayer(marker)) {
         map.removeLayer(marker);
@@ -186,6 +206,22 @@ export function applyFilter(visibleModes) {
 
 function countByMode(vehicles, filterMode) {
   return vehicles.filter((v) => normalizeMode(v) === filterMode).length;
+}
+
+/** Oppdaterer ikoner på alle kjøretøymarkører ved zoom-endring (viser/skjuler linjenummer). */
+export function refreshMarkerIcons() {
+  const map = getMap();
+  if (!map) return;
+  const showLine = shouldShowLineOnMarker();
+  for (const v of lastVehicles) {
+    const mode = normalizeMode(v);
+    if (!lastVisibleModes.has(mode)) continue;
+    const marker = vehicleMarkers.get(v.vehicleId);
+    if (marker && map.hasLayer(marker)) {
+      const lineCode = v.line?.publicCode || '?';
+      marker.setIcon(createIcon(mode, lineCode, showLine));
+    }
+  }
 }
 
 export function getVehicleCounts(vehicles) {

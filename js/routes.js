@@ -37,6 +37,7 @@ let routesVisible = true;
 let lastRenderedShapesKey = '';
 let lastRenderedModesKey = '';
 let lastSelectedVehicleKey = '';
+let lastRenderedStopsKey = '';
 
 /** Zoom-nivå før holdeplasser vises som små sirkler. */
 const ZOOM_STOPS_VISIBLE = 13;
@@ -87,12 +88,14 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   const selectedKey = selectedVehicle ? `${selectedVehicle.vehicleId}-${selectedVehicle.line?.publicCode}` : '';
   const shapesKey = shapes?.length ? `${shapes.length}-${shapes.slice(0, 5).map((s) => s.line + s.from).join('|')}` : '0';
   const modesKey = [...(visibleModes || [])].sort().join(',');
-  if (shapesKey === lastRenderedShapesKey && modesKey === lastRenderedModesKey && selectedKey === lastSelectedVehicleKey) {
+  const stopsVisibleKey = map.getZoom() >= ZOOM_STOPS_VISIBLE ? '1' : '0';
+  if (shapesKey === lastRenderedShapesKey && modesKey === lastRenderedModesKey && selectedKey === lastSelectedVehicleKey && stopsVisibleKey === lastRenderedStopsKey) {
     return;
   }
   lastRenderedShapesKey = shapesKey;
   lastRenderedModesKey = modesKey;
   lastSelectedVehicleKey = selectedKey;
+  lastRenderedStopsKey = stopsVisibleKey;
 
   map.routeLayerGroup.clearLayers();
   routeLayers = [];

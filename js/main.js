@@ -2,7 +2,7 @@ import { initMap, getMap } from './map.js';
 import { connectVehicles } from './api.js';
 import { fetchEstimatedVehicles } from './et-api.js';
 import { fetchLineRouteFromJp } from './jp-line-lookup.js';
-import { updateMarkers, applyFilter, getVehicleCounts } from './markers.js';
+import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons } from './markers.js';
 import { initLayers, getVisibleModes, updateVehicleCount } from './layers.js';
 import { updateRouteLines } from './routes.js';
 
@@ -103,6 +103,7 @@ if (map) {
   });
   map.on('zoomend', () => {
     updateRouteLines(routeShapes, getVisibleModes(), selectedVehicleForRoute);
+    refreshMarkerIcons();
   });
 }
 

@@ -58,34 +58,114 @@ async function fetchQuayCoords(quayIds, quayCoordCache) {
   }
 }
 
-// Bruk NSR StopPlace-IDs for pålitelige søk (fra Entur-dokumentasjonen)
-const RAIL_TRIPS = [
-  // Drammensbanen / Vestfoldbanen
-  { from: 'NSR:StopPlace:11', fromName: 'Drammen stasjon', to: 'NSR:StopPlace:288', toName: 'Nationaltheatret' },
-  { from: 'NSR:StopPlace:288', fromName: 'Nationaltheatret', to: 'NSR:StopPlace:11', toName: 'Drammen stasjon' },
-  // Østfoldbanen øst
-  { from: 'NSR:StopPlace:6234', fromName: 'Lillestrøm', to: 'NSR:StopPlace:288', toName: 'Nationaltheatret' },
-  { from: 'NSR:StopPlace:288', fromName: 'Nationaltheatret', to: 'NSR:StopPlace:6234', toName: 'Lillestrøm' },
-  { from: 'NSR:StopPlace:6010', fromName: 'Ski', to: 'NSR:StopPlace:288', toName: 'Nationaltheatret' },
-  { from: 'NSR:StopPlace:288', fromName: 'Nationaltheatret', to: 'NSR:StopPlace:6010', toName: 'Ski' },
-  // Flytoget
-  { from: 'NSR:StopPlace:269', fromName: 'Oslo lufthavn', to: 'NSR:StopPlace:288', toName: 'Nationaltheatret' },
-  { from: 'NSR:StopPlace:288', fromName: 'Nationaltheatret', to: 'NSR:StopPlace:269', toName: 'Oslo lufthavn' },
-  // Oslo S – flere strekninger (Østfoldbanen, Drammen)
-  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:6234', toName: 'Lillestrøm' },
-  { from: 'NSR:StopPlace:6234', fromName: 'Lillestrøm', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
-  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:6010', toName: 'Ski' },
-  { from: 'NSR:StopPlace:6010', fromName: 'Ski', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
-  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:11', toName: 'Drammen stasjon' },
-  { from: 'NSR:StopPlace:11', fromName: 'Drammen stasjon', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
+/** Hub-stasjoner for dynamisk oppdaging av tog- og flybussruter via avgangstavler. */
+const ROUTE_HUBS = [
+  { id: 'NSR:StopPlace:59872', name: 'Oslo S', modes: ['rail'] },
+  { id: 'NSR:StopPlace:269', name: 'Oslo lufthavn', modes: ['rail', 'bus', 'coach'] },
+  { id: 'NSR:StopPlace:6505', name: 'Oslo Bussterminal', modes: ['bus', 'coach'] },
 ];
 
-const FLYBUSS_TRIPS = [
-  { from: 'NSR:StopPlace:6505', fromName: 'Oslo Bussterminal', to: 'NSR:StopPlace:269', toName: 'Oslo lufthavn' },
-  { from: 'NSR:StopPlace:269', fromName: 'Oslo lufthavn', to: 'NSR:StopPlace:6505', toName: 'Oslo Bussterminal' },
-  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:269', toName: 'Oslo lufthavn' },
-  { from: 'NSR:StopPlace:269', fromName: 'Oslo lufthavn', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
-];
+/**
+ * Henter unike (linje, destinasjon)-par fra avgangstavler.
+ * @returns {{ rail: Array<{from,fromName,to,toName}>, flybuss: Array<{from,fromName,to,toName}> }}
+ */
+async function discoverTripsFromDepartureBoards() {
+  const timeRange = 86400; // 24t
+  const numberOfDepartures = 60;
+  const railPairs = new Map(); // "fromName|toName" -> trip
+  const flybussPairs = new Map();
+
+  for (const hub of ROUTE_HUBS) {
+    try {
+      const data = await fetchJp({
+        query: `query {
+          stopPlace(id: "${hub.id}") {
+            name
+            estimatedCalls(timeRange: ${timeRange}, numberOfDepartures: ${numberOfDepartures}) {
+              destinationDisplay { frontText }
+              serviceJourney {
+                journeyPattern {
+                  line { publicCode transportMode }
+                }
+              }
+            }
+          }
+        }`,
+      });
+        const calls = data?.stopPlace?.estimatedCalls || [];
+      for (const c of calls) {
+        const line = c?.serviceJourney?.journeyPattern?.line;
+        const mode = (line?.transportMode || '').toLowerCase();
+        const dest = (c?.destinationDisplay?.frontText || '').trim();
+        if (!line?.publicCode || !dest) continue;
+        const lineCode = line.publicCode;
+
+        if (hub.modes.includes('rail') && mode === 'rail') {
+          const key = `${hub.name}|${dest}`;
+          if (!railPairs.has(key)) {
+            railPairs.set(key, {
+              from: hub.id,
+              fromName: hub.name,
+              to: dest,
+              toName: dest,
+            });
+          }
+        }
+        if ((hub.modes.includes('bus') || hub.modes.includes('coach')) && /^(FB|NW)\d*$/i.test(lineCode)) {
+          const toLufthavn = /lufthavn|gardermoen|osl/i.test(dest);
+          const key = `${hub.name}|${toLufthavn ? 'Oslo lufthavn' : dest}`;
+          if (!flybussPairs.has(key)) {
+            flybussPairs.set(key, {
+              from: hub.id,
+              fromName: hub.name,
+              to: toLufthavn ? 'NSR:StopPlace:269' : undefined,
+              toName: toLufthavn ? 'Oslo lufthavn' : dest,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[RuterLive] Departure board fetch', hub.name, err.message);
+    }
+  }
+
+  const railTrips = [];
+  const seenRail = new Set();
+  for (const trip of railPairs.values()) {
+    const fwd = `${trip.fromName}|${trip.toName}`;
+    if (seenRail.has(fwd)) continue;
+    seenRail.add(fwd);
+    railTrips.push(trip);
+    const rev = `${trip.toName}|${trip.fromName}`;
+    if (!seenRail.has(rev)) {
+      seenRail.add(rev);
+      railTrips.push({ from: undefined, fromName: trip.toName, to: trip.from, toName: trip.fromName });
+    }
+  }
+
+  const flybussTrips = [];
+  const seenFb = new Set();
+  for (const trip of flybussPairs.values()) {
+    const fwd = `${trip.fromName}|${trip.toName}`;
+    if (seenFb.has(fwd)) continue;
+    seenFb.add(fwd);
+    flybussTrips.push(trip);
+    if (trip.toName === 'Oslo lufthavn' && trip.fromName !== 'Oslo lufthavn') {
+      const rev = `Oslo lufthavn|${trip.fromName}`;
+      if (!seenFb.has(rev)) {
+        seenFb.add(rev);
+        flybussTrips.push({
+          from: 'NSR:StopPlace:269',
+          fromName: 'Oslo lufthavn',
+          to: trip.from,
+          toName: trip.fromName,
+        });
+      }
+    }
+  }
+
+  return { rail: railTrips, flybuss: flybussTrips };
+}
 
 async function fetchJp(body) {
   const res = await fetchWithRetry(
@@ -101,6 +181,12 @@ async function fetchJp(body) {
   return data?.data;
 }
 
+function buildPlaceArg(placeId, name) {
+  const n = (name || '').replace(/"/g, '\\"');
+  if (placeId) return `{ place: "${placeId}", name: "${n}" }`;
+  return `{ name: "${n}" }`;
+}
+
 async function fetchTripShapes(trips, modes, acceptAllBus = false) {
   const allShapes = [];
   const modesArg = modes.map((m) => `{ transportMode: ${m} }`).join(', ');
@@ -108,9 +194,11 @@ async function fetchTripShapes(trips, modes, acceptAllBus = false) {
   const dateTime = new Date().toISOString().slice(0, 19);
   for (const trip of trips) {
     const { from, fromName, to, toName } = trip;
+    const fromArg = buildPlaceArg(from, fromName);
+    const toArg = buildPlaceArg(to, toName);
     try {
       const data = await fetchJp({
-        query: `{ trip(from: { place: "${from}", name: "${fromName}" }, to: { place: "${to}", name: "${toName}" }, dateTime: "${dateTime}", numTripPatterns: 10, modes: { transportModes: [${modesArg}] }) {
+        query: `{ trip(from: ${fromArg}, to: ${toArg}, dateTime: "${dateTime}", numTripPatterns: 10, modes: { transportModes: [${modesArg}] }) {
           tripPatterns {
             legs {
               mode
@@ -127,6 +215,7 @@ async function fetchTripShapes(trips, modes, acceptAllBus = false) {
       });
 
       const patterns = data?.trip?.tripPatterns || [];
+      const useTripEndpoints = modes.includes('rail'); // Bruk hele ruten (fromName/toName) for tog
       for (const p of patterns) {
         for (const leg of p.legs || []) {
           const lineCode = leg?.line?.publicCode || '';
@@ -147,12 +236,17 @@ async function fetchTripShapes(trips, modes, acceptAllBus = false) {
 
           const isFlytog = /^F\d*$|^FX$/.test(lineCode);
           const mode = modes.includes('rail') ? (isFlytog ? 'flytog' : 'rail') : 'flybuss';
+          // For tog: bruk hele ruten (trip.fromName/toName), ikke leg-delstrekning
+          const fromName = useTripEndpoints ? trip.fromName : (quayIds[0]?.name || leg.fromPlace?.name || '');
+          const toName = useTripEndpoints ? trip.toName : (quayIds[quayIds.length - 1]?.name || leg.toPlace?.name || '');
+          const midIdx = Math.floor(quayIds.length / 2);
+          const via = quayIds.length > 2 ? quayIds[midIdx]?.name : null;
           allShapes.push({
             mode,
             line: lineCode,
-            from: (quayIds[0]?.name || leg.fromPlace?.name || '').trim(),
-            to: (quayIds[quayIds.length - 1]?.name || leg.toPlace?.name || '').trim(),
-            via: quayIds.length > 2 ? quayIds[Math.floor(quayIds.length / 2)]?.name : null,
+            from: (fromName || '').trim(),
+            to: (toName || '').trim(),
+            via,
             quayIds,
             pointsOnLinkEncoded,
           });
@@ -170,8 +264,9 @@ async function fetchTripShapes(trips, modes, acceptAllBus = false) {
  * @param {Map} quayCoordCache - cache for quayId -> [lat, lon]
  */
 export async function fetchJpRoutes(quayCoordCache) {
-  const railShapes = await fetchTripShapes(RAIL_TRIPS, ['rail']);
-  const flybussShapes = await fetchTripShapes(FLYBUSS_TRIPS, ['bus', 'coach'], true);
+  const { rail: railTrips, flybuss: flybussTrips } = await discoverTripsFromDepartureBoards();
+  const railShapes = railTrips.length > 0 ? await fetchTripShapes(railTrips, ['rail']) : [];
+  const flybussShapes = flybussTrips.length > 0 ? await fetchTripShapes(flybussTrips, ['bus', 'coach'], true) : [];
 
   const railCount = railShapes.filter((s) => s.mode === 'flytog').length;
   const flybussCount = flybussShapes.length;
@@ -227,7 +322,8 @@ export async function fetchJpRoutes(quayCoordCache) {
 /** Henter kun jernbaneruter (regiontog, flytoget). Krever ikke GTFS. Brukes for rask preload ved oppstart. */
 export async function fetchRailShapesOnly() {
   const quayCoordCache = new Map();
-  const railShapes = await fetchTripShapes(RAIL_TRIPS, ['rail']);
+  const { rail: railTrips } = await discoverTripsFromDepartureBoards();
+  const railShapes = railTrips.length > 0 ? await fetchTripShapes(railTrips, ['rail']) : [];
   if (railShapes.length === 0) return [];
   const allQuayIds = [...new Set(railShapes.flatMap((s) => s.quayIds?.map((q) => (typeof q === 'object' ? q?.id : q)).filter(Boolean) ?? []))];
   await fetchQuayCoords(allQuayIds, quayCoordCache);

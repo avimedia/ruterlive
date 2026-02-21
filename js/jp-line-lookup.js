@@ -8,49 +8,8 @@ const CLIENT_NAME = 'ruterlive-web';
 
 const cache = new Map(); // key: "lineCode|destKey" -> { from, to, via }
 
-// Kjente endepunkter for linjer utenfor RUT ET (flybuss m.m.)
-const LINE_ENDPOINTS = {
-  FB1: [
-    { from: 'Oslo Bussterminal', to: 'Oslo lufthavn' },
-    { from: 'Oslo lufthavn', to: 'Oslo Bussterminal' },
-  ],
-  FB2: [
-    { from: 'Oslo Bussterminal', to: 'Oslo lufthavn' },
-    { from: 'Oslo lufthavn', to: 'Oslo Bussterminal' },
-  ],
-  FB3: [
-    { from: 'Oslo Bussterminal', to: 'Oslo lufthavn' },
-    { from: 'Oslo lufthavn', to: 'Oslo Bussterminal' },
-  ],
-  FB4: [
-    { from: 'Oslo Bussterminal', to: 'Oslo lufthavn' },
-    { from: 'Oslo lufthavn', to: 'Oslo Bussterminal' },
-  ],
-  FB5: [
-    { from: 'Oslo Bussterminal', to: 'Oslo lufthavn' },
-    { from: 'Oslo lufthavn', to: 'Oslo Bussterminal' },
-  ],
-  FB9: [
-    { from: 'Oslo Bussterminal', to: 'Oslo lufthavn' },
-    { from: 'Oslo lufthavn', to: 'Oslo Bussterminal' },
-  ],
-};
-
 function norm(s) {
   return (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function destMatches(destinationName, toName) {
-  if (!destinationName) return true;
-  const d = norm(destinationName);
-  const t = norm(toName);
-  if (d.includes('gardermoen') || d.includes('oslo lufthavn') || d.includes('osl')) {
-    return t.includes('lufthavn') || t.includes('gardermoen') || t.includes('osl');
-  }
-  if (d.includes('oslo') && !d.includes('lufthavn')) {
-    return t.includes('oslo') && !t.includes('lufthavn');
-  }
-  return d.includes(t) || t.includes(d);
 }
 
 function buildTripQuery(fromPlace, toPlace) {
@@ -98,31 +57,22 @@ export async function fetchLineRouteFromJp(lineCode, destinationName, options = 
   const cacheKey = `${lineCode}|${destKey}|${posKey}`;
   if (cache.has(cacheKey)) return cache.get(cacheKey);
 
-  const endpoints = LINE_ENDPOINTS[lineCode?.toUpperCase()];
-  if (endpoints) {
-    for (const { from, to } of endpoints) {
-      if (destinationName && !destMatches(destinationName, to)) continue;
-      const result = await runTripQuery({ name: from }, { name: to }, lineCode);
-      if (result) {
-        cache.set(cacheKey, result);
-        return result;
-      }
-    }
-    for (const { from, to } of endpoints) {
-      const result = await runTripQuery({ name: from }, { name: to }, lineCode);
-      if (result) {
-        cache.set(cacheKey, result);
-        return result;
-      }
-    }
-  }
-
   if (destinationName && options.lat != null && options.lon != null) {
     const result = await runTripQuery(
       { coordinates: { latitude: options.lat, longitude: options.lon } },
       { name: destinationName },
       lineCode
     );
+    if (result) {
+      cache.set(cacheKey, result);
+      return result;
+    }
+  }
+  if (destinationName && /^(FB|NW)\d*$/i.test(lineCode)) {
+    const toLufthavn = /lufthavn|gardermoen|osl/i.test(destinationName);
+    const result = toLufthavn
+      ? await runTripQuery({ name: 'Oslo Bussterminal' }, { name: 'Oslo lufthavn' }, lineCode)
+      : await runTripQuery({ name: 'Oslo lufthavn' }, { name: 'Oslo Bussterminal' }, lineCode);
     if (result) {
       cache.set(cacheKey, result);
       return result;

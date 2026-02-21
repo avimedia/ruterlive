@@ -153,7 +153,7 @@ async function fetchTripShapes(trips, modes, acceptAllBus = false) {
             from: (quayIds[0]?.name || leg.fromPlace?.name || '').trim(),
             to: (quayIds[quayIds.length - 1]?.name || leg.toPlace?.name || '').trim(),
             via: quayIds.length > 2 ? quayIds[Math.floor(quayIds.length / 2)]?.name : null,
-            quayIds: quayIds.map((q) => q.id).filter(Boolean),
+            quayIds,
             pointsOnLinkEncoded,
           });
         }
@@ -179,7 +179,7 @@ export async function fetchJpRoutes(quayCoordCache) {
   console.log(`[RuterLive] JP routes: ${railShapes.length} rail (${railCount} flytog), ${flybussCount} flybuss`);
 
   const allProto = [...railShapes, ...flybussShapes];
-  const allQuayIds = [...new Set(allProto.flatMap((s) => s.quayIds).filter(Boolean))];
+  const allQuayIds = [...new Set(allProto.flatMap((s) => s.quayIds?.map((q) => q?.id).filter(Boolean) ?? []))];
   await fetchQuayCoords(allQuayIds, quayCoordCache);
 
   const shapes = [];
@@ -198,8 +198,11 @@ export async function fetchJpRoutes(quayCoordCache) {
     }
     if (points.length < 2) continue;
 
-    const firstQuayId = s.quayIds?.[0];
-    if (s.quayIds?.length > 1 && s.quayIds[s.quayIds.length - 1] === firstQuayId) {
+    const firstQ = s.quayIds?.[0];
+    const firstQuayId = firstQ?.id ?? firstQ;
+    const lastQ = s.quayIds?.[s.quayIds.length - 1];
+    const lastQuayId = lastQ?.id ?? lastQ;
+    if (s.quayIds?.length > 1 && lastQuayId === firstQuayId) {
       points.pop();
     }
 
@@ -209,9 +212,11 @@ export async function fetchJpRoutes(quayCoordCache) {
 
     const { quayIds = [], ...rest } = s;
     const quayStops = quayIds
-      .map((id) => {
-        const c = quayCoordCache.get(id);
-        return c ? [c[0], c[1], id] : null;
+      .map((q) => {
+        const id = typeof q === 'string' ? q : q?.id;
+        const name = typeof q === 'object' ? q?.name : '';
+        const c = id ? quayCoordCache.get(id) : null;
+        return c ? [c[0], c[1], id, name || ''] : null;
       })
       .filter(Boolean);
     shapes.push({ ...rest, points, quayStops });

@@ -160,32 +160,38 @@ function addStopMarkers(map, shapes) {
       const lat = pt[0];
       const lon = pt[1];
       const quayId = pt[2];
-      stopSources.push({ lat, lon, quayId, color });
+      const name = pt[3];
+      stopSources.push({ lat, lon, quayId, name, color });
     }
     for (const pt of shape.quayStops ?? []) {
       const lat = pt[0];
       const lon = pt[1];
       const quayId = pt[2];
-      stopSources.push({ lat, lon, quayId, color });
+      const name = pt[3];
+      stopSources.push({ lat, lon, quayId, name, color });
     }
   }
-  for (const { lat, lon, quayId, color } of stopSources) {
+  for (const { lat, lon, quayId, name, color } of stopSources) {
     const key = pointKey(lat, lon);
     if (seen.has(key)) continue;
     seen.add(key);
     const circle = L.circleMarker([lat, lon], {
-      radius: quayId ? 5 : 4,
+      radius: quayId ? 7 : 4,
       fillColor: color,
       color: 'rgba(255,255,255,0.8)',
       weight: 1,
       fillOpacity: 0.7,
       interactive: !!quayId,
+      zIndexOffset: quayId ? 500 : 0,
     });
     if (quayId) {
+      const tooltipText = (name || 'Holdeplass').trim() ? `${(name || 'Holdeplass').trim()} · Klikk for avganger` : 'Klikk for avganger';
+      circle.bindTooltip(tooltipText, { permanent: false, direction: 'top', offset: [0, -6], opacity: 0.95 });
       circle.on('click', (e) => {
         L.DomEvent.stopPropagation(e);
         showDepartureBoard(map, quayId, circle);
       });
+      circle.bringToFront();
     }
     circle.addTo(map.routeLayerGroup);
   }

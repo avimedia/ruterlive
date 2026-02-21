@@ -20,6 +20,7 @@ const INFO_TEXTS = {
 };
 
 let onFilterChange = null;
+let infoOverlayTrigger = null;
 
 const STORAGE_KEY = 'ruterlive-panel-collapsed';
 
@@ -76,7 +77,7 @@ export function initLayers(callback) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const mode = btn.dataset.info;
-      showInfoOverlay(INFO_TEXTS[mode] || '');
+      showInfoOverlay(INFO_TEXTS[mode] || '', btn);
     });
   });
 
@@ -97,12 +98,16 @@ export function initLayers(callback) {
   overlay?.addEventListener('click', (e) => {
     if (e.target === overlay) hideInfoOverlay();
   });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay && !overlay.classList.contains('hidden')) hideInfoOverlay();
+  });
 }
 
-function showInfoOverlay(text) {
+function showInfoOverlay(text, triggerEl) {
   const overlay = document.getElementById('info-overlay');
   const textEl = document.getElementById('info-text');
   if (overlay && textEl) {
+    infoOverlayTrigger = triggerEl || null;
     textEl.textContent = text;
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
@@ -112,6 +117,12 @@ function showInfoOverlay(text) {
 function hideInfoOverlay() {
   const overlay = document.getElementById('info-overlay');
   if (overlay) {
+    // Flytt fokus ut av overlay før aria-hidden – unngår a11y-advarsel
+    if (infoOverlayTrigger?.focus) {
+      infoOverlayTrigger.focus();
+    } else {
+      document.getElementById('panel-toggle')?.focus();
+    }
     overlay.classList.add('hidden');
     overlay.setAttribute('aria-hidden', 'true');
   }

@@ -225,7 +225,7 @@ function buildRouteShapes(journeys) {
       if (!coords) continue;
       // Sirkelruter: ikke tegne linje tilbake til start – stopp ved siste stopp
       if (i === allCalls.length - 1 && c.quayId === firstQuayId) break;
-      points.push([coords[0], coords[1], c.quayId]);
+      points.push([coords[0], coords[1], c.quayId, c.name || '']);
     }
     const maxSpanKm = j.mode === 'bus' || j.mode === 'water' ? MAX_ROUTE_SPAN_KM_BUS : MAX_ROUTE_SPAN_KM;
     const cleanedPoints = removeGeoOutliers(points, maxSpanKm);

@@ -251,7 +251,7 @@ function buildVehiclesAndShapes(journeys, quayCoordCache) {
       const coords = quayCoordCache.get(c.quayId);
       if (!coords) continue;
       if (i === allCalls.length - 1 && c.quayId === firstQuayId) break;
-      points.push([coords[0], coords[1], c.quayId]);
+      points.push([coords[0], coords[1], c.quayId, c.name || '']);
     }
     const maxSpanKm = j.mode === 'bus' || j.mode === 'water' ? MAX_ROUTE_SPAN_KM_BUS : MAX_ROUTE_SPAN_KM;
     const cleanedPoints = removeGeoOutliers(points, maxSpanKm);

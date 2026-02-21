@@ -44,6 +44,31 @@ const MAX_QUAYS_TO_FETCH = 500; // Flere holdeplasser = flere busser med beregne
 
 const JP_BATCH_SIZE = 25; // Større batch = færre requests
 
+const QUAY_COORDS_URL = '/api/quay-coords';
+
+async function fetchQuayCoordsFromServer(quayIds) {
+  const ids = quayIds.filter((id) => /^NSR:Quay:\d+$/.test(id));
+  if (ids.length === 0) return new Map();
+  try {
+    const res = await fetch(QUAY_COORDS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) return new Map();
+    const data = await res.json();
+    const out = new Map();
+    for (const [id, coords] of Object.entries(data || {})) {
+      if (Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+        out.set(id, [coords[0], coords[1]]);
+      }
+    }
+    return out;
+  } catch (_) {
+    return new Map();
+  }
+}
+
 async function fetchQuayCoordsFromJpBatch(quayIds) {
   const ids = quayIds.filter((id) => /^NSR:Quay:\d+$/.test(id));
   if (ids.length === 0) return new Map();
@@ -244,7 +269,13 @@ export async function fetchEstimatedVehicles(onProgress) {
     const quayList = sorted
       .map(([quayId, name]) => ({ quayId, name }))
       .slice(0, MAX_QUAYS_TO_FETCH);
-    await fetchQuayCoordsBatch(quayList);
+    const quayIds = quayList.map((q) => q.quayId).filter(Boolean);
+    const serverCoords = await fetchQuayCoordsFromServer(quayIds);
+    for (const [id, coords] of serverCoords) {
+      quayCoordCache.set(id, coords);
+    }
+    const stillMissing = quayList.filter((q) => !quayCoordCache.has(q.quayId));
+    await fetchQuayCoordsBatch(stillMissing);
 
     const now = Date.now();
     const vehicles = [];

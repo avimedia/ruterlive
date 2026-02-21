@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
 import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
-import { loadGtfsStops } from './server/gtfs-stops-loader.js';
+import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache } from './server/gtfs-stops-loader.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -39,6 +39,25 @@ app.get('/api/vehicles-cached', async (_req, res) => {
     res.json(data);
   } catch (err) {
     res.status(503).json({ errors: [{ message: err.message }] });
+  }
+});
+
+// Quay-koordinater fra GTFS – brukes av klient for buss-posisjoner
+app.post('/api/quay-coords', express.json({ limit: '100kb' }), async (req, res) => {
+  try {
+    await ensureGtfsStopsLoaded();
+    const gtfs = getGtfsQuayCache();
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const out = {};
+    for (const id of ids.slice(0, 1000)) {
+      if (typeof id === 'string' && /^NSR:Quay:\d+$/.test(id) && gtfs?.has(id)) {
+        out[id] = gtfs.get(id);
+      }
+    }
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.json(out);
+  } catch (err) {
+    res.status(503).json({});
   }
 });
 

@@ -38,8 +38,8 @@ let lastRenderedShapesKey = '';
 let lastRenderedModesKey = '';
 let lastSelectedVehicleKey = '';
 
-/** Zoom-nivå før holdeplasser vises som små sirkler (gately nivå). */
-const ZOOM_STOPS_VISIBLE = 15;
+/** Zoom-nivå før holdeplasser vises som små sirkler. */
+const ZOOM_STOPS_VISIBLE = 13;
 
 /** T-bane, jernbane og trikk vises alltid. Buss, båt og flybuss kun ved klikk på kjøretøy. */
 const ALWAYS_SHOWN_MODES = new Set(['metro', 'rail', 'flytog', 'tram']);

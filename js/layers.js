@@ -30,6 +30,9 @@ export function initLayers(callback) {
   const toggleBtn = document.getElementById('panel-toggle');
   const controls = panel.querySelector('.layer-controls');
 
+  // Hindre at klikk i panelet trigger kartet (zoom, clearSelection osv.)
+  panel.addEventListener('click', (e) => e.stopPropagation());
+
   // Gjenopprett minimert tilstand
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved === 'true') {
@@ -60,10 +63,12 @@ export function initLayers(callback) {
   });
 
   controls.querySelectorAll('input[data-mode]').forEach((input) => {
-    input.addEventListener('change', () => {
+    input.addEventListener('change', (e) => {
+      e.stopPropagation();
       const modes = getVisibleModes();
       onFilterChange?.(modes);
     });
+    input.addEventListener('click', (e) => e.stopPropagation());
   });
 
   // Info-buttons for T-bane og Trikk
@@ -78,10 +83,12 @@ export function initLayers(callback) {
   // Rutelinjer-toggle
   const routesToggle = document.getElementById('routes-toggle');
   if (routesToggle) {
-    routesToggle.addEventListener('change', () => {
+    routesToggle.addEventListener('change', (e) => {
+      e.stopPropagation();
       setRoutesVisible(routesToggle.checked);
       onFilterChange?.(getVisibleModes());
     });
+    routesToggle.addEventListener('click', (e) => e.stopPropagation());
   }
 
   // Lukk-overlay

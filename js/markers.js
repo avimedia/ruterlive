@@ -66,9 +66,10 @@ function animateMarkerTo(marker, targetLat, targetLon, vehicleId) {
   requestAnimationFrame(tick);
 }
 
-export function updateMarkers(vehicles, visibleModes) {
+export function updateMarkers(vehicles, visibleModes, opts = {}) {
   const map = getMap();
   if (!map) return;
+  const { onVehicleSelect, onVehicleDeselect, getSelectedVehicleId } = opts;
 
   lastVehicles = vehicles;
   lastVisibleModes = new Set(visibleModes);
@@ -128,6 +129,13 @@ export function updateMarkers(vehicles, visibleModes) {
       marker.bindPopup(popupHtml, { className: 'vehicle-popup' });
       marker.addTo(map);
       vehicleMarkers.set(v.vehicleId, marker);
+    }
+    if (onVehicleSelect) {
+      marker.off('popupopen popupclose');
+      marker.on('popupopen', () => onVehicleSelect(v));
+      marker.on('popupclose', () => {
+        if (getSelectedVehicleId?.() === v.vehicleId) onVehicleDeselect?.();
+      });
     }
   }
 }

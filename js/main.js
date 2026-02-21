@@ -1,4 +1,4 @@
-import { initMap } from './map.js';
+import { initMap, getMap } from './map.js';
 import { connectVehicles } from './api.js';
 import { fetchEstimatedVehicles } from './et-api.js';
 import { fetchLineRouteFromJp } from './jp-line-lookup.js';
@@ -10,6 +10,7 @@ let graphqlVehicles = [];
 let etVehicles = [];
 let routeShapes = [];
 let etLoaded = false;
+let selectedVehicleForRoute = null;
 
 const jpLineResults = new Map(); // "line|dest" -> { from, to, via }
 
@@ -76,15 +77,35 @@ function mergeAndUpdate() {
     }
   }
   const visibleModes = getVisibleModes();
-  updateMarkers(merged, visibleModes);
+  updateMarkers(merged, visibleModes, {
+    onVehicleSelect: (v) => {
+      selectedVehicleForRoute = v;
+      updateRouteLines(routeShapes, visibleModes, v);
+    },
+    onVehicleDeselect: () => {
+      selectedVehicleForRoute = null;
+      updateRouteLines(routeShapes, visibleModes, null);
+    },
+    getSelectedVehicleId: () => selectedVehicleForRoute?.vehicleId,
+  });
   updateVehicleCount(getVehicleCounts(merged), null, !etLoaded);
-  updateRouteLines(routeShapes, visibleModes);
+  updateRouteLines(routeShapes, visibleModes, selectedVehicleForRoute);
 }
 
 initMap();
+const map = getMap();
+if (map) {
+  map.on('click', () => {
+    if (selectedVehicleForRoute) {
+      selectedVehicleForRoute = null;
+      updateRouteLines(routeShapes, getVisibleModes(), null);
+    }
+  });
+}
+
 initLayers((visibleModes) => {
   applyFilter(visibleModes);
-  updateRouteLines(routeShapes, visibleModes);
+  updateRouteLines(routeShapes, visibleModes, selectedVehicleForRoute);
 });
 
 updateVehicleCount(null, null, true);

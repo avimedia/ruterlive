@@ -36,32 +36,70 @@ let selectedPolyline = null;
 let routesVisible = true;
 let lastRenderedShapesKey = '';
 let lastRenderedModesKey = '';
+let lastSelectedVehicleKey = '';
 
-export function updateRouteLines(shapes, visibleModes) {
+/** T-bane og jernbane vises alltid. Buss, trikk, båt, flybuss kun ved klikk på kjøretøy. */
+const ALWAYS_SHOWN_MODES = new Set(['metro', 'rail', 'flytog']);
+const VEHICLE_CLICK_MODES = new Set(['bus', 'tram', 'water', 'flybuss']);
+
+function vehicleMode(vehicle) {
+  const m = (vehicle?.mode || '').toLowerCase();
+  if (m === 'rail' && /^F\d*$|^FX$/.test((vehicle?.line?.publicCode || ''))) return 'flytog';
+  if (m === 'bus' && (vehicle?.line?.publicCode || '').toUpperCase().startsWith('FB')) return 'flybuss';
+  return m || 'bus';
+}
+
+function shapeMatchesVehicle(shape, vehicle) {
+  if (!vehicle) return false;
+  const sLine = (shape.line || '').toString();
+  const vLine = vehicle.line?.publicCode || '';
+  if (sLine !== vLine) return false;
+  const mode = vehicleMode(vehicle);
+  const sMode = (shape.mode || '').toLowerCase();
+  if (sMode !== mode) return false;
+  const dest = (vehicle.destinationName || '').toLowerCase();
+  const sTo = (shape.to || '').toLowerCase();
+  if (dest && sTo && !dest.includes(sTo) && !sTo.includes(dest)) return false;
+  return true;
+}
+
+export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   const map = getMap();
   if (!map || !map.routeLayerGroup) return;
 
+  const selectedKey = selectedVehicle ? `${selectedVehicle.vehicleId}-${selectedVehicle.line?.publicCode}` : '';
   const shapesKey = shapes?.length ? `${shapes.length}-${shapes.slice(0, 5).map((s) => s.line + s.from).join('|')}` : '0';
   const modesKey = [...(visibleModes || [])].sort().join(',');
-  if (shapesKey === lastRenderedShapesKey && modesKey === lastRenderedModesKey) {
-    return; // Ingen endring – unngå å tømme og tegne på nytt (f.eks. ved zoom/pan)
+  if (shapesKey === lastRenderedShapesKey && modesKey === lastRenderedModesKey && selectedKey === lastSelectedVehicleKey) {
+    return;
   }
   lastRenderedShapesKey = shapesKey;
   lastRenderedModesKey = modesKey;
+  lastSelectedVehicleKey = selectedKey;
 
   map.routeLayerGroup.clearLayers();
   routeLayers = [];
   selectedPolyline = null;
 
   if (import.meta.env.DEV) {
-    console.debug('[RuterLive] updateRouteLines:', { routesVisible, shapesCount: shapes?.length ?? 0, visibleModes: [...(visibleModes || [])] });
+    console.debug('[RuterLive] updateRouteLines:', { routesVisible, shapesCount: shapes?.length ?? 0, selectedVehicle: !!selectedVehicle });
   }
 
   if (!routesVisible || !shapes?.length) return;
 
+  const shapesToShow = [];
   for (const shape of shapes) {
     const mode = shape.mode?.toLowerCase();
     if (!visibleModes.has(mode)) continue;
+    if (ALWAYS_SHOWN_MODES.has(mode)) {
+      shapesToShow.push(shape);
+    } else if (VEHICLE_CLICK_MODES.has(mode) && selectedVehicle && shapeMatchesVehicle(shape, selectedVehicle)) {
+      shapesToShow.push(shape);
+    }
+  }
+
+  for (const shape of shapesToShow) {
+    const mode = shape.mode?.toLowerCase();
 
     const latlngs = shape.points.map(([lat, lon]) => [lat, lon]);
     const color = getShapeColor(mode, shape.line + (shape.from || ''));

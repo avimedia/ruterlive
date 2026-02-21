@@ -87,13 +87,10 @@ app.use(
   })
 );
 
-app.use(
-  '/api/osrm',
-  proxy('https://router.project-osrm.org', {
-    proxyReqPathResolver: (req) => (req.url || '').replace(/^\/api\/osrm/, '') || '/',
-    proxyReqOptDecorator: (opt) => opt,
-  })
-);
+// OSRM fjernet – offentlig server gir 500/429; rutekart bruker rette linjer mellom stopp
+app.use('/api/osrm', (_req, res) => {
+  res.status(410).json({ error: 'OSRM disabled' });
+});
 
 app.use(
   '/api/entur-jp',

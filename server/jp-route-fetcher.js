@@ -109,8 +109,9 @@ async function fetchTripShapes(trips, modes) {
           if (quayIds.length < 2) continue;
 
           const isFlytog = /^F\d*$|^FX$/.test(lineCode);
+          const mode = modes.includes('rail') ? (isFlytog ? 'flytog' : 'rail') : 'flybuss';
           allShapes.push({
-            mode: modes.includes('rail') ? (isFlytog ? 'flytog' : 'rail') : 'flybuss',
+            mode,
             line: lineCode,
             from: quayIds[0]?.name || leg.fromPlace?.name || '',
             to: quayIds[quayIds.length - 1]?.name || leg.toPlace?.name || '',

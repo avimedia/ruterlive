@@ -10,18 +10,15 @@ import { ensureEtCache } from './et-cache.js';
 import { fetchJpRoutes } from './jp-route-fetcher.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
-const OSRM_URL = 'https://router.project-osrm.org';
 const CLIENT_NAME = 'ruterlive-web';
 
 const METRO_LINE_NUMS = new Set([1, 2, 3, 4, 5, 6]);
 const TRAM_LINE_NUMS = new Set([11, 12, 13, 14, 15, 16, 17, 18, 19]);
 const MAX_QUAYS_TO_FETCH = 500;
 const JP_BATCH_SIZE = 25;
-const MAX_WAYPOINTS = 50;
 
 const quayCoordCache = new Map();
 const lineModeCache = new Map();
-const osrmCache = new Map();
 
 function getLineNum(lineRef) {
   const m = /:Line:(\d+)/.exec(lineRef || '');
@@ -94,39 +91,6 @@ async function fetchLineModes(lineRefs) {
     const mode = mapJpTransportMode(line?.transportMode);
     lineModeCache.set(ref, mode);
   });
-}
-
-async function getOsrmGeometry(coords) {
-  if (!coords || coords.length < 2) return null;
-
-  const key = coords.map(([lat, lon]) => `${lat.toFixed(4)},${lon.toFixed(4)}`).join(';');
-  if (osrmCache.has(key)) return osrmCache.get(key);
-
-  let waypoints = coords;
-  if (waypoints.length > MAX_WAYPOINTS) {
-    const step = (coords.length - 1) / (MAX_WAYPOINTS - 1);
-    waypoints = [];
-    for (let i = 0; i < MAX_WAYPOINTS; i++) {
-      waypoints.push(coords[Math.min(Math.round(i * step), coords.length - 1)]);
-    }
-  }
-
-  const coordsStr = waypoints.map(([lat, lon]) => `${lon},${lat}`).join(';');
-  const url = `${OSRM_URL}/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
-
-  try {
-    const res = await fetchWithRetry(url, {}, { timeout: 15000, retries: 2 });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const geom = data?.routes?.[0]?.geometry;
-    if (!geom?.coordinates?.length) return null;
-
-    const points = geom.coordinates.map(([lon, lat]) => [lat, lon]);
-    osrmCache.set(key, points);
-    return points;
-  } catch (_) {
-    return null;
-  }
 }
 
 function parseIsoTime(str) {
@@ -276,25 +240,6 @@ function buildRouteShapes(journeys) {
   return shapes;
 }
 
-async function enrichWithOsrm(shapes, concurrency = 5) {
-  const toEnrich = shapes.filter((s) => (s.mode === 'bus' || s.mode === 'tram') && s.points?.length >= 2);
-
-  for (let i = 0; i < toEnrich.length; i += concurrency) {
-    const batch = toEnrich.slice(i, i + concurrency);
-    const results = await Promise.all(
-      batch.map(async (shape) => {
-        const geometry = await getOsrmGeometry(shape.points);
-        return geometry ? { ...shape, points: geometry } : shape;
-      })
-    );
-    for (let j = 0; j < batch.length; j++) {
-      const idx = shapes.indexOf(batch[j]);
-      if (idx >= 0 && results[j].points !== batch[j].points) shapes[idx] = results[j];
-    }
-  }
-  return shapes;
-}
-
 let cachedShapes = [];
 let lastFetch = 0;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 1 døgn
@@ -338,9 +283,8 @@ export async function refreshRouteShapes() {
     await fetchQuayCoordsBatch(quayIds);
 
     shapes = buildRouteShapes(journeys);
-    shapes = await enrichWithOsrm(shapes);
   } catch (err) {
-    console.warn('[RuterLive] shape-service ET/OSRM:', err.message);
+    console.warn('[RuterLive] shape-service ET:', err.message);
   }
 
   try {

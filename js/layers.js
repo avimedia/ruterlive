@@ -21,11 +21,43 @@ const INFO_TEXTS = {
 
 let onFilterChange = null;
 
+const STORAGE_KEY = 'ruterlive-panel-collapsed';
+
 export function initLayers(callback) {
   onFilterChange = callback;
 
   const panel = document.getElementById('layers-panel');
+  const toggleBtn = document.getElementById('panel-toggle');
   const controls = panel.querySelector('.layer-controls');
+
+  // Gjenopprett minimert tilstand
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved === 'true') {
+    panel.classList.add('collapsed');
+    toggleBtn.textContent = '+';
+    toggleBtn.setAttribute('aria-label', 'Utvid panel');
+    toggleBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const collapsed = panel.classList.toggle('collapsed');
+    localStorage.setItem(STORAGE_KEY, String(collapsed));
+    toggleBtn.textContent = collapsed ? '+' : '−';
+    toggleBtn.setAttribute('aria-label', collapsed ? 'Utvid panel' : 'Minimer panel');
+    toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+  });
+
+  panel.querySelector('.panel-header')?.addEventListener('click', (e) => {
+    if (e.target === toggleBtn || toggleBtn.contains(e.target)) return;
+    if (panel.classList.contains('collapsed')) {
+      panel.classList.remove('collapsed');
+      localStorage.setItem(STORAGE_KEY, 'false');
+      toggleBtn.textContent = '−';
+      toggleBtn.setAttribute('aria-label', 'Minimer panel');
+      toggleBtn.setAttribute('aria-expanded', 'true');
+    }
+  });
 
   controls.querySelectorAll('input[data-mode]').forEach((input) => {
     input.addEventListener('change', () => {

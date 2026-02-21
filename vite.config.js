@@ -25,11 +25,7 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/entur-jp/, '/journey-planner/v3'),
       },
-      '/api/osrm': {
-        target: 'https://router.project-osrm.org',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/osrm/, ''),
-      },
+      // OSRM fjernet – 410 i prod
     },
   },
 });

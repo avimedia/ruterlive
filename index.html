@@ -17,7 +17,11 @@
 
     <main id="map-container">
       <aside id="layers-panel">
-        <h2>Vis lag</h2>
+        <div class="panel-header">
+          <h2>Vis lag</h2>
+          <button type="button" class="panel-toggle" id="panel-toggle" title="Minimer/utvid" aria-label="Minimer panel" aria-expanded="true">−</button>
+        </div>
+        <div class="panel-body">
         <div class="layer-controls">
           <span class="layer-row">
             <label><span class="layer-color-dot bus" aria-hidden="true"></span><input type="checkbox" data-mode="bus" checked> Buss</label>
@@ -42,6 +46,7 @@
         </div>
         <label class="routes-toggle"><input type="checkbox" id="routes-toggle" checked> Rutelinjer</label>
         <div id="vehicle-count">Henter kjøretøy og rutelinjer fra Entur…</div>
+        </div>
       </aside>
       <div id="info-overlay" class="overlay hidden" aria-hidden="true">
         <div class="overlay-content">

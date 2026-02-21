@@ -4,7 +4,6 @@
  */
 
 import { MAX_ROUTE_SPAN_KM } from '../config.js';
-import { enrichShapesWithOSRM } from './osrm.js';
 
 const ET_URL = import.meta.env.DEV ? '/api/entur-et/et?datasetId=RUT&maxSize=3000' : '/api/et-cached';
 const JP_GRAPHQL_URL = '/api/entur-jp/graphql';
@@ -303,12 +302,8 @@ export async function fetchEstimatedVehicles(onProgress) {
       }
     }
 
-    let routeShapes = buildRouteShapes(journeys);
-    try {
-      routeShapes = await enrichShapesWithOSRM(routeShapes);
-    } catch (err) {
-      if (import.meta.env.DEV) console.warn('[RuterLive] OSRM berikelse feilet, bruker rette linjer:', err);
-    }
+    const routeShapes = buildRouteShapes(journeys);
+    // OSRM (veifølgende geometri) deaktivert – offentlig server gir ofte 500/429
 
     if (import.meta.env.DEV) {
       console.debug('[RuterLive] ET result:', { vehicles: vehicles.length, routeShapes: routeShapes.length, quayCacheSize: quayCoordCache.size });

@@ -49,13 +49,75 @@ header p {
   border-radius: 8px;
   min-width: 180px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  transition: min-width 0.2s, padding 0.2s;
+}
+
+#layers-panel.collapsed {
+  min-width: 90px;
+  padding: 0.5rem 0.75rem;
+}
+
+#layers-panel.collapsed .panel-header {
+  cursor: pointer;
+  margin-bottom: 0;
+}
+
+#layers-panel.collapsed h2 {
+  font-size: 0.8rem;
+}
+
+#layers-panel.collapsed .panel-body {
+  display: none;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 #layers-panel h2 {
   font-size: 0.875rem;
   font-weight: 600;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0;
   color: #ccc;
+  flex: 1;
+}
+
+.panel-toggle {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: #444;
+  color: #ccc;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.panel-toggle:hover {
+  background: #555;
+  color: #fff;
+}
+
+#layers-panel.collapsed .panel-toggle {
+  font-size: 1rem;
+}
+
+.layer-controls {
+  margin-top: 0.75rem;
+}
+
+.panel-body {
+  margin-top: 0;
 }
 
 .layer-controls {

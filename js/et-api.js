@@ -5,7 +5,7 @@
 
 import { enrichShapesWithOSRM } from './osrm.js';
 
-const ET_URL = '/api/entur-et/et?datasetId=RUT&maxSize=2000';
+const ET_URL = '/api/entur-et/et?datasetId=RUT&maxSize=3000';
 const GEOCODER_URL = '/api/entur-geocoder/autocomplete';
 const JP_GRAPHQL_URL = '/api/entur-jp/graphql';
 const CLIENT_NAME = 'ruterlive-web';
@@ -42,7 +42,7 @@ function mapJpTransportMode(jpMode) {
 
 // Oslo sentrum – brukes for å prioritere Geocoder-treff
 const OSLO_FOCUS = { lat: 59.91, lon: 10.75 };
-const MAX_QUAYS_TO_FETCH = 350; // Flere holdeplasser = bedre rutelinjer
+const MAX_QUAYS_TO_FETCH = 500; // Flere holdeplasser = flere busser med beregnet posisjon
 
 const JP_BATCH_SIZE = 25; // Større batch = færre requests
 
@@ -267,10 +267,20 @@ export async function fetchEstimatedVehicles(onProgress) {
 
       const lastRecorded = j.recordedCalls[j.recordedCalls.length - 1];
       const firstEstimated = j.estimatedCalls[0];
+      const secondEstimated = j.estimatedCalls[1];
 
       if (lastRecorded && firstEstimated) {
         fromCall = lastRecorded;
         toCall = firstEstimated;
+      } else if (firstEstimated && secondEstimated && j.recordedCalls.length === 0) {
+        const tFirstDep = firstEstimated.depTime || firstEstimated.arrTime;
+        const tSecondArr = secondEstimated.arrTime || secondEstimated.depTime;
+        if (now >= tFirstDep && tSecondArr > tFirstDep) {
+          fromCall = { ...firstEstimated, time: tFirstDep };
+          toCall = secondEstimated;
+        } else {
+          toCall = firstEstimated;
+        }
       } else if (firstEstimated && j.recordedCalls.length === 0) {
         toCall = firstEstimated;
       } else if (lastRecorded && j.estimatedCalls.length === 0) {
@@ -284,7 +294,7 @@ export async function fetchEstimatedVehicles(onProgress) {
       let lon = null;
 
       if (fromCoords && toCoords && fromCall && toCall) {
-        const tFrom = fromCall.time;
+        const tFrom = fromCall.time ?? fromCall.depTime ?? fromCall.arrTime;
         const tTo = toCall.arrTime || toCall.depTime || tFrom + 60000;
         const progress = Math.max(0, Math.min(1, (now - tFrom) / (tTo - tFrom)));
         lat = fromCoords[0] + progress * (toCoords[0] - fromCoords[0]);
@@ -343,7 +353,20 @@ function buildRouteShapes(journeys) {
     const key = points.map((p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join('|');
     if (seen.has(key)) continue;
     seen.add(key);
-    shapes.push({ mode: j.mode, lineRef: j.lineRef, points });
+
+    const first = allCalls[0];
+    const last = allCalls[allCalls.length - 1];
+    const midIdx = Math.floor(allCalls.length / 2);
+    const viaStop = allCalls.length > 2 ? allCalls[midIdx]?.name : null;
+
+    shapes.push({
+      mode: j.mode,
+      line: getLinePublicCode(j.lineRef),
+      from: first?.name || '',
+      to: last?.name || '',
+      via: viaStop || null,
+      points,
+    });
   }
   if (import.meta.env.DEV && shapes.length > 0) {
     console.debug('[RuterLive] routeShapes:', shapes.length, 'avg points:', (shapes.reduce((s, sh) => s + sh.points.length, 0) / shapes.length).toFixed(0));

@@ -2,12 +2,12 @@
 const GRAPHQL_URL = '/api/entur/graphql';
 const CLIENT_NAME = 'ruterlive-web';
 
-// Oslo area bounds (RUT returns empty - use boundingBox for Oslo region instead)
+// Stor-Oslo: dekker Oslo, Akershus, Lillestrøm, Drammen-området, Ski, Nesodden
 const OSLO_BOUNDS = {
-  minLat: 59.8,
-  maxLat: 60.05,
-  minLon: 10.4,
-  maxLon: 10.95,
+  minLat: 59.45,
+  maxLat: 60.2,
+  minLon: 10.15,
+  maxLon: 11.25,
 };
 
 // Inline boundingBox (BoundingBoxInput type causes validation error)

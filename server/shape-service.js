@@ -5,14 +5,14 @@
 
 import { DOMParser } from '@xmldom/xmldom';
 
-const ET_URL = 'https://api.entur.io/realtime/v1/rest/et?datasetId=RUT&maxSize=2000';
+const ET_URL = 'https://api.entur.io/realtime/v1/rest/et?datasetId=RUT&maxSize=3000';
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const OSRM_URL = 'https://router.project-osrm.org';
 const CLIENT_NAME = 'ruterlive-web';
 
 const METRO_LINE_NUMS = new Set([1, 2, 3, 4, 5, 6]);
 const TRAM_LINE_NUMS = new Set([11, 12, 13, 14, 15, 16, 17, 18, 19]);
-const MAX_QUAYS_TO_FETCH = 350;
+const MAX_QUAYS_TO_FETCH = 500;
 const JP_BATCH_SIZE = 25;
 const MAX_WAYPOINTS = 50;
 
@@ -148,9 +148,10 @@ function parseSiriXml(xmlText) {
     for (let r = 0; r < rcEls.length; r++) {
       const cel = rcEls[r];
       const ref = cel.getElementsByTagNameNS(SIRI_NS, 'StopPointRef')[0]?.textContent;
+      const name = cel.getElementsByTagNameNS(SIRI_NS, 'StopPointName')[0]?.textContent || '';
       const dep = parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, 'ActualDepartureTime')[0]?.textContent)
         || parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, 'ActualArrivalTime')[0]?.textContent);
-      if (ref && dep) recordedCalls.push({ quayId: ref, time: dep });
+      if (ref && dep) recordedCalls.push({ quayId: ref, name, time: dep });
     }
 
     const estimatedCalls = [];
@@ -158,10 +159,11 @@ function parseSiriXml(xmlText) {
     for (let e = 0; e < ecEls.length; e++) {
       const cel = ecEls[e];
       const ref = cel.getElementsByTagNameNS(SIRI_NS, 'StopPointRef')[0]?.textContent;
+      const name = cel.getElementsByTagNameNS(SIRI_NS, 'StopPointName')[0]?.textContent || '';
       const arr = parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, 'ExpectedArrivalTime')[0]?.textContent)
         || parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, 'ExpectedDepartureTime')[0]?.textContent);
       const dep = parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, 'ExpectedDepartureTime')[0]?.textContent);
-      if (ref && (arr || dep)) estimatedCalls.push({ quayId: ref, arrTime: arr || dep, depTime: dep || arr });
+      if (ref && (arr || dep)) estimatedCalls.push({ quayId: ref, name, arrTime: arr || dep, depTime: dep || arr });
     }
 
     if (recordedCalls.length === 0 && estimatedCalls.length === 0) continue;
@@ -174,6 +176,11 @@ function parseSiriXml(xmlText) {
     });
   }
   return journeys;
+}
+
+function getLinePublicCode(lineRef) {
+  const m = /:Line:(\d+)/.exec(lineRef || '');
+  return m ? m[1] : '?';
 }
 
 function buildRouteShapes(journeys) {
@@ -193,7 +200,20 @@ function buildRouteShapes(journeys) {
     const key = points.map((p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join('|');
     if (seen.has(key)) continue;
     seen.add(key);
-    shapes.push({ mode: j.mode, points });
+
+    const first = allCalls[0];
+    const last = allCalls[allCalls.length - 1];
+    const midIdx = Math.floor(allCalls.length / 2);
+    const viaStop = allCalls.length > 2 ? allCalls[midIdx]?.name : null;
+
+    shapes.push({
+      mode: j.mode,
+      line: getLinePublicCode(j.lineRef),
+      from: first?.name || '',
+      to: last?.name || '',
+      via: viaStop || null,
+      points,
+    });
   }
   return shapes;
 }

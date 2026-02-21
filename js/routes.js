@@ -38,6 +38,18 @@ export function updateRouteLines(shapes, visibleModes) {
       opacity: 0.9,
       className: 'route-line',
     });
+
+    const line = shape.line || '?';
+    const from = shape.from || '—';
+    const to = shape.to || '—';
+    const via = shape.via;
+    const tooltipText = `Linje ${line}: ${from} → ${to}`;
+    const popupParts = [`<strong>Linje ${line}</strong>`, `Fra: ${from}`, `Til: ${to}`];
+    if (via) popupParts.push(`Via: ${via}`);
+    const popupHtml = popupParts.join('<br>');
+
+    polyline.bindTooltip(tooltipText, { permanent: false, direction: 'top', opacity: 0.95 });
+    polyline.bindPopup(popupHtml);
     polyline.addTo(map.routeLayerGroup);
     routeLayers.push(polyline);
   }

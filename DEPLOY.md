@@ -38,5 +38,6 @@ For Cloudflare Workers trengs en annen tilnærming (Workers støtter ikke Expres
 ## Hvorfor server?
 
 - **CORS:** Entur sine API-er tillater ikke alle domener – proxy løser dette
-- **Rutelinjer:** Serveren cacher rutekartet (ET + Journey Planner) ved oppstart og 24t – brukeren får linjene øyeblikkelig
-- **Kjøretøy:** Brukerens nettleser poller Entur via proxy hvert 10. sekund; serveren cacher ikke kjøretøy
+- **Rutelinjer:** Serveren cacher rutekartet (ET + Journey Planner) i 24t; sjekk hvert time. Brukeren får linjene øyeblikkelig
+- **Holdeplasser:** GTFS lastes ved oppstart; stops-in-bbox og søk via server
+- **Kjøretøy:** Brukerens nettleser poller via proxy hvert 20–30 sek; serveren cacher ikke kjøretøy

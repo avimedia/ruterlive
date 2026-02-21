@@ -1,17 +1,29 @@
-# RuterLive
+# livetrafikk.no (RuterLive)
 
-Realtidskart for kollektivtrafikk. **Live:** [livetrafikk.no](https://livetrafikk.no) Viser buss, T-bane, trikk, båt og tog basert på Entur API. Ruter leverer ikke GPS til Entur; buss/T-bane/trikk bruker beregnet posisjon fra avgangsdata.
+Realtidskart for kollektivtrafikk i Stor-Oslo. **Live:** [livetrafikk.no](https://livetrafikk.no)
+
+Viser buss, T-bane, trikk, båt, regiontog og Flytoget basert på Entur API. Ruter leverer ikke GPS til Entur; buss/T-bane/trikk bruker beregnet posisjon fra avgangsdata.
+
+## Funksjoner
+
+- **Kjøretøy på kart** – posisjoner oppdateres løpende
+- **Rutelinjer** – T-bane, trikk og jernbane vises alltid; buss og båt ved valgt kjøretøy
+- **Holdeplasser** – vises ved zoom 15+, klikk for avgangstavle
+- **Søk** – finn holdeplass etter navn
 
 ## Transporttyper
 
-Modus hentes fra **Entur Journey Planner** (transportMode per linje). Linjenummer er upålitelig – f.eks. er 390 og 396 bussruter (Nittedal/Hellerudhaugen), ikke ferger.
+Modus hentes fra **Entur Journey Planner** (transportMode per linje).
 
-| Type   | Beskrivelse                                   |
-|--------|-----------------------------------------------|
-| T-bane | Linje 1–6                                     |
-| Trikk  | Linje 11–19                                   |
-| Buss   | Bussruter (inkl. 20–89, 100+, 300, 390 …)    |
-| Båt    | Ferger og øybåter (fra JP transportMode)       |
+| Type      | Beskrivelse                                   |
+|-----------|-----------------------------------------------|
+| T-bane   | Linje 1–6                                     |
+| Trikk    | Linje 11–19                                   |
+| Buss     | Bussruter (inkl. 20–89, 100+, 300, 390 …)    |
+| Flybuss  | Ekspress til/fra lufthavn                      |
+| Båt      | Ferger og øybåter                             |
+| Regiontog| R10, R11, R12, R13 … (Vestfold, Østfold, Drammen) |
+| Flytoget | F1, F2, FX – Gardermoen-ekspressen            |
 
 Inspirert av [SL Live Map](https://sl-map.gunnar.se/).
 
@@ -39,10 +51,11 @@ Se [DEPLOY.md](DEPLOY.md) for oppsett på Render, Railway m.m. Produksjonsvisnin
 
 | Data            | Hvor lastes det? | Oppdatering                                      |
 |-----------------|------------------|--------------------------------------------------|
-| **Rutelinjer**  | Server           | Ved oppstart + hvert 24. time (ET + Journey Planner) |
-| **Kjøretøy**    | Klient           | Nettleseren poller Entur via proxy hvert 10. sek |
+| **Rutelinjer**  | Server           | Ved oppstart; cache 24t, sjekk hvert time (ET + Journey Planner) |
+| **Holdeplasser**| Server           | GTFS stops + bbox-forespørsler (zoom 15+)        |
+| **Kjøretøy**    | Klient           | Nettleseren poller via proxy hvert 20–30 sek     |
 
-**Rutelinjer** (de fargede linjene på kartet) caches på serveren slik at kartet vises umiddelbart når brukeren åpner siden. **Kjøretøyposisjoner** (busser, trikk osv.) hentes ikke på forhånd – hver brukers nettleser henter dem direkte fra Entur gjennom vår API-proxy. Serveren cacher aldri kjøretøy.
+**Rutelinjer** (T-bane, trikk, jernbane, buss, båt) caches på serveren i 24 timer. Kartet vises umiddelbart når brukeren åpner siden. **Kjøretøyposisjoner** hentes av hver brukers nettleser gjennom API-proxy – serveren cacher ikke kjøretøy.
 
 ## Teknologi
 

@@ -294,5 +294,5 @@ app.listen(PORT, async () => {
   refreshRouteShapes()
     .then((shapes) => console.log(`[RuterLive] Rutekart cache: ${shapes?.length ?? 0} linjer (inkl. jernbane)`))
     .catch((e) => console.warn('[RuterLive] Rutekart preload:', e.message));
-  setInterval(refreshRouteShapes, 15 * 60 * 1000);
+  setInterval(refreshRouteShapes, 60 * 60 * 1000); // Sjekk hver time, refetch kun når cache er eldre enn 24t
 });

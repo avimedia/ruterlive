@@ -265,6 +265,7 @@ export function isCacheFresh() {
 }
 
 export async function refreshRouteShapes() {
+  if (isCacheFresh()) return cachedShapes;
   let shapes = [];
   const jpPromise = fetchJpRoutes(quayCoordCache).catch((err) => {
     console.warn('[RuterLive] JP routes fetch:', err.message);

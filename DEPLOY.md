@@ -36,5 +36,5 @@ For Cloudflare Workers trengs en annen tilnærming (Workers støtter ikke Expres
 ## Hvorfor server?
 
 - **CORS:** Entur sine API-er tillater ikke alle domener – proxy løser dette
-- **Båndbredde:** Serveren henter data én gang; brukeren får kun ferdig svar
-- **Rutelinjer:** Krever mange API-kall (Journey Planner) – raskere når serveren aggregerer
+- **Rutelinjer:** Serveren cacher rutekartet (ET + Journey Planner) ved oppstart og 24t – brukeren får linjene øyeblikkelig
+- **Kjøretøy:** Brukerens nettleser poller Entur via proxy hvert 10. sekund; serveren cacher ikke kjøretøy

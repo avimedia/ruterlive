@@ -2,6 +2,8 @@
  * Henter flybuss- og togruter fra Journey Planner. Kjøres daglig sammen med ET-rutene.
  */
 
+import { fetchWithRetry } from './fetch-with-retry.js';
+
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CLIENT_NAME = 'ruterlive-web';
 const JP_QUAY_BATCH = 25;
@@ -24,13 +26,24 @@ async function fetchQuayCoords(quayIds, quayCoordCache) {
 
 // Bruk NSR StopPlace-IDs for pålitelige søk (fra Entur-dokumentasjonen)
 const RAIL_TRIPS = [
+  // Drammensbanen / Vestfoldbanen
   { from: 'NSR:StopPlace:11', fromName: 'Drammen stasjon', to: 'NSR:StopPlace:288', toName: 'Nationaltheatret' },
   { from: 'NSR:StopPlace:288', fromName: 'Nationaltheatret', to: 'NSR:StopPlace:11', toName: 'Drammen stasjon' },
+  // Østfoldbanen øst
   { from: 'NSR:StopPlace:6234', fromName: 'Lillestrøm', to: 'NSR:StopPlace:288', toName: 'Nationaltheatret' },
   { from: 'NSR:StopPlace:288', fromName: 'Nationaltheatret', to: 'NSR:StopPlace:6234', toName: 'Lillestrøm' },
   { from: 'NSR:StopPlace:6010', fromName: 'Ski', to: 'NSR:StopPlace:288', toName: 'Nationaltheatret' },
+  { from: 'NSR:StopPlace:288', fromName: 'Nationaltheatret', to: 'NSR:StopPlace:6010', toName: 'Ski' },
+  // Flytoget
   { from: 'NSR:StopPlace:269', fromName: 'Oslo lufthavn', to: 'NSR:StopPlace:288', toName: 'Nationaltheatret' },
   { from: 'NSR:StopPlace:288', fromName: 'Nationaltheatret', to: 'NSR:StopPlace:269', toName: 'Oslo lufthavn' },
+  // Oslo S – flere strekninger (Østfoldbanen, Drammen)
+  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:6234', toName: 'Lillestrøm' },
+  { from: 'NSR:StopPlace:6234', fromName: 'Lillestrøm', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
+  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:6010', toName: 'Ski' },
+  { from: 'NSR:StopPlace:6010', fromName: 'Ski', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
+  { from: 'NSR:StopPlace:59872', fromName: 'Oslo S', to: 'NSR:StopPlace:11', toName: 'Drammen stasjon' },
+  { from: 'NSR:StopPlace:11', fromName: 'Drammen stasjon', to: 'NSR:StopPlace:59872', toName: 'Oslo S' },
 ];
 
 const FLYBUSS_TRIPS = [
@@ -39,11 +52,15 @@ const FLYBUSS_TRIPS = [
 ];
 
 async function fetchJp(body) {
-  const res = await fetch(JP_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'ET-Client-Name': CLIENT_NAME },
-    body: JSON.stringify(body),
-  });
+  const res = await fetchWithRetry(
+    JP_URL,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': CLIENT_NAME },
+      body: JSON.stringify(body),
+    },
+    { timeout: 25000 }
+  );
   const data = await res.json();
   return data?.data;
 }

@@ -4,9 +4,10 @@
  */
 
 import { DOMParser } from '@xmldom/xmldom';
+import { fetchWithRetry } from './fetch-with-retry.js';
+import { ensureEtCache } from './et-cache.js';
 import { fetchJpRoutes } from './jp-route-fetcher.js';
 
-const ET_URL = 'https://api.entur.io/realtime/v1/rest/et?datasetId=RUT&maxSize=3000';
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const OSRM_URL = 'https://router.project-osrm.org';
 const CLIENT_NAME = 'ruterlive-web';
@@ -44,17 +45,19 @@ function mapJpTransportMode(jpMode) {
 }
 
 async function fetchEtXml() {
-  const res = await fetch(ET_URL, { headers: { 'ET-Client-Name': CLIENT_NAME } });
-  if (!res.ok) throw new Error(`ET ${res.status}`);
-  return res.text();
+  return ensureEtCache();
 }
 
 async function fetchJpGraphql(query) {
-  const res = await fetch(JP_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'ET-Client-Name': CLIENT_NAME },
-    body: JSON.stringify({ query }),
-  });
+  const res = await fetchWithRetry(
+    JP_URL,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': CLIENT_NAME },
+      body: JSON.stringify({ query }),
+    },
+    { timeout: 25000 }
+  );
   const data = await res.json();
   return data?.data;
 }
@@ -111,7 +114,7 @@ async function getOsrmGeometry(coords) {
   const url = `${OSRM_URL}/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
 
   try {
-    const res = await fetch(url);
+    const res = await fetchWithRetry(url, {}, { timeout: 15000, retries: 2 });
     if (!res.ok) return null;
     const data = await res.json();
     const geom = data?.routes?.[0]?.geometry;
@@ -184,19 +187,25 @@ function getLinePublicCode(lineRef) {
   return m ? m[1] : '?';
 }
 
-/** Fjerner stopp med åpenbart feil koordinater (f.eks. holdeplass som peker til annet land). */
-function removeGeoOutliers(points, maxNeighborDistKm = 25) {
-  if (!points || points.length < 3) return points;
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
 
-  const haversineKm = (a, b) => {
-    const R = 6371;
-    const dLat = ((b[0] - a[0]) * Math.PI) / 180;
-    const dLon = ((b[1] - a[1]) * Math.PI) / 180;
-    const x =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-    return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-  };
+/** Fjerner stopp med åpenbart feil koordinater. Forkaster også ruter med bare 2 punkter og urealistisk stor spennvidde (går over vann). */
+function removeGeoOutliers(points, maxNeighborDistKm = 25) {
+  if (!points || points.length < 2) return points;
+
+  if (points.length === 2) {
+    const dist = haversineKm(points[0], points[1]);
+    if (dist > maxNeighborDistKm) return []; // Ingen mellomstopp, urealistisk – trolig feil data
+    return points;
+  }
 
   let current = [...points];
 
@@ -218,6 +227,9 @@ function removeGeoOutliers(points, maxNeighborDistKm = 25) {
     current.splice(outlierIdx, 1);
   }
 
+  if (current.length === 2 && haversineKm(current[0], current[1]) > maxNeighborDistKm) {
+    return [];
+  }
   return current;
 }
 

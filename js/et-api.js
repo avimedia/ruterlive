@@ -5,7 +5,7 @@
 
 import { enrichShapesWithOSRM } from './osrm.js';
 
-const ET_URL = '/api/entur-et/et?datasetId=RUT&maxSize=3000';
+const ET_URL = '/api/et-cached';
 const JP_GRAPHQL_URL = '/api/entur-jp/graphql';
 const CLIENT_NAME = 'ruterlive-web';
 
@@ -320,19 +320,24 @@ export async function fetchEstimatedVehicles(onProgress) {
   }
 }
 
-/** Fjerner stopp med åpenbart feil koordinater (f.eks. holdeplass som peker til annet land). */
-function removeGeoOutliers(points, maxNeighborDistKm = 25) {
-  if (!points || points.length < 3) return points;
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
 
-  const haversineKm = (a, b) => {
-    const R = 6371;
-    const dLat = ((b[0] - a[0]) * Math.PI) / 180;
-    const dLon = ((b[1] - a[1]) * Math.PI) / 180;
-    const x =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-    return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-  };
+/** Fjerner stopp med feil koordinater. Forkaster ruter med 2 punkter og urealistisk stor spennvidde. */
+function removeGeoOutliers(points, maxNeighborDistKm = 25) {
+  if (!points || points.length < 2) return points;
+
+  if (points.length === 2) {
+    if (haversineKm(points[0], points[1]) > maxNeighborDistKm) return [];
+    return points;
+  }
 
   let current = [...points];
 
@@ -354,6 +359,9 @@ function removeGeoOutliers(points, maxNeighborDistKm = 25) {
     current.splice(outlierIdx, 1);
   }
 
+  if (current.length === 2 && haversineKm(current[0], current[1]) > maxNeighborDistKm) {
+    return [];
+  }
   return current;
 }
 

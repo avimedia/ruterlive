@@ -94,8 +94,8 @@ fetch('/api/route-shapes')
   .then((r) => (r.ok ? r.json() : []))
   .then((shapes) => {
     if (Array.isArray(shapes) && shapes.length > 0) {
-      routeShapes = shapes;
-      mergeAndUpdate(); // Re-enrich kjøretøy med from/to/via fra rutekart
+      routeShapes = mergeRouteShapes(routeShapes, shapes);
+      mergeAndUpdate();
     }
   })
   .catch(() => {});
@@ -119,13 +119,29 @@ connectVehicles(
 const ET_MODES = new Set(['bus', 'tram', 'metro', 'water']);
 const JP_MODES = new Set(['rail', 'flytog', 'flybuss']);
 
-function mergeRouteShapes(etShapes, existingShapes) {
-  const fromEt = (etShapes ?? []).filter((s) => ET_MODES.has((s.mode || '').toLowerCase()));
-  const fromExisting = (existingShapes ?? []).filter((s) => JP_MODES.has((s.mode || '').toLowerCase()));
-  return [...fromEt, ...fromExisting];
+function shapeKey(s) {
+  return `${(s.mode || '').toLowerCase()}|${(s.line || '').toString()}|${(s.from || '')}|${(s.to || '')}`;
 }
 
-const ET_POLL_MS = 10000;
+/** Union av shapes – beholder alle ruter. Ved duplikat: behold den med flest punkter (mer komplett). */
+function mergeRouteShapes(newShapes, existingShapes) {
+  const byKey = new Map();
+  for (const s of existingShapes ?? []) {
+    byKey.set(shapeKey(s), s);
+  }
+  for (const s of newShapes ?? []) {
+    const k = shapeKey(s);
+    const existing = byKey.get(k);
+    const ptsNew = s.points?.length ?? 0;
+    const ptsOld = existing?.points?.length ?? 0;
+    if (!existing || ptsNew >= ptsOld) {
+      byKey.set(k, s);
+    }
+  }
+  return [...byKey.values()];
+}
+
+const ET_POLL_MS = 30000; // 30s – reduserer load mot Entur (429 rate limit)
 async function pollEt() {
   try {
     const result = await fetchEstimatedVehicles();

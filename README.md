@@ -35,6 +35,15 @@ npm run start
 
 Se [DEPLOY.md](DEPLOY.md) for oppsett på Render, Railway m.m. Produksjonsvisning krever en server som proxier API-kall til Entur (CORS, båndbredde).
 
+## Arkitektur / dataflyt
+
+| Data            | Hvor lastes det? | Oppdatering                                      |
+|-----------------|------------------|--------------------------------------------------|
+| **Rutelinjer**  | Server           | Ved oppstart + hvert 24. time (ET + Journey Planner) |
+| **Kjøretøy**    | Klient           | Nettleseren poller Entur via proxy hvert 10. sek |
+
+**Rutelinjer** (de fargede linjene på kartet) caches på serveren slik at kartet vises umiddelbart når brukeren åpner siden. **Kjøretøyposisjoner** (busser, trikk osv.) hentes ikke på forhånd – hver brukers nettleser henter dem direkte fra Entur gjennom vår API-proxy. Serveren cacher aldri kjøretøy.
+
 ## Teknologi
 
 - **Leaflet** – interaktivt kart

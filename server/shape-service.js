@@ -196,7 +196,8 @@ function buildRouteShapes(journeys) {
       const coords = quayCoordCache.get(c.quayId);
       if (coords) points.push(coords);
     }
-    if (points.length < 2) continue;
+    const minPoints = j.mode === 'metro' ? 5 : 3; // T-bane: krever nok stopp – unngå strek mellom endepunktene
+    if (points.length < minPoints) continue;
     const key = points.map((p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join('|');
     if (seen.has(key)) continue;
     seen.add(key);
@@ -262,13 +263,20 @@ export async function refreshRouteShapes() {
       if (jpMode) j.mode = jpMode;
     }
 
-    const quayIds = new Set();
+    const quayToMode = new Map();
     for (const j of journeys) {
       for (const c of [...j.recordedCalls, ...j.estimatedCalls]) {
-        if (c?.quayId) quayIds.add(c.quayId);
+        if (c?.quayId) quayToMode.set(c.quayId, j.mode);
       }
     }
-    await fetchQuayCoordsBatch([...quayIds]);
+    const quayIds = [...quayToMode.entries()]
+      .sort((a, b) => {
+        const pm = (m) => (m === 'metro' ? 0 : m === 'tram' ? 1 : 2);
+        return pm(a[1]) - pm(b[1]);
+      })
+      .map(([id]) => id)
+      .slice(0, MAX_QUAYS_TO_FETCH);
+    await fetchQuayCoordsBatch(quayIds);
 
     let shapes = buildRouteShapes(journeys);
     shapes = await enrichWithOsrm(shapes);

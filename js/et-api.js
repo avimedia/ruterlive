@@ -248,12 +248,26 @@ export async function fetchEstimatedVehicles(onProgress) {
     }
 
     const quaysToFetch = new Map();
+    const metroQuays = new Set();
+    const tramQuays = new Set();
     for (const j of journeys) {
-      for (const c of [...j.recordedCalls, ...j.estimatedCalls]) {
-        if (c?.quayId) quaysToFetch.set(c.quayId, c.name);
+      const quays = [...j.recordedCalls, ...j.estimatedCalls].filter((c) => c?.quayId);
+      for (const c of quays) {
+        quaysToFetch.set(c.quayId, c.name);
+        if (j.mode === 'metro') metroQuays.add(c.quayId);
+        else if (j.mode === 'tram') tramQuays.add(c.quayId);
       }
     }
-    const quayList = [...quaysToFetch.entries()]
+    const entries = [...quaysToFetch.entries()];
+    const sorted = entries.sort((a, b) => {
+      const [idA, idB] = [a[0], b[0]];
+      if (metroQuays.has(idA) && !metroQuays.has(idB)) return -1;
+      if (!metroQuays.has(idA) && metroQuays.has(idB)) return 1;
+      if (tramQuays.has(idA) && !tramQuays.has(idB)) return -1;
+      if (!tramQuays.has(idA) && tramQuays.has(idB)) return 1;
+      return 0;
+    });
+    const quayList = sorted
       .map(([quayId, name]) => ({ quayId, name }))
       .slice(0, MAX_QUAYS_TO_FETCH);
     await fetchQuayCoordsBatch(quayList);
@@ -349,7 +363,8 @@ function buildRouteShapes(journeys) {
       const coords = quayCoordCache.get(c.quayId);
       if (coords) points.push(coords);
     }
-    if (points.length < 2) continue;
+    const minPoints = j.mode === 'metro' ? 5 : 3; // T-bane trenger mange stopp – unngå strek mellom endepunktene
+    if (points.length < minPoints) continue;
     const key = points.map((p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join('|');
     if (seen.has(key)) continue;
     seen.add(key);

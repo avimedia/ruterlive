@@ -105,10 +105,10 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   const selectedKey = selectedVehicle ? `${selectedVehicle.vehicleId}-${selectedVehicle.line?.publicCode}` : '';
   const shapesKey = shapes?.length ? `${shapes.length}-${shapes.slice(0, 5).map((s) => s.line + s.from).join('|')}` : '0';
   const modesKey = [...(visibleModes || [])].sort().join(',');
-  const zoom = map.getZoom();
-  const stopsVisibleKey = zoom >= ZOOM_STOPS_VISIBLE ? '1' : '0';
+  const mapZoom = map.getZoom();
+  const stopsVisibleKey = mapZoom >= ZOOM_STOPS_VISIBLE ? '1' : '0';
   const b = map.getBounds();
-  const bboxKey = zoom >= ZOOM_STOPS_VISIBLE ? `${b.getSouth().toFixed(2)},${b.getNorth().toFixed(2)},${b.getWest().toFixed(2)},${b.getEast().toFixed(2)}` : '';
+  const bboxKey = mapZoom >= ZOOM_STOPS_VISIBLE ? `${b.getSouth().toFixed(2)},${b.getNorth().toFixed(2)},${b.getWest().toFixed(2)},${b.getEast().toFixed(2)}` : '';
   if (shapesKey === lastRenderedShapesKey && modesKey === lastRenderedModesKey && selectedKey === lastSelectedVehicleKey && stopsVisibleKey === lastRenderedStopsKey && bboxKey === lastRenderedBboxKey) {
     return;
   }
@@ -178,10 +178,14 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
     addRoutePolyline(map, shape, drawn, true);
   }
 
-  // Holdeplasser vises for ALLE synlige transporttyper ved zoom 15+
-  if (map.getZoom() >= ZOOM_STOPS_VISIBLE) {
-    const shapesForStops = (shapes ?? []).filter((s) => visibleModes.has(shapeModeForFilter(s)));
-    addStopMarkers(map, shapesForStops, visibleModes);
+  // Holdeplasser: ved valgt kjøretøy vises rutens stopp (zoom 12+), ellers zoom 15+
+  const showStopsForSelection = selectedMatches.length > 0 && mapZoom >= 12;
+  const showStopsForAll = mapZoom >= ZOOM_STOPS_VISIBLE;
+  if (showStopsForSelection || showStopsForAll) {
+    const shapesForStops = showStopsForSelection
+      ? selectedMatches
+      : (shapes ?? []).filter((s) => effectiveModes.has(shapeModeForFilter(s)));
+    addStopMarkers(map, shapesForStops, effectiveModes);
   }
 }
 
@@ -250,6 +254,21 @@ function addStopMarkers(map, shapes, visibleModes) {
     if (quayId) {
       createStopMarker(lat, lon, quayId, name, color, stopsLayer);
       seen.add(quayId);
+    } else if (name) {
+      const marker = L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: 'stop-marker stop-marker-label-only',
+          html: `
+            <span class="stop-marker-dot" style="background:${color}"></span>
+            <span class="stop-marker-label">${escapeHtml(name)}</span>
+          `,
+          iconSize: [140, 24],
+          iconAnchor: [5, 12],
+        }),
+        zIndexOffset: 500,
+      });
+      marker.bindTooltip(escapeHtml(name), { permanent: false, direction: 'top', offset: [0, -8] });
+      marker.addTo(stopsLayer);
     } else {
       const circle = L.circleMarker([lat, lon], {
         radius: 4,

@@ -14,6 +14,7 @@ import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
 import { fetchRailShapesOnly } from './server/jp-route-fetcher.js';
 import { fetchOsmRailTracks } from './server/osm-rail-fetcher.js';
 import { getFlybussShapes } from './server/flybuss-shapes.js';
+import { getFallbackRailShapes } from './server/rail-fallback-shapes.js';
 import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
@@ -47,7 +48,8 @@ async function loadRailShapes() {
     console.warn('[RuterLive] OSM jernbane:', e.message);
   }
   if (railShapesCache.length === 0) {
-    console.warn('[RuterLive] Jernbane: Ingen strekninger fra Entur eller OSM – vil prøve igjen senere');
+    railShapesCache = getFallbackRailShapes();
+    console.log('[RuterLive] Jernbanekart (fallback): ' + railShapesCache.length + ' linjer');
   }
   return railShapesCache.length > 0;
 }

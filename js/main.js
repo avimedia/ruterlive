@@ -164,14 +164,21 @@ function applyInitialData(data) {
   setTimeout(tryStaticNetworkShapes, 8000);
   setTimeout(tryStaticNetworkShapes, 25000);
   const hasRail = shapes.some((s) => (s.mode || '').toLowerCase() === 'rail' || (s.mode || '').toLowerCase() === 'flytog');
-  if (!hasRail && shapes.length > 0) {
-    [5000, 15000, 45000].forEach((delay) => {
-      setTimeout(() => fetch('/api/route-shapes').then((r) => r.ok && r.json()).then((more) => {
-        if (Array.isArray(more) && more.length > 0) {
-          routeShapes = mergeRouteShapes(more, routeShapes);
-          mergeAndUpdate();
-        }
-      }), delay);
+  if (!hasRail) {
+    // Prøv rail-shapes eksplisitt – jernbane kan mangle fra initial-data
+    [2000, 8000, 25000].forEach((delay) => {
+      setTimeout(() => {
+        Promise.all([
+          fetch('/api/rail-shapes').then((r) => r.ok && r.json()).catch(() => []),
+          fetch('/api/route-shapes').then((r) => r.ok && r.json()).catch(() => []),
+        ]).then(([railResp, routeResp]) => {
+          const more = Array.isArray(railResp) && railResp.length > 0 ? railResp : (Array.isArray(routeResp) ? routeResp : []);
+          if (more.length > 0) {
+            routeShapes = mergeRouteShapes(more, routeShapes);
+            mergeAndUpdate();
+          }
+        });
+      }, delay);
     });
   }
 }

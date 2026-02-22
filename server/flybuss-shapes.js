@@ -1,14 +1,13 @@
 /**
  * Flybuss-rutenett med alle stoppesteder.
- * Basert på Flybussen Connect: FB1, FB3, FB5 fra flybussen.no
- * https://www.flybussen.no/flyplasser/oslo-lufthavn/oslo-lufthavn-flybussen-connect/stoppesteder/
+ * Basert på Flybussen Connect FB1, FB3, FB5 fra flybussen.no
+ * Rekkefølge og avstand sjekkes mot faktisk geografi – Oslo lufthavn alltid første/siste stopp.
  *
- * Koordinater fra NSR/kartverk.
+ * Koordinater fra NSR/kartverk. E6 går sørover fra Gardermoen (60.19°N) til Oslo (~59.91°N).
  */
 
 /** Punkter med [lat, lon, quayId, name] – quayId null for statiske stopp */
 const GARDERMOEN = [60.1939, 11.1004, null, 'Oslo lufthavn'];
-const LILLESTROM = [59.955, 11.0497, null, 'Lillestrøm'];
 const GRORUD = [59.9615, 10.8817, null, 'Grorud'];
 const OKERN = [59.9248, 10.7965, null, 'Økern'];
 const HASLE = [59.922, 10.797, null, 'Hasle'];
@@ -19,29 +18,29 @@ const CARL_BERNERS = [59.9285, 10.778, null, 'Carl Berners plass'];
 const SAGENE = [59.935, 10.7522, null, 'Sagene'];
 const BISLETT = [59.923, 10.731, null, 'Bislett'];
 const OSLO_S = [59.9107, 10.7525, null, 'Oslo S'];
-const JERNBANETORGET = [59.9112, 10.7522, null, 'Jernbanetorget'];
 const MAJORSTUEN = [59.9295, 10.7162, null, 'Majorstuen'];
 const ULLEVAAL = [59.9375, 10.734, null, 'Ullevål stadion'];
 const TAASEN = [59.948, 10.751, null, 'Tåsen'];
 const SMESTAD = [59.941, 10.699, null, 'Smestad'];
 const RADIUMHOSPITALET = [59.9328, 10.698, null, 'Radiumhospitalet'];
 const SINSEN = [59.9385, 10.782, null, 'Sinsen'];
-const BJOLSON = [59.9315, 10.791, null, 'Bjølsen'];
-const MUNKELI = [59.925, 10.804, null, 'Munkelia'];
 
-/** Flybussruter med alle stopp. FB1: Majorstuen via Torshov-Sagene */
+/** E6-mellomstopp sørover: Gardermoen (60.19) → Oslo (~59.96). Breddegrad minsker sørover. */
+const E6_SOUTH = [
+  [60.12, 11.08, null, 'Olavsgaard'],
+  [60.05, 11.05, null, 'Hellerud E6'],
+  [59.99, 11.02, null, 'Kjeller'],
+  [59.965, 10.95, null, 'Strømmen'],
+];
+
+/** FB1: Majorstuen via Torshov-Sagene. Oslo lufthavn → E6 → Grorud → Sinsen → Carl Berners → Torshov → Sagene → Ullevål → Majorstuen */
 const FB1_LUFTHAVN_TO_MAJORSTUEN = [
   GARDERMOEN,
-  LILLESTROM,
-  [59.98, 11.06, null, 'Kjeller'],
-  [60.04, 11.1, null, 'Sørum'],
-  [60.12, 11.1, null, 'E6 rastplass'],
-  [59.96, 10.92, null, 'Strømmen'],
+  ...E6_SOUTH,
   GRORUD,
   SINSEN,
-  BJOLSON,
-  TORSHOV,
   CARL_BERNERS,
+  TORSHOV,
   SAGENE,
   ULLEVAAL,
   MAJORSTUEN,
@@ -49,15 +48,13 @@ const FB1_LUFTHAVN_TO_MAJORSTUEN = [
 
 const FB1_MAJORSTUEN_TO_LUFTHAVN = [...FB1_LUFTHAVN_TO_MAJORSTUEN].reverse();
 
-/** FB3: Radiumhospitalet via Økern-Storo-Tåsen-Smestad */
+/** FB3: Radiumhospitalet via Økern-Storo-Tåsen-Smestad. Oslo lufthavn → E6 → Grorud → Økern → Sinsen → Storo → Tåsen → Smestad → Radiumhospitalet */
 const FB3_LUFTHAVN_TO_RADIUM = [
   GARDERMOEN,
-  LILLESTROM,
-  [59.98, 11.06, null, 'Kjeller'],
-  [60.04, 11.1, null, 'Sørum'],
+  ...E6_SOUTH,
   GRORUD,
-  MUNKELI,
   OKERN,
+  SINSEN,
   STORO,
   TAASEN,
   SMESTAD,
@@ -66,17 +63,14 @@ const FB3_LUFTHAVN_TO_RADIUM = [
 
 const FB3_RADIUM_TO_LUFTHAVN = [...FB3_LUFTHAVN_TO_RADIUM].reverse();
 
-/** FB5: Oslo sentrum via Helsfyr-Hasle-Bislett */
+/** FB5: Oslo sentrum via Helsfyr-Hasle-Bislett. Oslo lufthavn → E6 → Helsfyr → Hasle → Carl Berners → Bislett → Oslo S */
 const FB5_LUFTHAVN_TO_OSLO = [
   GARDERMOEN,
-  LILLESTROM,
-  [59.96, 10.92, null, 'Strømmen'],
+  ...E6_SOUTH,
   HELSFYR,
   HASLE,
-  OKERN,
   CARL_BERNERS,
   BISLETT,
-  JERNBANETORGET,
   OSLO_S,
 ];
 

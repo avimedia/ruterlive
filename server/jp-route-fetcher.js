@@ -354,6 +354,50 @@ export async function fetchJpRoutes(quayCoordCache) {
   return shapes;
 }
 
+/** Henter kun flybussruter fra Journey Planner. Brukes for ukentlig automatisk oppdatering. */
+export async function fetchFlybussShapesOnly() {
+  const { flybuss: flybussTrips } = await discoverTripsFromDepartureBoards();
+  if (flybussTrips.length === 0) return [];
+  const quayCoordCache = new Map();
+  const flybussShapes = await fetchTripShapes(flybussTrips, ['bus', 'coach'], true);
+  const allQuayIds = [...new Set(flybussShapes.flatMap((s) => s.quayIds?.map((q) => (typeof q === 'object' ? q?.id : q)).filter(Boolean) ?? []))];
+  await fetchQuayCoords(allQuayIds, quayCoordCache);
+
+  const shapes = [];
+  const seen = new Set();
+  for (const s of flybussShapes) {
+    let points = [];
+    if (s.pointsOnLinkEncoded) points = decodePolyline(s.pointsOnLinkEncoded);
+    if (points.length < 2) {
+      for (const q of s.quayIds || []) {
+        const id = typeof q === 'object' ? q?.id : q;
+        const coords = id ? quayCoordCache.get(id) : null;
+        if (coords) points.push(coords);
+      }
+    }
+    if (points.length < 2) continue;
+    const firstQ = s.quayIds?.[0];
+    const lastQ = s.quayIds?.[s.quayIds.length - 1];
+    const firstQuayId = firstQ?.id ?? firstQ;
+    const lastQuayId = lastQ?.id ?? lastQ;
+    if (s.quayIds?.length > 1 && lastQuayId === firstQuayId) points.pop();
+    const key = `${s.line}|${points[0][0].toFixed(4)},${points[0][1].toFixed(4)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const { quayIds = [], ...rest } = s;
+    const quayStops = (quayIds || [])
+      .map((q) => {
+        const id = typeof q === 'object' ? q?.id : q;
+        const name = typeof q === 'object' ? q?.name : '';
+        const c = id ? quayCoordCache.get(id) : null;
+        return c ? [c[0], c[1], id, name || ''] : null;
+      })
+      .filter(Boolean);
+    shapes.push({ ...rest, points, quayStops });
+  }
+  return shapes;
+}
+
 /** Henter kun jernbaneruter (regiontog, flytoget). Bruker NSR StopPlace-IDer – avgangstavle-navn gir 0 resultater i trip-søk. */
 export async function fetchRailShapesOnly() {
   const quayCoordCache = new Map();

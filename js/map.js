@@ -15,8 +15,11 @@ const TILE_OPTS = {
   maxZoom: 19,
 };
 
+const OPENRAILWAYMAP_ATTR = 'Data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, Style <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA 2.0</a> <a href="https://openrailwaymap.org/">OpenRailwayMap</a>';
+
 let map = null;
 let tileLayer = null;
+let openRailwayMapLayer = null;
 let currentTileTheme = null;
 
 export function initMap() {
@@ -29,6 +32,16 @@ export function initMap() {
   const theme = document.documentElement.dataset.theme || 'dark';
   currentTileTheme = theme;
   tileLayer = L.tileLayer(TILE_URLS[theme] || TILE_URLS.dark, TILE_OPTS).addTo(map);
+
+  // OpenRailwayMap overlay – jernbanelinjer. Toggle via setOpenRailwayMapVisible.
+  openRailwayMapLayer = L.tileLayer('https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
+    attribution: OPENRAILWAYMAP_ATTR,
+    maxZoom: 19,
+    opacity: 0.65,
+    pane: 'overlayPane',
+  });
+  const ormChecked = localStorage.getItem('ruterlive-openrailwaymap') !== 'false';
+  if (ormChecked) openRailwayMapLayer.addTo(map);
 
   // Move zoom control to bottom-right
   map.zoomControl.setPosition('bottomright');
@@ -72,4 +85,18 @@ export function setMapTheme(theme) {
   currentTileTheme = t;
   map.removeLayer(tileLayer);
   tileLayer = L.tileLayer(TILE_URLS[t] || TILE_URLS.dark, TILE_OPTS).addTo(map);
+}
+
+export function setOpenRailwayMapVisible(visible) {
+  if (!map || !openRailwayMapLayer) return;
+  if (visible) {
+    if (!map.hasLayer(openRailwayMapLayer)) openRailwayMapLayer.addTo(map);
+  } else {
+    map.removeLayer(openRailwayMapLayer);
+  }
+  localStorage.setItem('ruterlive-openrailwaymap', String(visible));
+}
+
+export function isOpenRailwayMapVisible() {
+  return map && openRailwayMapLayer && map.hasLayer(openRailwayMapLayer);
 }

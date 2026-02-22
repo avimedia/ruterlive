@@ -1,4 +1,5 @@
 import { setRoutesVisible } from './routes.js';
+import { setOpenRailwayMapVisible, isOpenRailwayMapVisible } from './map.js';
 
 const MODE_CONFIG = {
   bus: { label: 'Buss', key: 'bus' },
@@ -90,6 +91,17 @@ export function initLayers(callback) {
       onFilterChange?.(getVisibleModes());
     });
     routesToggle.addEventListener('click', (e) => e.stopPropagation());
+  }
+
+  // OpenRailwayMap-toggle (jernbanekart)
+  const ormToggle = document.getElementById('openrailwaymap-toggle');
+  if (ormToggle) {
+    ormToggle.checked = localStorage.getItem('ruterlive-openrailwaymap') !== 'false';
+    ormToggle.addEventListener('change', (e) => {
+      e.stopPropagation();
+      setOpenRailwayMapVisible(ormToggle.checked);
+    });
+    ormToggle.addEventListener('click', (e) => e.stopPropagation());
   }
 
   // Lukk-overlay

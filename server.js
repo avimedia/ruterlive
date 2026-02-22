@@ -11,7 +11,7 @@ import proxy from 'express-http-proxy';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
-import { fetchRailShapesOnly } from './server/jp-route-fetcher.js';
+import { fetchRailShapesOnly, fetchFlybussShapesOnly } from './server/jp-route-fetcher.js';
 import { fetchOsmRailTracks } from './server/osm-rail-fetcher.js';
 import { getFlybussShapes } from './server/flybuss-shapes.js';
 import { getFallbackRailShapes } from './server/rail-fallback-shapes.js';
@@ -57,6 +57,21 @@ async function loadRailShapes() {
 function loadFlybussShapes() {
   flybussShapesCache = getFlybussShapes();
   console.log(`[RuterLive] Flybuss-rutenett: ${flybussShapesCache.length} linjer`);
+}
+
+const FLYBUSS_REFRESH_MS = 7 * 24 * 60 * 60 * 1000; // Ukentlig
+
+async function refreshFlybussFromJp() {
+  try {
+    await ensureGtfsStopsLoaded();
+    const jpShapes = await fetchFlybussShapesOnly();
+    if (jpShapes.length > 0) {
+      flybussShapesCache = mergeShapes(getFlybussShapes(), jpShapes); // JP vinner ved konflikt
+      console.log(`[RuterLive] Flybuss oppdatert fra Entur JP: ${jpShapes.length} linjer`);
+    }
+  } catch (e) {
+    console.warn('[RuterLive] Flybuss JP-oppdatering:', e.message);
+  }
 }
 
 const app = express();
@@ -359,6 +374,10 @@ async function startup() {
       .catch((e) => console.warn('[RuterLive] Rutekart preload:', e.message));
     setInterval(refreshRouteShapes, 60 * 60 * 1000);
     setInterval(loadRailShapes, 30 * 24 * 60 * 60 * 1000); // En gang i måneden
+
+    // Flybussruter fra Entur JP – ukentlig automatisk oppdatering
+    setTimeout(refreshFlybussFromJp, 15000); // Etter oppstart
+    setInterval(refreshFlybussFromJp, FLYBUSS_REFRESH_MS);
   });
 }
 startup();

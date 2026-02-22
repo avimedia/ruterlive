@@ -154,9 +154,8 @@ function applyInitialData(data) {
       .then((r) => r.ok && r.json())
       .then((rail) => {
         if (Array.isArray(rail) && rail.length > 0) {
-          const hadRail = routeShapes.some((s) => (s.mode || '').toLowerCase() === 'rail' || (s.mode || '').toLowerCase() === 'flytog');
           routeShapes = mergeRouteShapes(rail, routeShapes);
-          if (!hadRail) mergeAndUpdate();
+          mergeAndUpdate();
         }
       })
       .catch(() => {});
@@ -169,9 +168,8 @@ function applyInitialData(data) {
     [5000, 15000, 45000].forEach((delay) => {
       setTimeout(() => fetch('/api/route-shapes').then((r) => r.ok && r.json()).then((more) => {
         if (Array.isArray(more) && more.length > 0) {
-          const hadRail = routeShapes.some((s) => (s.mode || '').toLowerCase() === 'rail' || (s.mode || '').toLowerCase() === 'flytog');
           routeShapes = mergeRouteShapes(more, routeShapes);
-          if (!hadRail) mergeAndUpdate();
+          mergeAndUpdate();
         }
       }), delay);
     });

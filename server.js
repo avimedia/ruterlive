@@ -24,25 +24,24 @@ const PORT = process.env.PORT || 3000;
 let railShapesCache = [];
 async function loadRailShapes() {
   try {
+    const enturShapes = await fetchRailShapesOnly();
+    if (enturShapes.length > 0) {
+      railShapesCache = enturShapes;
+      console.log(`[RuterLive] Jernbanekart (Entur): ${enturShapes.length} linjer`);
+      return;
+    }
+  } catch (e) {
+    console.warn('[RuterLive] Entur jernbane:', e.message);
+  }
+  try {
     const osmShapes = await fetchOsmRailTracks();
     if (osmShapes.length > 0) {
       railShapesCache = osmShapes;
-      return;
     }
   } catch (e) {
     console.warn('[RuterLive] OSM jernbane:', e.message);
   }
-  fetchRailShapesOnly()
-    .then((shapes) => {
-      railShapesCache = shapes || [];
-      if (railShapesCache.length > 0) {
-        console.log(`[RuterLive] Jernbanekart (Entur): ${railShapesCache.length} linjer`);
-      }
-    })
-    .catch((e) => console.warn('[RuterLive] Jernbanekart:', e.message));
 }
-loadRailShapes();
-setInterval(loadRailShapes, 24 * 60 * 60 * 1000);
 
 const app = express();
 
@@ -318,12 +317,16 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(PORT, async () => {
-  console.log(`RuterLive kjører på http://localhost:${PORT}`);
-  getCachedVehicles().catch((e) => console.warn('[RuterLive] Vehicles cache prewarm:', e.message));
-  startEtCachePoll();
-  refreshRouteShapes()
-    .then((shapes) => console.log(`[RuterLive] Rutekart cache: ${shapes?.length ?? 0} linjer (inkl. jernbane)`))
-    .catch((e) => console.warn('[RuterLive] Rutekart preload:', e.message));
-  setInterval(refreshRouteShapes, 60 * 60 * 1000); // Sjekk hver time, refetch kun når cache er eldre enn 24t
-});
+(async () => {
+  await loadRailShapes();
+  app.listen(PORT, async () => {
+    console.log(`RuterLive kjører på http://localhost:${PORT}`);
+    getCachedVehicles().catch((e) => console.warn('[RuterLive] Vehicles cache prewarm:', e.message));
+    startEtCachePoll();
+    refreshRouteShapes()
+      .then((shapes) => console.log(`[RuterLive] Rutekart cache: ${shapes?.length ?? 0} linjer (inkl. jernbane)`))
+      .catch((e) => console.warn('[RuterLive] Rutekart preload:', e.message));
+    setInterval(refreshRouteShapes, 60 * 60 * 1000);
+    setInterval(loadRailShapes, 24 * 60 * 60 * 1000);
+  });
+})();

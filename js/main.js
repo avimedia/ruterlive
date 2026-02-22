@@ -82,11 +82,11 @@ function mergeAndUpdate() {
   updateMarkers(merged, visibleModes, {
     onVehicleSelect: (v) => {
       selectedVehicleForRoute = v;
-      updateRouteLines(routeShapes, visibleModes, v);
+      updateRouteLines(routeShapes, getVisibleModes(), v);
     },
     onVehicleDeselect: () => {
       selectedVehicleForRoute = null;
-      updateRouteLines(routeShapes, visibleModes, null);
+      updateRouteLines(routeShapes, getVisibleModes(), null);
     },
     getSelectedVehicleId: () => selectedVehicleForRoute?.vehicleId,
   });

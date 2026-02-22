@@ -57,7 +57,8 @@ const VEHICLE_CLICK_MODES = new Set(['bus', 'water', 'flybuss']);
 function vehicleMode(vehicle) {
   const m = (vehicle?.mode || '').toLowerCase();
   if (m === 'rail' && /^F\d*$|^FX$/.test((vehicle?.line?.publicCode || ''))) return 'flytog';
-  if (m === 'bus' && (vehicle?.line?.publicCode || '').toUpperCase().startsWith('FB')) return 'flybuss';
+  if ((m === 'bus' || m === 'coach') && (vehicle?.line?.publicCode || '').toUpperCase().startsWith('FB'))
+    return 'flybuss';
   return m || 'bus';
 }
 
@@ -134,12 +135,18 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
     return;
   }
 
+  // Inkluder valgt kjøretøys modus slik at flybuss/buss/båt-ruter vises ved klikk
+  const effectiveModes = new Set(visibleModes);
+  if (selectedVehicle && VEHICLE_CLICK_MODES.has(vehicleMode(selectedVehicle))) {
+    effectiveModes.add(vehicleMode(selectedVehicle));
+  }
+
   const shapesToShow = [];
   let vehicleClickFallbacks = [];
   const selectedMatches = [];
   for (const shape of shapes) {
     const mode = shapeModeForFilter(shape);
-    if (!visibleModes.has(mode)) continue;
+    if (!effectiveModes.has(mode)) continue;
     if (ALWAYS_SHOWN_MODES.has(mode)) {
       shapesToShow.push(shape);
       if (selectedVehicle && shapeMatchesVehicle(shape, selectedVehicle)) selectedMatches.push(shape);

@@ -15,7 +15,8 @@ const MODE_TO_CLASS = {
 function normalizeMode(vehicle) {
   const m = (typeof vehicle === 'object' ? vehicle?.mode : vehicle)?.toLowerCase();
   let base = MODE_TO_CLASS[m] || m || 'bus';
-  if (base === 'bus' && vehicle?.line?.publicCode?.toUpperCase?.().startsWith('FB')) return 'flybuss';
+  if ((base === 'bus' || base === 'coach') && vehicle?.line?.publicCode?.toUpperCase?.().startsWith('FB'))
+    return 'flybuss';
   // Flytoget: F1, F2, FX (Gardermoen-ekspressen)
   if (base === 'rail') {
     const code = (vehicle?.line?.publicCode || '').toUpperCase();

@@ -371,37 +371,51 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
   const mode = shape.mode?.toLowerCase();
   const color = getShapeColor(mode, shape.line + (shape.from || ''));
   const highlightColor = getRouteHighlightColor();
+  const isRail = mode === 'rail' || mode === 'flytog';
   const polyline = L.polyline(latlngs, {
     color: isHighlighted ? highlightColor : color,
     weight: isHighlighted ? 3 : 2,
     opacity: isHighlighted ? 1 : 0.9,
+    dashArray: isRail ? '6, 6' : undefined,
     className: 'route-line',
   });
   polyline._ruterOriginalColor = color;
+  polyline._ruterIsRail = isRail;
 
-  const line = shape.line || '?';
+  const lineRaw = shape.line || '?';
+  const line = lineRaw.replace(/-\d+$/, ''); // OSM: fjern -id fra tooltip
   const from = (shape.from || '').trim() || '—';
   const to = (shape.to || '').trim() || '—';
   const via = (shape.via || '').trim();
   const samePlace = from !== '—' && to !== '—' && from.toLowerCase() === to.toLowerCase();
-  const tooltipText = samePlace && via
-    ? `Linje ${line}: ${from} – ${via}`
-    : samePlace
-      ? `Linje ${line}: ${from}`
-      : `Linje ${line}: ${from} → ${to}`;
+  const tooltipText =
+    from === '—' && to === '—'
+      ? line
+      : samePlace && via
+        ? `Linje ${line}: ${from} – ${via}`
+        : samePlace
+          ? `Linje ${line}: ${from}`
+          : `Linje ${line}: ${from} → ${to}`;
 
   polyline.bindTooltip(tooltipText, { permanent: false, direction: 'top', opacity: 0.95 });
   polyline.on('click', (e) => {
     L.DomEvent.stopPropagation(e);
     if (selectedPolyline && selectedPolyline !== polyline) {
-      selectedPolyline.setStyle({
+      const prev = selectedPolyline;
+      prev.setStyle({
         weight: 2,
         opacity: 0.9,
-        color: selectedPolyline._ruterOriginalColor,
+        color: prev._ruterOriginalColor,
+        dashArray: prev._ruterIsRail ? '6, 6' : undefined,
       });
     }
     selectedPolyline = polyline;
-    polyline.setStyle({ weight: 3, opacity: 1, color: getRouteHighlightColor() });
+    polyline.setStyle({
+      weight: 3,
+      opacity: 1,
+      color: getRouteHighlightColor(),
+      dashArray: polyline._ruterIsRail ? '6, 6' : undefined,
+    });
     polyline.bringToFront();
   });
   polyline.addTo(map.routeLayerGroup);
@@ -441,10 +455,12 @@ export function isRoutesVisible() {
 
 export function clearRouteSelection() {
   if (selectedPolyline) {
-    selectedPolyline.setStyle({
+    const p = selectedPolyline;
+    p.setStyle({
       weight: 2,
       opacity: 0.9,
-      color: selectedPolyline._ruterOriginalColor,
+      color: p._ruterOriginalColor,
+      dashArray: p._ruterIsRail ? '6, 6' : undefined,
     });
     selectedPolyline = null;
   }

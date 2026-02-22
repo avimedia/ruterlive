@@ -1,5 +1,5 @@
 /**
- * Tema: Lys / Mørk / Følg system.
+ * Tema: Lys / Mørk / System (følger OS).
  * Lager ruterlive-theme i localStorage.
  */
 

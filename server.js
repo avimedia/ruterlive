@@ -12,6 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
 import { fetchRailShapesOnly } from './server/jp-route-fetcher.js';
+import { fetchOsmRailTracks } from './server/osm-rail-fetcher.js';
 import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
@@ -21,12 +22,21 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
 let railShapesCache = [];
-function loadRailShapes() {
+async function loadRailShapes() {
+  try {
+    const osmShapes = await fetchOsmRailTracks();
+    if (osmShapes.length > 0) {
+      railShapesCache = osmShapes;
+      return;
+    }
+  } catch (e) {
+    console.warn('[RuterLive] OSM jernbane:', e.message);
+  }
   fetchRailShapesOnly()
     .then((shapes) => {
       railShapesCache = shapes || [];
       if (railShapesCache.length > 0) {
-        console.log(`[RuterLive] Jernbanekart: ${railShapesCache.length} linjer`);
+        console.log(`[RuterLive] Jernbanekart (Entur): ${railShapesCache.length} linjer`);
       }
     })
     .catch((e) => console.warn('[RuterLive] Jernbanekart:', e.message));

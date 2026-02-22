@@ -50,9 +50,9 @@ function shapeModeForFilter(shape) {
   return m || 'bus';
 }
 
-/** T-bane, trikk, regiontog og flytoget vises alltid. Øvrige ruter kun ved valgt kjøretøy. */
-const ALWAYS_SHOWN_MODES = new Set(['metro', 'tram', 'rail', 'flytog']);
-const VEHICLE_CLICK_MODES = new Set(['bus', 'water', 'flybuss']);
+/** T-bane, trikk, regiontog, flytoget og flybuss vises alltid. Øvrige ruter kun ved valgt kjøretøy. */
+const ALWAYS_SHOWN_MODES = new Set(['metro', 'tram', 'rail', 'flytog', 'flybuss']);
+const VEHICLE_CLICK_MODES = new Set(['bus', 'water']);
 
 function vehicleMode(vehicle) {
   const m = (vehicle?.mode || '').toLowerCase();

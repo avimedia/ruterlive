@@ -149,20 +149,20 @@ function applyInitialData(data) {
   routeShapes = mergeRouteShapes(shapes, routeShapes);
   etLoaded = true;
   mergeAndUpdate();
-  function tryRailShapes() {
-    fetch('/api/rail-shapes')
+  function tryStaticNetworkShapes() {
+    fetch('/api/static-network-shapes')
       .then((r) => r.ok && r.json())
-      .then((rail) => {
-        if (Array.isArray(rail) && rail.length > 0) {
-          routeShapes = mergeRouteShapes(rail, routeShapes);
+      .then((shapes) => {
+        if (Array.isArray(shapes) && shapes.length > 0) {
+          routeShapes = mergeRouteShapes(shapes, routeShapes);
           mergeAndUpdate();
         }
       })
       .catch(() => {});
   }
-  tryRailShapes();
-  setTimeout(tryRailShapes, 8000);
-  setTimeout(tryRailShapes, 25000);
+  tryStaticNetworkShapes();
+  setTimeout(tryStaticNetworkShapes, 8000);
+  setTimeout(tryStaticNetworkShapes, 25000);
   const hasRail = shapes.some((s) => (s.mode || '').toLowerCase() === 'rail' || (s.mode || '').toLowerCase() === 'flytog');
   if (!hasRail && shapes.length > 0) {
     [5000, 15000, 45000].forEach((delay) => {

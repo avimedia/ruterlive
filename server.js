@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
 import { fetchRailShapesOnly } from './server/jp-route-fetcher.js';
 import { fetchOsmRailTracks } from './server/osm-rail-fetcher.js';
+import { getFlybussShapes } from './server/flybuss-shapes.js';
 import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
@@ -22,13 +23,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
 let railShapesCache = [];
+let flybussShapesCache = [];
+
 async function loadRailShapes() {
   try {
     const enturShapes = await fetchRailShapesOnly();
     if (enturShapes.length > 0) {
       railShapesCache = enturShapes;
       console.log(`[RuterLive] Jernbanekart (Entur): ${enturShapes.length} linjer`);
-      return;
+      return true;
     }
   } catch (e) {
     console.warn('[RuterLive] Entur jernbane:', e.message);
@@ -37,10 +40,21 @@ async function loadRailShapes() {
     const osmShapes = await fetchOsmRailTracks();
     if (osmShapes.length > 0) {
       railShapesCache = osmShapes;
+      console.log(`[RuterLive] Jernbanekart (OSM): ${osmShapes.length} strekninger`);
+      return true;
     }
   } catch (e) {
     console.warn('[RuterLive] OSM jernbane:', e.message);
   }
+  if (railShapesCache.length === 0) {
+    console.warn('[RuterLive] Jernbane: Ingen strekninger fra Entur eller OSM – vil prøve igjen senere');
+  }
+  return railShapesCache.length > 0;
+}
+
+function loadFlybussShapes() {
+  flybussShapesCache = getFlybussShapes();
+  console.log(`[RuterLive] Flybuss-rutenett: ${flybussShapesCache.length} linjer`);
 }
 
 const app = express();
@@ -50,16 +64,26 @@ app.get('/health', (_req, res) => {
   res.status(200).send('ok');
 });
 
-// Cached rutekart – klart med en gang brukeren laster siden (inkl. jernbane fra egen preload)
+function getAllShapes() {
+  return mergeShapes(mergeShapes(getCachedShapes(), railShapesCache), flybussShapesCache);
+}
+
+// Cached rutekart – klart med en gang brukeren laster siden (inkl. jernbane og flybuss fra egen preload)
 app.get('/api/route-shapes', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=30');
-  res.json(mergeShapes(getCachedShapes(), railShapesCache));
+  res.json(getAllShapes());
 });
 
 // Kun jernbaneruter – for å sikre at strekninger alltid lastes
 app.get('/api/rail-shapes', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=3600');
   res.json(railShapesCache);
+});
+
+// Flybuss + jernbane – alltid tilgjengelig, lastes ved oppstart
+app.get('/api/static-network-shapes', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.json([...railShapesCache, ...flybussShapesCache]);
 });
 
 function shapeKey(s) {
@@ -85,7 +109,7 @@ app.get('/api/initial-data', async (_req, res) => {
     const [vehiclesData, etResult, shapes] = await Promise.all([
       getCachedVehicles(),
       getEtVehiclesAndShapes(),
-      Promise.resolve(mergeShapes(getCachedShapes(), railShapesCache)),
+      Promise.resolve(getAllShapes()),
     ]);
     const graphqlVehicles = Array.isArray(vehiclesData?.data?.vehicles)
       ? vehiclesData.data.vehicles
@@ -317,16 +341,22 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-(async () => {
-  await loadRailShapes();
+async function startup() {
+  loadFlybussShapes(); // Synkron – statiske koordinater
+  const railOk = await loadRailShapes();
+  if (!railOk) {
+    setTimeout(() => loadRailShapes().then((ok) => ok && console.log('[RuterLive] Jernbane retry: ok')), 30000);
+    setTimeout(() => loadRailShapes().then((ok) => ok && console.log('[RuterLive] Jernbane retry: ok')), 120000);
+  }
   app.listen(PORT, async () => {
     console.log(`RuterLive kjører på http://localhost:${PORT}`);
     getCachedVehicles().catch((e) => console.warn('[RuterLive] Vehicles cache prewarm:', e.message));
     startEtCachePoll();
     refreshRouteShapes()
-      .then((shapes) => console.log(`[RuterLive] Rutekart cache: ${shapes?.length ?? 0} linjer (inkl. jernbane)`))
+      .then((shapes) => console.log(`[RuterLive] Rutekart cache: ${shapes?.length ?? 0} linjer (inkl. jernbane, flybuss)`))
       .catch((e) => console.warn('[RuterLive] Rutekart preload:', e.message));
     setInterval(refreshRouteShapes, 60 * 60 * 1000);
-    setInterval(loadRailShapes, 24 * 60 * 60 * 1000);
+    setInterval(loadRailShapes, 30 * 24 * 60 * 60 * 1000); // En gang i måneden
   });
-})();
+}
+startup();

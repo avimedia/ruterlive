@@ -1,7 +1,7 @@
 /**
  * Statisk flybuss-rutenett basert på kjente holdeplasskoordinater.
  * Oslo Bussterminal, Oslo S ↔ Oslo lufthavn (Gardermoen).
- * Vises alltid – uavhengig av sanntidsdata og JP API.
+ * Vises ved klikk på flybuss (som andre busser) – uavhengig av JP API.
  *
  * Koordinater fra NSR/GTFS: Oslo Bussterminal, Oslo S, Oslo lufthavn.
  */

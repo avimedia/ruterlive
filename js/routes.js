@@ -50,9 +50,9 @@ function shapeModeForFilter(shape) {
   return m || 'bus';
 }
 
-/** T-bane, trikk, regiontog, flytoget og flybuss vises alltid. Øvrige ruter kun ved valgt kjøretøy. */
-const ALWAYS_SHOWN_MODES = new Set(['metro', 'tram', 'rail', 'flytog', 'flybuss']);
-const VEHICLE_CLICK_MODES = new Set(['bus', 'water']);
+/** T-bane, trikk, regiontog og flytoget vises alltid. Buss, flybuss og båt kun ved valgt kjøretøy. */
+const ALWAYS_SHOWN_MODES = new Set(['metro', 'tram', 'rail', 'flytog']);
+const VEHICLE_CLICK_MODES = new Set(['bus', 'water', 'flybuss']);
 
 function vehicleMode(vehicle) {
   const m = (vehicle?.mode || '').toLowerCase();
@@ -77,10 +77,18 @@ function destMatchesNorm(dest, toName) {
   return d.includes(t) || t.includes(d);
 }
 
+function lineMatchesForMode(shapeLine, vehicleLine, mode) {
+  const s = normalizeLine(shapeLine || '');
+  const v = normalizeLine(vehicleLine || '');
+  if (s === v) return true;
+  if (mode === 'flybuss' && (s === 'FB' || s === '') && /^FB\d*$/i.test(v)) return true;
+  return false;
+}
+
 function shapeMatchesVehicle(shape, vehicle) {
   if (!vehicle) return false;
-  if (normalizeLine(shape.line) !== normalizeLine(vehicle.line?.publicCode)) return false;
   const mode = vehicleMode(vehicle);
+  if (!lineMatchesForMode(shape.line, vehicle.line?.publicCode, mode)) return false;
   const sMode = (shape.mode || '').toLowerCase();
   if (sMode !== mode) return false;
   const dest = (vehicle.destinationName || '').toLowerCase();
@@ -140,7 +148,7 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
         shapesToShow.push(shape);
         selectedMatches.push(shape);
       } else if (
-        normalizeLine(shape.line) === normalizeLine(selectedVehicle.line?.publicCode) &&
+        lineMatchesForMode(shape.line, selectedVehicle.line?.publicCode, mode) &&
         mode === vehicleMode(selectedVehicle)
       ) {
         vehicleClickFallbacks.push(shape);

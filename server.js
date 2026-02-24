@@ -373,7 +373,7 @@ async function startup() {
       .then((shapes) => console.log(`[RuterLive] Rutekart cache: ${shapes?.length ?? 0} linjer (inkl. jernbane, flybuss)`))
       .catch((e) => console.warn('[RuterLive] Rutekart preload:', e.message));
     setInterval(refreshRouteShapes, 60 * 60 * 1000);
-    setInterval(loadRailShapes, 30 * 24 * 60 * 60 * 1000); // En gang i måneden
+    setInterval(loadRailShapes, 7 * 24 * 60 * 60 * 1000); // Ukentlig (30d overstiger Node sin 32-bit timeout)
 
     // Flybussruter fra Entur JP – ukentlig automatisk oppdatering
     setTimeout(refreshFlybussFromJp, 15000); // Etter oppstart

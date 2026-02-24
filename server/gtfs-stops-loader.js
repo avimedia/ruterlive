@@ -15,10 +15,13 @@ const DOWNLOAD_TIMEOUT_MS = 120000; // 2 min for ~95MB
 let gtfsQuayCache = null;
 let lastLoadTime = 0;
 
+/** Stor-Oslo bbox – reduserer minne på server (Render gratisplan). */
+const OSLO_BBOX = { minLat: 59.2, maxLat: 60.8, minLon: 10.0, maxLon: 11.6 };
+
 /**
  * Parser stops.txt CSV.
  * Returnerer Map<quayId, { lat, lon, name }> for stops-in-bbox og søk.
- * Fallback Map<quayId, [lat, lon]> for quay-coords (bakoverkompatibilitet).
+ * Filtrerer til Stor-Oslo for å spare minne.
  * Format: stop_id,stop_name,stop_lat,stop_lon,...
  * Entur bruker stop_id = NSR:Quay:XXXXX.
  */
@@ -34,6 +37,7 @@ function parseStopsTxt(content) {
   const lonIdx = header.indexOf('stop_lon');
   if (stopIdIdx < 0 || latIdx < 0 || lonIdx < 0) return map;
 
+  const { minLat, maxLat, minLon, maxLon } = OSLO_BBOX;
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
     if (!line.trim()) continue;
@@ -44,6 +48,7 @@ function parseStopsTxt(content) {
     const lon = parseFloat(cols[lonIdx]);
     if (!stopId || isNaN(lat) || isNaN(lon)) continue;
     if (!/^NSR:Quay:\d+$/.test(stopId)) continue;
+    if (lat < minLat || lat > maxLat || lon < minLon || lon > maxLon) continue;
     map.set(stopId, { lat, lon, name });
   }
   return map;

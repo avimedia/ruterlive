@@ -129,14 +129,16 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
 
     const lineCode = v.line?.publicCode || '?';
     const dest = v.destinationName || '';
-    const title = `${lineCode} → ${dest}`.trim();
-    const popupParts = [`<strong>Linje ${lineCode}</strong>`];
     const from = (v.from || '').trim();
     const to = (v.to || '').trim();
     const via = (v.via || '').trim();
     const nextStop = (v.nextStop || '').trim();
     const endStation = (dest || to || '').trim();
     const destNorm = (dest || '').toLowerCase();
+    const routeLabel = from && endStation ? `${from} → ${endStation}` : (dest ? `→ ${dest}` : null);
+    const title = routeLabel ? `${lineCode} ${routeLabel}`.trim() : `${lineCode} → ${dest}`.trim();
+    const popupHeader = routeLabel ? `Linje ${lineCode} · ${routeLabel}` : `Linje ${lineCode}`;
+    const popupParts = [`<strong>${popupHeader}</strong>`];
     const samePlace = from && to && from.toLowerCase() === to.toLowerCase();
     if (samePlace && via) {
       const fromNorm = from.toLowerCase();
@@ -159,8 +161,10 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
         popupParts.push(`Neste: ${nextStop}`);
       }
     } else {
-      if (from) popupParts.push(`Fra: ${from}`);
-      if (endStation) popupParts.push(`Til: ${endStation}`);
+      if (!routeLabel) {
+        if (from) popupParts.push(`Fra: ${from}`);
+        if (endStation) popupParts.push(`Til: ${endStation}`);
+      }
       if (nextStop && nextStop.toLowerCase() !== endStation.toLowerCase()) {
         popupParts.push(`Neste: ${nextStop}`);
       }

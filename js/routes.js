@@ -103,7 +103,6 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   if (!map || !map.routeLayerGroup) return;
 
   const selectedKey = selectedVehicle ? `${selectedVehicle.vehicleId}-${selectedVehicle.line?.publicCode}` : '';
-  const prevSelectedKey = lastSelectedVehicleKey;
   const shapesKey = shapes?.length ? `${shapes.length}-${shapes.slice(0, 5).map((s) => s.line + s.from).join('|')}` : '0';
   const modesKey = [...(visibleModes || [])].sort().join(',');
   const mapZoom = map.getZoom();
@@ -191,19 +190,6 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
     addStopMarkers(map, shapesForStops, effectiveModes, onlyRouteStops);
   }
 
-  // Ved nyvalgt kjøretøy: fit view til ruten for fornuftig zoom (ikke ved pan/zoom)
-  if (selectedMatches.length > 0 && selectedKey !== prevSelectedKey) {
-    const allPts = selectedMatches.flatMap((s) => [...(s.points ?? []), ...(s.quayStops ?? [])]);
-    if (allPts.length >= 2) {
-      const lats = allPts.map((p) => p[0]);
-      const lons = allPts.map((p) => p[1]);
-      const pad = 0.015;
-      map.fitBounds([
-        [Math.min(...lats) - pad, Math.min(...lons) - pad],
-        [Math.max(...lats) + pad, Math.max(...lons) + pad],
-      ], { maxZoom: 16, duration: 0.4 });
-    }
-  }
 }
 
 function escapeHtml(s) {

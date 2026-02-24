@@ -12,8 +12,9 @@ function norm(s) {
   return (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-function buildTripQuery(fromPlace, toPlace) {
+function buildTripQuery(fromPlace, toPlace, useRail = false) {
   const dateTime = new Date().toISOString().slice(0, 19);
+  const modesStr = useRail ? '[rail]' : '[bus, coach]';
   return {
     query: `query Trip($from: InputCoordinatesOrNamedPlace!, $to: InputCoordinatesOrNamedPlace!, $dateTime: DateTime) {
   trip(
@@ -21,7 +22,7 @@ function buildTripQuery(fromPlace, toPlace) {
     to: $to
     dateTime: $dateTime
     numTripPatterns: 5
-    modes: { transportModes: [bus, coach] }
+    modes: { transportModes: ${modesStr} }
   ) {
     tripPatterns {
       legs {
@@ -61,8 +62,19 @@ export async function fetchLineRouteFromJp(lineCode, destinationName, options = 
     const result = await runTripQuery(
       { coordinates: { latitude: options.lat, longitude: options.lon } },
       { name: destinationName },
-      lineCode
+      lineCode,
+      /^(R|L|F)\d*$/i.test(lineCode)
     );
+    if (result) {
+      cache.set(cacheKey, result);
+      return result;
+    }
+  }
+  if (destinationName && /^(R|L|F)\d*$/i.test(lineCode)) {
+    const toOslo = /oslo\s*s|jernbanetorget/i.test(destinationName);
+    const fromPlace = toOslo ? { name: 'Drammen' } : { name: 'Oslo S' };
+    const toPlace = toOslo ? { name: 'Oslo S' } : { name: destinationName };
+    const result = await runTripQuery(fromPlace, toPlace, lineCode, true);
     if (result) {
       cache.set(cacheKey, result);
       return result;
@@ -81,9 +93,9 @@ export async function fetchLineRouteFromJp(lineCode, destinationName, options = 
   return null;
 }
 
-async function runTripQuery(fromPlace, toPlace, filterLineCode) {
+async function runTripQuery(fromPlace, toPlace, filterLineCode, useRail = false) {
   try {
-    const body = buildTripQuery(fromPlace, toPlace);
+    const body = buildTripQuery(fromPlace, toPlace, useRail);
     const res = await fetch(JP_GRAPHQL_URL, {
       method: 'POST',
       headers: {

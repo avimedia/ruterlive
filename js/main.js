@@ -60,12 +60,17 @@ function enrichVehicleWithRouteShape(vehicle, shapes) {
   }
 
   if (shapes?.length) {
+    const normDest = (d) => (d || '').toLowerCase().replace(/\s+(stasjon|holdeplass|st\.?)$/i, '').trim();
+    const destNorm = normDest(vehicle.destinationName);
     const match =
       shapes.find((s) => {
         const sLine = (s.line || '').toString();
-        const sTo = (s.to || '').toLowerCase();
+        const sTo = normDest(s.to);
+        const sFrom = normDest(s.from);
         const sMode = (s.mode || '').toLowerCase();
-        return sLine === line && (sMode === mode || !sMode) && (dest.includes(sTo) || sTo.includes(dest) || dest === '');
+        if (sLine !== line || (sMode && sMode !== mode)) return false;
+        if (!destNorm) return true;
+        return destNorm.includes(sTo) || sTo.includes(destNorm) || destNorm.includes(sFrom) || sFrom.includes(destNorm);
       }) ||
       shapes.find((s) => (s.line || '').toString() === line && ((s.mode || '').toLowerCase() === mode || !s.mode));
     if (match) {
@@ -73,8 +78,12 @@ function enrichVehicleWithRouteShape(vehicle, shapes) {
     }
   }
 
-  const isExternalLine = line?.toUpperCase().startsWith('FB'); // Flybuss m.m. utenfor RUT ET
-  const needsJpLookup = isExternalLine && vehicle.destinationName && !jpLineResults.has(jpKey);
+  const isRail = mode === 'rail' || mode === 'flytog';
+  const isExternalLine = line?.toUpperCase().startsWith('FB');
+  const needsJpLookup =
+    vehicle.destinationName &&
+    !jpLineResults.has(jpKey) &&
+    (isExternalLine || (isRail && (!vehicle.from || !vehicle.to)));
   if (needsJpLookup) {
     const lat = vehicle.location?.latitude;
     const lon = vehicle.location?.longitude;

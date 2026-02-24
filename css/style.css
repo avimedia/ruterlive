@@ -90,6 +90,66 @@ body {
   margin: 0 auto;
 }
 
+.consent-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 2000;
+  padding: 0.75rem 1rem;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 12px var(--shadow);
+  font-size: 0.85rem;
+}
+
+.consent-banner p {
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.consent-banner a {
+  color: var(--text-muted);
+  text-decoration: underline;
+}
+
+.consent-banner a:hover {
+  color: var(--text-primary);
+}
+
+.consent-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.consent-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+
+.consent-reject {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.consent-reject:hover {
+  background: var(--bg-input);
+  color: var(--text-secondary);
+}
+
+.consent-accept {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.consent-accept:hover {
+  background: var(--bg-input-hover);
+}
+
 header {
   flex-shrink: 0;
   padding: 0.5rem 0.75rem 0.6rem;
@@ -110,9 +170,25 @@ header h1 {
   line-height: 1.35;
 }
 
+.header-links {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.header-link {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.header-link:hover {
+  color: var(--text-secondary);
+}
+
 .about-toggle {
   font-size: 0.75rem;
-  margin-top: 0.4rem;
   padding: 0.2rem 0.5rem;
   background: transparent;
   border: 1px solid var(--border);

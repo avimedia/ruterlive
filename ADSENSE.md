@@ -2,9 +2,10 @@
 
 ## Tilført innhold for godkjenning
 
-For å møte AdSense-krav om «publisher content» er følgende lagt til:
+For å møte AdSense-krav er følgende lagt til:
 
-- **Tagline** under overskriften som beskriver tjenesten
+- **Personvernserklæring** ([/personvern.html](/personvern.html)) – informasjonskapsler, datainnsamling, rettigheter
+- **Samtykkebanner** – vises ved første besøk; AdSense lastes kun etter «Godta alle»
 - **«Om tjenesten»-seksjon** med utvidbar innhold:
   - Om livetrafikk.no
   - Hvordan bruke kartet

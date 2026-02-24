@@ -30,8 +30,10 @@
   <div id="app">
     <header>
       <h1>livetrafikk.no</h1>
-      <p class="header-tagline">Realtidskart over kollektivtransport i Stor-Oslo. Se buss, T-bane, trikk, tog og båt live på kartet.</p>
-      <button type="button" id="about-toggle" class="about-toggle" aria-expanded="false" aria-controls="about-content">Om tjenesten</button>
+      <span class="header-links">
+        <a href="/personvern.html" class="header-link">Personvern</a>
+        <button type="button" id="about-toggle" class="about-toggle" aria-expanded="false" aria-controls="about-content">Om tjenesten</button>
+      </span>
       <section id="about-content" class="about-content" aria-labelledby="about-heading" hidden>
         <h2 id="about-heading">Om livetrafikk.no</h2>
         <p>livetrafikk.no er en gratis tjeneste som viser sanntidsposisjoner for kollektivtransport i Oslo og omegn. Kartet henter data fra Entur og viser kjøretøy fra Ruter (buss, T-bane, trikk), Vy (regiontog, Flytoget), flybuss og båt.</p>
@@ -43,6 +45,8 @@
         <p>Flybussen (FB1, FB3, FB5) går mellom Oslo lufthavn Gardermoen og ulike steder i Oslo. Flytoget (F1, F2, FX) tar 20 minutter fra Oslo S til flyplassen. Begge vises på kartet når du har valgt riktig lag.</p>
         <h3>Datakilder</h3>
         <p>Posisjoner og rutekart kommer fra Entur, Norges nasjonale reiseinformasjonssystem. Buss- og trikkeposisjoner er estimert ut fra avgangsdata; Ruter leverer ikke GPS til Entur. Tog og flytog har sanntidsposisjoner.</p>
+        <h3>Personvern</h3>
+        <p><a href="/personvern.html">Personvernserklæring</a> – informasjonskapsler og data vi samler inn.</p>
         <h3>Lenker</h3>
         <p class="about-links">
           <a href="https://ruter.no" target="_blank" rel="noopener">Ruter</a> ·
@@ -112,20 +116,59 @@
       </div>
     </main>
 
-    <footer id="ad-footer" class="ad-footer">
-      <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1298230222793785" crossorigin="anonymous"></script>
-      <ins class="adsbygoogle"
-           style="display:block"
-           data-ad-client="ca-pub-1298230222793785"
-           data-ad-slot="XXXXXXXXXX"
-           data-ad-format="auto"
-           data-full-width-responsive="true"></ins>
-      <script>
-        (window.adsbygoogle = window.adsbygoogle || []).push({});
-      </script>
-    </footer>
+    <footer id="ad-footer" class="ad-footer"></footer>
+    <div id="consent-banner" class="consent-banner" role="dialog" aria-label="Informasjonskapsler" hidden>
+      <p>Vi bruker informasjonskapsler for å vise reklame og lagre preferanser. <a href="/personvern.html">Personvern</a></p>
+      <div class="consent-buttons">
+        <button type="button" id="consent-reject" class="consent-btn consent-reject">Kun nødvendige</button>
+        <button type="button" id="consent-accept" class="consent-btn consent-accept">Godta alle</button>
+      </div>
+    </div>
   </div>
 
+  <script>
+    (function(){
+      var CONSENT_KEY = 'ruterlive-consent';
+      var banner = document.getElementById('consent-banner');
+      var adFooter = document.getElementById('ad-footer');
+      var stored = localStorage.getItem(CONSENT_KEY);
+      if (stored === 'all') {
+        loadAdSense();
+      } else if (stored === 'necessary') {
+        adFooter.style.display = 'none';
+      } else {
+        banner.hidden = false;
+      }
+      document.getElementById('consent-accept')?.addEventListener('click', function(){
+        localStorage.setItem(CONSENT_KEY, 'all');
+        banner.hidden = true;
+        loadAdSense();
+      });
+      document.getElementById('consent-reject')?.addEventListener('click', function(){
+        localStorage.setItem(CONSENT_KEY, 'necessary');
+        banner.hidden = true;
+        adFooter.style.display = 'none';
+      });
+      function loadAdSense(){
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1298230222793785';
+        s.crossOrigin = 'anonymous';
+        document.head.appendChild(s);
+        s.onload = function(){
+          var ins = document.createElement('ins');
+          ins.className = 'adsbygoogle';
+          ins.style.display = 'block';
+          ins.dataset.adClient = 'ca-pub-1298230222793785';
+          ins.dataset.adSlot = 'XXXXXXXXXX';
+          ins.dataset.adFormat = 'auto';
+          ins.dataset.fullWidthResponsive = 'true';
+          adFooter.appendChild(ins);
+          (window.adsbygoogle = window.adsbygoogle || []).push({});
+        };
+      }
+    })();
+  </script>
   <script type="module" src="/js/main.js"></script>
 </body>
 </html>

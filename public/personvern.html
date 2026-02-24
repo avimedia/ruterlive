@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personvern – livetrafikk.no</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <script>
+    (function(){
+      var s = localStorage.getItem('ruterlive-theme') || 'system';
+      var d = s === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : s;
+      document.documentElement.dataset.theme = d;
+    })();
+  </script>
+  <style>
+    :root, [data-theme="dark"] {
+      --bg: #1a1a1a; --text: #e0e0e0; --muted: #999; --border: #444; --link: #6ab7ff;
+    }
+    [data-theme="light"] {
+      --bg: #f5f5f5; --text: #333; --muted: #666; --border: #ccc; --link: #0066cc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 1rem max(1rem, 5%); }
+    a { color: var(--link); }
+    h1 { font-size: 1.3rem; margin-bottom: 1rem; }
+    h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+    p { margin-bottom: 0.75rem; color: var(--text); }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+    ul { margin: 0.5rem 0 1rem 1.5rem; }
+    .back { display: inline-block; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <a href="/" class="back">← Tilbake til kartet</a>
+  <h1>Personvernserklæring</h1>
+  <p class="muted">Sist oppdatert: februar 2025</p>
+
+  <h2>Om livetrafikk.no</h2>
+  <p>livetrafikk.no er en gratis tjeneste som viser sanntidsposisjoner for kollektivtransport på et kart. Tjenesten er uavhengig og ikke tilknyttet Ruter, Entur eller andre transportoperatører.</p>
+
+  <h2>Informasjonskapsler (cookies)</h2>
+  <p>Vi bruker informasjonskapsler og lignende teknologier for:</p>
+  <ul>
+    <li><strong>Nødvendige funksjoner:</strong> Lagring av dine preferanser (f.eks. lys/mørk modus, lagvelger-tilstand) – uten disse virker ikke tjenesten som forventet.</li>
+    <li><strong>Reklame:</strong> Vi viser reklame via Google AdSense. Google og deres partnere bruker informasjonskapsler for å levere annonser, måle effekt og personalisere innhold. Du kan godta eller avvise reklame-informasjonskapsler ved første besøk.</li>
+  </ul>
+
+  <h2>Data vi samler inn</h2>
+  <p>Vi samler ikke personopplysninger direkte. Kartet henter kollektivdata (posisjoner, ruter) fra Entur via vår server. Reklameleverandøren (Google) kan samle data i henhold til deres <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">personvernregler</a>.</p>
+
+  <h2>Dine rettigheter</h2>
+  <p>Du kan når som helst:</p>
+  <ul>
+    <li>Trekke tilbake samtykke: <button type="button" id="revoke-consent" style="font-size:inherit;padding:0.2rem 0.5rem;cursor:pointer;background:var(--border);border:1px solid var(--border);border-radius:4px;color:inherit">Vis samtykkebanner på nytt</button> – du sendes tilbake til kartet og kan velge på nytt.</li>
+    <li>Konfigurere informasjonskapsler i nettleserens innstillinger.</li>
+  </ul>
+
+  <h2>Kontakt</h2>
+  <p>Spørsmål om personvern kan rettes til utgiveren av livetrafikk.no via standard kontaktkanaler for nettstedet.</p>
+
+  <p><a href="/">← Tilbake til kartet</a></p>
+
+  <script>
+    document.getElementById('revoke-consent')?.addEventListener('click', function(){
+      localStorage.removeItem('ruterlive-consent');
+      window.location.href = '/';
+    });
+  </script>
+</body>
+</html>

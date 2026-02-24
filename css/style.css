@@ -117,13 +117,19 @@ header h1 {
   margin-top: 0.4rem;
 }
 
-.header-link {
+.header-btn {
   font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   color: var(--text-muted);
   text-decoration: none;
+  cursor: pointer;
 }
 
-.header-link:hover {
+.header-btn:hover {
+  background: var(--bg-input);
   color: var(--text-secondary);
 }
 

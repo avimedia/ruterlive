@@ -12,7 +12,31 @@ export function initStopSearch() {
   const input = document.getElementById('stop-search-input');
   const resultsEl = document.getElementById('stop-search-results');
   const wrap = document.getElementById('stop-search-wrap');
+  const trigger = wrap?.querySelector('.stop-search-trigger');
   if (!input || !resultsEl || !wrap) return;
+
+  if (trigger) {
+    trigger.addEventListener('click', () => {
+      wrap.classList.add('search-expanded');
+      trigger.setAttribute('aria-expanded', 'true');
+      input.focus();
+    });
+    input.addEventListener('blur', () => {
+      setTimeout(() => {
+        const hasResults = resultsEl.querySelector('li[data-id]');
+        if (!input.value.trim() && !hasResults) {
+          wrap.classList.remove('search-expanded');
+          trigger.setAttribute('aria-expanded', 'false');
+          resultsEl.hidden = true;
+          resultsEl.innerHTML = '';
+        }
+      }, 150);
+    });
+    input.addEventListener('focus', () => {
+      wrap.classList.add('search-expanded');
+      trigger.setAttribute('aria-expanded', 'true');
+    });
+  }
 
   function hideResults() {
     resultsEl.hidden = true;

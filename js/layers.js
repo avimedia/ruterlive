@@ -22,8 +22,13 @@ const INFO_TEXTS = {
 
 let onFilterChange = null;
 let infoOverlayTrigger = null;
+let onRetry = null;
 
 const STORAGE_KEY = 'ruterlive-panel-collapsed';
+
+export function setRetryHandler(fn) {
+  onRetry = fn;
+}
 
 export function initLayers(callback) {
   onFilterChange = callback;
@@ -35,9 +40,11 @@ export function initLayers(callback) {
   // Hindre at klikk i panelet trigger kartet (zoom, clearSelection osv.)
   panel.addEventListener('click', (e) => e.stopPropagation());
 
-  // Gjenopprett minimert tilstand
+  // Gjenopprett minimert tilstand; på mobil start minimert hvis ingen lagret preferanse
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved === 'true') {
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 480;
+  const startCollapsed = saved === 'true' || (isMobile && saved === null);
+  if (startCollapsed) {
     panel.classList.add('collapsed');
     toggleBtn.textContent = '+';
     toggleBtn.setAttribute('aria-label', 'Utvid panel');
@@ -156,11 +163,39 @@ export function updateVehicleCount(counts, error, routesLoading = false) {
 
   el.title = error ? 'Sjekk nettleserkonsollen (F12) for detaljer' : '';
   if (error && (!counts || (counts.total ?? 0) === 0)) {
-    el.textContent = `Feil: ${error}`;
+    el.innerHTML = '';
+    const txt = document.createTextNode(`Feil: ${error}`);
+    el.appendChild(txt);
+    if (typeof onRetry === 'function') {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'retry-btn';
+      btn.textContent = 'Prøv igjen';
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onRetry();
+      });
+      el.appendChild(document.createTextNode(' '));
+      el.appendChild(btn);
+    }
     return;
   }
   if (!counts || (counts.total ?? 0) === 0) {
-    el.textContent = error ? `Feil: ${error}` : 'Henter kjøretøy og rutelinjer fra Entur…';
+    if (error && typeof onRetry === 'function') {
+      el.innerHTML = '';
+      el.appendChild(document.createTextNode(`Feil: ${error} `));
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'retry-btn';
+      btn.textContent = 'Prøv igjen';
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onRetry();
+      });
+      el.appendChild(btn);
+    } else {
+      el.textContent = error ? `Feil: ${error}` : 'Henter kjøretøy og rutelinjer fra Entur…';
+    }
     return;
   }
 

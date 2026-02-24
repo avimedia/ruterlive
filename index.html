@@ -6,6 +6,16 @@
   <meta name="description" content="Realtidskart over buss, T-bane, trikk, tog og båt i Stor-Oslo. Se hvor kjøretøyene er og følg rutene på kartet.">
   <meta name="theme-color" content="#1a1a1a" id="theme-color-meta">
   <title>livetrafikk.no – Realtidskart kollektivtransport</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/favicon.svg">
+  <link rel="manifest" href="/manifest.json">
+  <meta property="og:title" content="livetrafikk.no – Realtidskart kollektivtransport">
+  <meta property="og:description" content="Se buss, T-bane, trikk, tog og båt live på kartet i Oslo og omegn. Sanntidsposisjoner fra Entur.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://livetrafikk.no/">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="livetrafikk.no – Realtidskart kollektivtransport">
+  <meta name="twitter:description" content="Se buss, T-bane, trikk, tog og båt live på kartet i Oslo og omegn.">
   <script>
     (function(){
       var s = localStorage.getItem('ruterlive-theme') || 'system';
@@ -20,11 +30,33 @@
   <div id="app">
     <header>
       <h1>livetrafikk.no</h1>
+      <p class="header-tagline">Realtidskart over kollektivtransport i Stor-Oslo. Se buss, T-bane, trikk, tog og båt live på kartet.</p>
+      <button type="button" id="about-toggle" class="about-toggle" aria-expanded="false" aria-controls="about-content">Om tjenesten</button>
+      <section id="about-content" class="about-content" aria-labelledby="about-heading" hidden>
+        <h2 id="about-heading">Om livetrafikk.no</h2>
+        <p>livetrafikk.no er en gratis tjeneste som viser sanntidsposisjoner for kollektivtransport i Oslo og omegn. Kartet henter data fra Entur og viser kjøretøy fra Ruter (buss, T-bane, trikk), Vy (regiontog, Flytoget), flybuss og båt.</p>
+        <h3>Hvordan bruke kartet</h3>
+        <p>Velg transporttyper i lagvelgeren til venstre. Klikk på et kjøretøy for å se ruten og holdeplasser. Søk etter holdeplass for å finne avganger. Rutelinjer vises for T-bane, trikk, tog og flytog; for buss og flybuss vises ruten når du klikker på kjøretøyet.</p>
+        <h3>Kollektivtransport i Oslo</h3>
+        <p>Ruter driver T-bane, trikk og buss i Oslo og Akershus. T-banen har seks linjer som betjener sentrum og forstedene. Trikken går i indre by og vest. Bussnettet dekker hele regionen. Vy og andre operatører kjører regiontog til Drammen, Ski, Lillestrøm, Kongsberg og flere destinasjoner.</p>
+        <h3>Flybuss og Flytoget</h3>
+        <p>Flybussen (FB1, FB3, FB5) går mellom Oslo lufthavn Gardermoen og ulike steder i Oslo. Flytoget (F1, F2, FX) tar 20 minutter fra Oslo S til flyplassen. Begge vises på kartet når du har valgt riktig lag.</p>
+        <h3>Datakilder</h3>
+        <p>Posisjoner og rutekart kommer fra Entur, Norges nasjonale reiseinformasjonssystem. Buss- og trikkeposisjoner er estimert ut fra avgangsdata; Ruter leverer ikke GPS til Entur. Tog og flytog har sanntidsposisjoner.</p>
+        <h3>Lenker</h3>
+        <p class="about-links">
+          <a href="https://ruter.no" target="_blank" rel="noopener">Ruter</a> ·
+          <a href="https://entur.no" target="_blank" rel="noopener">Entur</a> ·
+          <a href="https://reise.ruter.no" target="_blank" rel="noopener">Reiseplanlegger</a> ·
+          <a href="https://vy.no" target="_blank" rel="noopener">Vy</a>
+        </p>
+        <button type="button" class="about-close" aria-label="Lukk">Lukk</button>
+      </section>
     </header>
 
     <main id="map-container">
       <div id="stop-search-wrap" class="stop-search-wrap">
-        <label for="stop-search-input" class="visually-hidden">Søk etter holdeplass</label>
+        <button type="button" class="stop-search-trigger" aria-label="Søk holdeplass" aria-expanded="false" aria-controls="stop-search-input">🔍</button>
         <input type="search" id="stop-search-input" class="stop-search-input" placeholder="Søk holdeplass…" autocomplete="off" aria-autocomplete="list" aria-controls="stop-search-results">
         <ul id="stop-search-results" class="stop-search-results" role="listbox" aria-label="Søkeresultater" hidden></ul>
       </div>
@@ -64,10 +96,13 @@
           </span>
         </div>
         <label class="routes-toggle"><input type="checkbox" id="routes-toggle" checked> Rutelinjer</label>
-        <label class="routes-toggle"><input type="checkbox" id="openrailwaymap-toggle"> Jernbanekart (OpenRailwayMap)</label>
+        <label class="routes-toggle"><input type="checkbox" id="openrailwaymap-toggle"> Jernbanekart</label>
         <div id="vehicle-count">Henter kjøretøy og rutelinjer fra Entur…</div>
         </div>
       </aside>
+      <button type="button" id="share-link-btn" class="btn-float" aria-label="Kopier lenke til kartvisning" title="Kopier lenke">📋</button>
+      <div id="loading-indicator" class="loading-indicator" aria-live="polite" hidden></div>
+      <div id="tip-toast" class="tip-toast" role="status" aria-live="polite" hidden></div>
       <div id="info-overlay" class="overlay hidden" aria-hidden="true">
         <div class="overlay-content">
           <h3>Om datakilden</h3>
@@ -78,7 +113,6 @@
     </main>
 
     <footer id="ad-footer" class="ad-footer">
-      <!-- Google AdSense: Legg inn data-ad-slot fra din annonseenhet i AdSense-dashboard -->
       <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1298230222793785" crossorigin="anonymous"></script>
       <ins class="adsbygoogle"
            style="display:block"

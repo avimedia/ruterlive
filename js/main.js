@@ -5,8 +5,35 @@ import { connectVehicles } from './api.js';
 import { fetchEstimatedVehicles } from './et-api.js';
 import { fetchLineRouteFromJp } from './jp-line-lookup.js';
 import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons } from './markers.js';
-import { initLayers, getVisibleModes, updateVehicleCount } from './layers.js';
+import { initLayers, getVisibleModes, updateVehicleCount, setRetryHandler } from './layers.js';
 import { updateRouteLines } from './routes.js';
+import {
+  initShareLink,
+  initLoadingIndicator,
+  initTipToast,
+  initKeyboardNav,
+  initPwa,
+  applyUrlParams,
+  getLoadingIndicator,
+} from './ux.js';
+
+function initAboutSection() {
+  const toggle = document.getElementById('about-toggle');
+  const content = document.getElementById('about-content');
+  const closeBtn = content?.querySelector('.about-close');
+  if (!toggle || !content) return;
+  toggle.addEventListener('click', () => {
+    const expanded = content.hidden;
+    content.hidden = !expanded;
+    toggle.setAttribute('aria-expanded', String(expanded));
+    toggle.textContent = expanded ? 'Skjul' : 'Om tjenesten';
+  });
+  closeBtn?.addEventListener('click', () => {
+    content.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.textContent = 'Om tjenesten';
+  });
+}
 
 let graphqlVehicles = [];
 let etVehicles = [];
@@ -97,6 +124,13 @@ function mergeAndUpdate() {
 initMap();
 initTheme();
 initStopSearch();
+initAboutSection();
+initShareLink();
+initLoadingIndicator();
+initTipToast();
+initKeyboardNav();
+initPwa();
+applyUrlParams();
 const map = getMap();
 if (map) {
   map.on('click', () => {
@@ -184,6 +218,8 @@ function applyInitialData(data) {
 }
 
 async function fetchInitialData(attempt = 0) {
+  const loading = getLoadingIndicator();
+  if (attempt === 0) loading?.show('Henter kjøretøy…');
   try {
     const res = await fetch('/api/initial-data');
     if ((res.status === 502 || res.status === 503) && attempt < RETRY_DELAYS.length) {
@@ -193,11 +229,13 @@ async function fetchInitialData(attempt = 0) {
     if (res.ok) {
       const data = await res.json();
       applyInitialData(data);
+      loading?.hide();
       return true;
     }
   } catch (err) {
     if (import.meta.env.DEV) console.warn('[RuterLive] initial-data:', err.message);
   }
+  loading?.hide();
   return false;
 }
 
@@ -227,22 +265,35 @@ function loadRouteShapes(attempt = 0) {
       }
     });
 }
+function onVehiclesSuccess(vehicles) {
+  if (Array.isArray(vehicles)) {
+    graphqlVehicles = vehicles;
+    mergeAndUpdate();
+  }
+  getLoadingIndicator()?.hide();
+}
+
+function onVehiclesError(error) {
+  getLoadingIndicator()?.hide();
+  const merged = graphqlVehicles.length
+    ? [...graphqlVehicles, ...etVehicles.filter((v) => !graphqlVehicles.some((g) => g.vehicleId === v.vehicleId))]
+    : etVehicles;
+  updateVehicleCount(getVehicleCounts(merged), error, !etLoaded);
+}
+
+function retryDataFetch() {
+  getLoadingIndicator()?.show('Prøver igjen…');
+  connectVehicles(null, onVehiclesSuccess, onVehiclesError);
+}
+
 fetchInitialData().then((ok) => {
   if (ok) {
     setInterval(() => fetchInitialData(), POLL_MS);
   } else {
+    setRetryHandler(retryDataFetch);
+    getLoadingIndicator()?.show('Prøver igjen…');
     loadRouteShapes();
-    connectVehicles(null, (vehicles) => {
-      if (Array.isArray(vehicles)) {
-        graphqlVehicles = vehicles;
-        mergeAndUpdate();
-      }
-    }, (error) => {
-      const merged = graphqlVehicles.length
-        ? [...graphqlVehicles, ...etVehicles.filter((v) => !graphqlVehicles.some((g) => g.vehicleId === v.vehicleId))]
-        : etVehicles;
-      updateVehicleCount(getVehicleCounts(merged), error, !etLoaded);
-    });
+    connectVehicles(null, onVehiclesSuccess, onVehiclesError);
     async function pollEt() {
       try {
         const result = await fetchEstimatedVehicles();

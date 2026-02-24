@@ -156,7 +156,8 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
         selectedMatches.push(shape);
       } else if (
         lineMatchesForMode(shape.line, selectedVehicle.line?.publicCode, mode) &&
-        mode === vehicleMode(selectedVehicle)
+        mode === vehicleMode(selectedVehicle) &&
+        destMatchesNorm((selectedVehicle.destinationName || '').toLowerCase(), shape.to)
       ) {
         vehicleClickFallbacks.push(shape);
       }

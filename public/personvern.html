@@ -42,29 +42,18 @@
   <p>Vi bruker informasjonskapsler og lignende teknologier for:</p>
   <ul>
     <li><strong>Nødvendige funksjoner:</strong> Lagring av dine preferanser (f.eks. lys/mørk modus, lagvelger-tilstand) – uten disse virker ikke tjenesten som forventet.</li>
-    <li><strong>Reklame:</strong> Vi viser reklame via Google AdSense. Google og deres partnere bruker informasjonskapsler for å levere annonser, måle effekt og personalisere innhold. Du kan godta eller avvise reklame-informasjonskapsler ved første besøk.</li>
+    <li><strong>Reklame:</strong> Vi viser reklame via Google AdSense. Google og deres partnere bruker informasjonskapsler for å levere annonser, måle effekt og personalisere innhold. Samtykke håndteres av Googles «Privacy and cookie settings» for brukere i EØS.</li>
   </ul>
 
   <h2>Data vi samler inn</h2>
   <p>Vi samler ikke personopplysninger direkte. Kartet henter kollektivdata (posisjoner, ruter) fra Entur via vår server. Reklameleverandøren (Google) kan samle data i henhold til deres <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">personvernregler</a>.</p>
 
   <h2>Dine rettigheter</h2>
-  <p>Du kan når som helst:</p>
-  <ul>
-    <li>Trekke tilbake samtykke: <button type="button" id="revoke-consent" style="font-size:inherit;padding:0.2rem 0.5rem;cursor:pointer;background:var(--border);border:1px solid var(--border);border-radius:4px;color:inherit">Vis samtykkebanner på nytt</button> – du sendes tilbake til kartet og kan velge på nytt.</li>
-    <li>Konfigurere informasjonskapsler i nettleserens innstillinger.</li>
-  </ul>
+  <p>Du kan når som helst endre eller trekke tilbake samtykke via «Privacy and cookie settings» (Google) som vises på siden, eller konfigurere informasjonskapsler i nettleserens innstillinger.</p>
 
   <h2>Kontakt</h2>
   <p>Spørsmål om personvern kan rettes til utgiveren av livetrafikk.no via standard kontaktkanaler for nettstedet.</p>
 
   <p><a href="/">← Tilbake til kartet</a></p>
-
-  <script>
-    document.getElementById('revoke-consent')?.addEventListener('click', function(){
-      localStorage.removeItem('ruterlive-consent');
-      window.location.href = '/';
-    });
-  </script>
 </body>
 </html>

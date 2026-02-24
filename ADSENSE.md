@@ -5,7 +5,7 @@
 For å møte AdSense-krav er følgende lagt til:
 
 - **Personvernserklæring** ([/personvern.html](/personvern.html)) – informasjonskapsler, datainnsamling, rettigheter
-- **Samtykkebanner** – vises ved første besøk; AdSense lastes kun etter «Godta alle»
+- **Samtykke** – håndteres av Googles «Privacy and cookie settings» (Privacy & messaging i AdSense)
 - **«Om tjenesten»-seksjon** med utvidbar innhold:
   - Om livetrafikk.no
   - Hvordan bruke kartet

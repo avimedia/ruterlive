@@ -81,6 +81,20 @@ app.get('/health', (_req, res) => {
   res.status(200).send('ok');
 });
 
+// ads.txt – kreves av Google AdSense, må være tilgjengelig på roten
+app.get('/ads.txt', (_req, res) => {
+  res.type('text/plain');
+  res.sendFile(path.join(__dirname, 'dist', 'ads.txt'));
+});
+
+// robots.txt – tillater søkemotorer
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain');
+  res.send(`User-agent: *
+Allow: /
+`);
+});
+
 function getAllShapes() {
   return mergeShapes(mergeShapes(getCachedShapes(), railShapesCache), flybussShapesCache);
 }

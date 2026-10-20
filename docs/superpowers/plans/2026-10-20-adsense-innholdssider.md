@@ -67,7 +67,7 @@
   - `pickMainPattern(journeyPatterns) -> { stops: string[], from, to } | null` — mønsteret med flest `serviceJourneys`; ved likhet flest quays.
   - `async getLineStops(line) -> { stops, from, to } | null` — slår opp JP-ID via `lines(publicCodes:[...])` filtrert på `id.startsWith(authority + ':')` (én spørring for alle linjer, cache 24t), deretter `line(id){ journeyPatterns { quays { name } serviceJourneys { id } } }`, cache 24t per linje, timeout 5 s, `null` ved feil.
   - `prewarmLineStops() -> Promise<void>` — henter alle sekvensielt.
-  - `server/live-vehicles.js`: `async getMergedVehicles() -> vehicle[]` (flyttet logikk fra `/api/initial-data`, returnerer også `routeShapes` via `getLiveData() -> { vehicles, routeShapes }`); `countVehiclesForLine(vehicles, line) -> number` (match `line.publicCode` mot `code` + `aliases`, case-insensitive).
+  - `server/live-vehicles.js`: `async getMergedVehicles() -> vehicle[]` = `(await getLiveData()).vehicles`; `async getLiveData() -> { vehicles, routeShapes }` er logikken flyttet uendret fra `/api/initial-data`, som nå kaller den (`mergeShapes`/`getAllShapes` flyttes med eller sendes inn); `countVehiclesForLine(vehicles, line) -> number` (match `line.publicCode` mot `code` + `aliases`, case-insensitive).
   - `renderLinePage(line, stopsResult | null, vehicleCount: number) -> string`.
 
 - [ ] **Step 1: Skriv tester.**

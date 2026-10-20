@@ -15,6 +15,15 @@ Appen trenger en server som proxier API-kall til Entur (unngår CORS, bedre for 
    - **Root directory:** (tom)
 5. Deploy
 
+## Kartfliser (CARTO)
+
+Bakgrunnskartet fra CARTO krever API-nøkkel ([carto.com/basemaps/apikey](https://carto.com/basemaps/apikey)). Nøkkelen bygges inn i klienten, så den må finnes **ved bygg**:
+
+- **Render:** Environment → legg til `VITE_CARTO_API_KEY`, deretter ny deploy.
+- **Lokalt:** `.env.local` med `VITE_CARTO_API_KEY=...` (ignoreres av git).
+
+Uten nøkkel fungerer kartet, men CARTO viser vannmerke. Nøkkelen er synlig i flis-URL-ene i nettleseren; begrens den til livetrafikk.no i CARTO-dashbordet.
+
 ## Railway
 
 1. [railway.app](https://railway.app) → New Project → Deploy from GitHub

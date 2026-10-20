@@ -22,7 +22,11 @@ Bakgrunnskartet fra CARTO krever API-nøkkel ([carto.com/basemaps/apikey](https:
 - **Render:** Environment → legg til `VITE_CARTO_API_KEY`, deretter ny deploy.
 - **Lokalt:** `.env.local` med `VITE_CARTO_API_KEY=...` (ignoreres av git).
 
-Uten nøkkel fungerer kartet, men CARTO viser vannmerke. Nøkkelen er synlig i flis-URL-ene i nettleseren; begrens den til livetrafikk.no i CARTO-dashbordet.
+Uten nøkkel fungerer kartet, men CARTO viser vannmerke.
+
+Nøkkelen er alltid synlig i flis-URL-ene i nettleseren (CARTO-vilkårene forbyr proxy/caching av fliser på server, så den kan ikke skjules). Beskyttelsen er å gjøre den **website-restricted** i [CARTO-dashbordet](https://dashboard.basemaps.carto.com/): tillatte verter `livetrafikk.no` og `*.livetrafikk.no` (wildcard dekker ikke rotdomenet). Bruk en egen nøkkel med `localhost` for lokal utvikling.
+
+Med annonser regnes bruken som kommersiell: gratis inntil 1 million flisforespørsler per måned, deretter betalt plan. Følg forbruket i dashbordet.
 
 ## Railway
 

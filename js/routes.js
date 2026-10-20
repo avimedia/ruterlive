@@ -40,6 +40,7 @@ let lastRenderedModesKey = '';
 let lastSelectedVehicleKey = '';
 let lastRenderedStopsKey = '';
 let lastRenderedBboxKey = '';
+let lastRenderedRoutesVisible = null;
 let bboxFetchId = 0;
 
 /** Zoom-nivå før holdeplasser vises (med navn). */
@@ -110,10 +111,11 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   const stopsVisibleKey = mapZoom >= ZOOM_STOPS_VISIBLE ? '1' : '0';
   const b = map.getBounds();
   const bboxKey = mapZoom >= ZOOM_STOPS_VISIBLE ? `${b.getSouth().toFixed(2)},${b.getNorth().toFixed(2)},${b.getWest().toFixed(2)},${b.getEast().toFixed(2)}` : '';
-  if (shapesKey === lastRenderedShapesKey && modesKey === lastRenderedModesKey && selectedKey === lastSelectedVehicleKey && stopsVisibleKey === lastRenderedStopsKey && bboxKey === lastRenderedBboxKey) {
+  if (shapesKey === lastRenderedShapesKey && modesKey === lastRenderedModesKey && selectedKey === lastSelectedVehicleKey && stopsVisibleKey === lastRenderedStopsKey && bboxKey === lastRenderedBboxKey && routesVisible === lastRenderedRoutesVisible) {
     return;
   }
   lastRenderedBboxKey = bboxKey;
+  lastRenderedRoutesVisible = routesVisible;
   lastRenderedShapesKey = shapesKey;
   lastRenderedModesKey = modesKey;
   lastSelectedVehicleKey = selectedKey;

@@ -38,3 +38,22 @@ test('renderLinePage med to stopp og linjenavn viser strekning i stedet for list
   assert.ok(html.includes('Entur har ikke en fullstendig stoppliste for denne linjen.'));
   assert.doesNotMatch(html, /<ol/);
 });
+
+test('renderLinePage setter modus og viser linjekoden som brikke i h1', () => {
+  const html = renderLinePage(getLineBySlug('t-bane-5'), stops, 3);
+  assert.match(html, /<body data-mode="metro">/);
+  assert.match(html, /<h1 class="line-title"><span class="line-badge line-badge--lg" data-mode="metro" aria-hidden="true">5<\/span> <span>T-bane linje 5<\/span><\/h1>/);
+  assert.match(html, /class="button button--primary" href="\/\?lat=/);
+  const fly = renderLinePage(getLineBySlug('flybuss-fb3'), stops, 2);
+  assert.match(fly, /<body data-mode="flybuss">/);
+  assert.match(fly, /line-badge--lg" data-mode="flybuss" aria-hidden="true">FB3</);
+});
+
+test('menyen markerer aktiv side med aria-current', async () => {
+  const html = renderLinePage(getLineBySlug('t-bane-5'), stops, 3);
+  assert.ok(!html.includes('aria-current'));
+  const { renderPage } = await import('../server/pages/layout.js');
+  const guide = renderPage({ title: 'T', description: 'D', path: '/guider/x', body: '' });
+  assert.ok(guide.includes('<a href="/guider" aria-current="page">Guider og linjer</a>'));
+  assert.ok(!guide.includes('<a href="/om" aria-current'));
+});

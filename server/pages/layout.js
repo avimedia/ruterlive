@@ -15,11 +15,28 @@ export function escapeHtml(value) {
 }
 
 /**
+ * Linjekoden som farget brikke. Med `link` blir den en lenke til linjesiden
+ * (med fullt linjenavn som tilgjengelig navn); ellers en dekorativ brikke.
+ */
+export function lineBadge(line, { link = false, size = '' } = {}) {
+  const cls = `line-badge${size ? ` line-badge--${size}` : ''}`;
+  const code = escapeHtml(line.code);
+  return link
+    ? `<a class="${cls}" data-mode="${escapeHtml(line.mode)}" href="/linje/${escapeHtml(line.slug)}" aria-label="${escapeHtml(line.title)}">${code}</a>`
+    : `<span class="${cls}" data-mode="${escapeHtml(line.mode)}" aria-hidden="true">${code}</span>`;
+}
+
+/**
  * Bygger et komplett HTML-dokument.
  * `body` er ferdig HTML (kallerens ansvar å escape dynamiske strenger).
  */
-export function renderPage({ title, description, path, body, ads = true, noindex = false }) {
+export function renderPage({ title, description, path, body, ads = true, noindex = false, mode = '', bodyClass = '' }) {
   const url = `${BASE_URL}${path}`;
+  const navLink = (href, label) => {
+    const current = path === href || (href !== '/' && path.startsWith(`${href}/`));
+    return `<a href="${href}"${current ? ' aria-current="page"' : ''}>${label}</a>`;
+  };
+  const bodyAttrs = `${mode ? ` data-mode="${escapeHtml(mode)}"` : ''}${bodyClass ? ` class="${escapeHtml(bodyClass)}"` : ''}`;
   return `<!DOCTYPE html>
 <html lang="nb">
 <head>
@@ -43,22 +60,26 @@ ${noindex ? '  <meta name="robots" content="noindex">\n' : ''}  <meta property="
   </script>
   <link rel="stylesheet" href="/content.css">
 ${ads ? `  ${ADSENSE_SCRIPT}\n` : ''}</head>
-<body>
+<body${bodyAttrs}>
   <header class="site-header">
-    <a class="site-name" href="/">livetrafikk.no</a>
-    <nav aria-label="Hovedmeny">
-      <a href="/">Kart</a>
-      <a href="/guider">Guider og linjer</a>
-      <a href="/om">Om</a>
-    </nav>
+    <div class="site-header-inner">
+      <a class="site-name" href="/"><span class="site-logo" aria-hidden="true"></span>livetrafikk.no</a>
+      <nav aria-label="Hovedmeny">
+        <a href="/">Kart</a>
+        ${navLink('/guider', 'Guider og linjer')}
+        ${navLink('/om', 'Om')}
+      </nav>
+    </div>
   </header>
   <main>
 ${body}
   </main>
   <footer class="site-footer">
-    <a href="/personvern.html">Personvern</a>
-    <a href="https://apptastic.no/pages/contact/" rel="noopener">Kontakt</a>
-    <span>Data fra Entur</span>
+    <div class="site-footer-inner">
+      <a href="/personvern.html">Personvern</a>
+      <a href="https://apptastic.no/pages/contact/" rel="noopener">Kontakt</a>
+      <span>Sanntidsdata fra Entur</span>
+    </div>
   </footer>
 </body>
 </html>

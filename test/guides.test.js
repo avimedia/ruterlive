@@ -40,7 +40,9 @@ test('renderGuideIndex lenker til alle guider og linjer', () => {
   const html = renderGuideIndex(GUIDES, LINES);
   for (const g of GUIDES) assert.ok(html.includes(`/guider/${g.slug}`));
   for (const l of LINES) assert.ok(html.includes(`/linje/${l.slug}`));
-  for (const h of ['T-bane', 'Trikk', 'Tog', 'Flytoget', 'Flybuss']) assert.ok(html.includes(`<h2>${h}</h2>`), h);
+  assert.ok(html.includes('<h2>Linjer</h2>'));
+  for (const h of ['T-bane', 'Trikk', 'Tog', 'Flytoget', 'Flybuss']) assert.ok(html.includes(`<h3>${h}</h3>`), h);
+  assert.match(html, /<a class="line-badge" data-mode="tram" href="\/linje\/trikk-17" aria-label="Trikk linje 17">17<\/a>/);
 });
 
 test('renderAboutPage', async () => {

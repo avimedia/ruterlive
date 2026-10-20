@@ -8,8 +8,12 @@ export function renderNotFound() {
     path: '/',
     ads: false,
     noindex: true,
-    body: `    <h1>Siden finnes ikke</h1>
-    <p>Adressen stemmer ikke med noen side hos oss.</p>
-    <p><a href="/">Gå til kartet</a> eller se <a href="/guider">guider og linjer</a>.</p>`,
+    bodyClass: 'page-not-found',
+    body: `    <div class="not-found">
+      <p class="not-found-code" aria-hidden="true">404</p>
+      <h1>Siden finnes ikke</h1>
+      <p>Adressen stemmer ikke med noen side hos oss.</p>
+      <p class="line-actions"><a class="button button--primary" href="/">Gå til kartet</a> <a class="button" href="/guider">Guider og linjer</a></p>
+    </div>`,
   });
 }

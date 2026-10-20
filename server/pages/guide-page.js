@@ -9,14 +9,19 @@ export function renderGuidePage(guide, body) {
     ? `publisert ${escapeHtml(guide.published)} · oppdatert ${escapeHtml(guide.updated)}`
     : `publisert ${escapeHtml(guide.published)}`;
   const others = GUIDES.filter((g) => g.slug !== guide.slug)
-    .map((g) => `<li><a href="/guider/${escapeHtml(g.slug)}">${escapeHtml(g.title)}</a></li>`)
+    .map((g) => `<li><a class="card" href="/guider/${escapeHtml(g.slug)}"><span class="card-title">${escapeHtml(g.title)}</span><span class="card-text">${escapeHtml(g.description)}</span></a></li>`)
     .join('');
 
-  const html = `    <h1>${escapeHtml(guide.title)}</h1>
+  const html = `    <article class="prose">
+    <p class="eyebrow"><a href="/guider">Guider</a></p>
+    <h1>${escapeHtml(guide.title)}</h1>
     <p class="byline">livetrafikk.no · ${date}</p>
 ${body}
-    <h2>Les også</h2>
-    <ul>${others}</ul>`;
+    </article>
+    <aside class="related" aria-labelledby="les-ogsa">
+      <h2 id="les-ogsa">Les også</h2>
+      <ul class="card-list">${others}</ul>
+    </aside>`;
 
   return renderPage({
     title: `${guide.title} | livetrafikk.no`,

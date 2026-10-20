@@ -32,3 +32,12 @@ test('content.css har balanserte klammer', () => {
   const css = readFileSync(new URL('../public/content.css', import.meta.url), 'utf8');
   assert.equal(css.split('{').length, css.split('}').length);
 });
+
+test('renderPage med noindex utelater canonical og og:url', () => {
+  const html = renderPage({ title: 'T', description: 'D', path: '/', body: '', ads: false, noindex: true });
+  assert.ok(!html.includes('rel="canonical"'));
+  assert.ok(!html.includes('og:url'));
+  const normal = renderPage({ title: 'T', description: 'D', path: '/om', body: '' });
+  assert.ok(normal.includes('rel="canonical"'));
+  assert.ok(normal.includes('og:url'));
+});

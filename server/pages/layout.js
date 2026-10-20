@@ -33,7 +33,11 @@ export function lineBadge(line, { link = false, size = '' } = {}) {
 export function renderPage({ title, description, path, body, ads = true, noindex = false, mode = '', bodyClass = '' }) {
   const url = `${BASE_URL}${path}`;
   const navLink = (href, label) => {
-    const current = path === href || (href !== '/' && path.startsWith(`${href}/`));
+    const current = !noindex && (
+      path === href
+      || (href !== '/' && path.startsWith(`${href}/`))
+      || (href === '/guider' && path.startsWith('/linje/'))
+    );
     return `<a href="${href}"${current ? ' aria-current="page"' : ''}>${label}</a>`;
   };
   const bodyAttrs = `${mode ? ` data-mode="${escapeHtml(mode)}"` : ''}${bodyClass ? ` class="${escapeHtml(bodyClass)}"` : ''}`;
@@ -44,12 +48,10 @@ export function renderPage({ title, description, path, body, ads = true, noindex
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
   <meta name="description" content="${escapeHtml(description)}">
-  <link rel="canonical" href="${escapeHtml(url)}">
-${noindex ? '  <meta name="robots" content="noindex">\n' : ''}  <meta property="og:title" content="${escapeHtml(title)}">
+${noindex ? '' : `  <link rel="canonical" href="${escapeHtml(url)}">\n`}${noindex ? '  <meta name="robots" content="noindex">\n' : ''}  <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="${escapeHtml(url)}">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+${noindex ? '' : `  <meta property="og:url" content="${escapeHtml(url)}">\n`}  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/favicon.svg">
   <script>
     (function(){

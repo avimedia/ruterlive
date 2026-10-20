@@ -295,7 +295,11 @@ export async function getEtVehiclesAndShapes() {
   if (cached && Date.now() - lastCompute < CACHE_TTL_MS) {
     return cached;
   }
-  return computeDeduped();
+  // Avviser aldri: ved tidsavbrudd brukes forrige resultat, som før.
+  return computeDeduped().catch((e) => {
+    console.warn('[RuterLive] ET vehicles:', e.message);
+    return cached ?? { vehicles: [], shapes: [] };
+  });
 }
 
 const computeDeduped = dedupeInFlight(async () => {
@@ -336,4 +340,4 @@ const computeDeduped = dedupeInFlight(async () => {
     if (cached) return cached;
     return { vehicles: [], shapes: [] };
   }
-});
+}, { timeoutMs: 60000 }); // ET-beregning: maks 1 min, deretter nytt forsøk

@@ -76,17 +76,34 @@ export function pickMainPattern(journeyPatterns) {
   return { stops, from: stops[0], to: stops[stops.length - 1] };
 }
 
-async function jpQuery(query, fetchFn) {
-  const res = await fetchFn(JP_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'ET-Client-Name': 'ruterlive-web' },
-    body: JSON.stringify({ query }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+// Hard tidsgrense med egen timer: AbortSignal.timeout alene stoppet ikke et hengende kall i prod,
+// og med in-flight-dedup låste det linjesiden til serveren startet på nytt.
+async function jpQuery(query, fetchFn, timeoutMs = TIMEOUT_MS) {
+  const controller = new AbortController();
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`JP tidsavbrudd etter ${timeoutMs} ms`));
+    }, timeoutMs);
   });
-  if (!res.ok) throw new Error(`JP ${res.status}`);
-  const json = await res.json();
-  if (json.errors?.length) throw new Error(json.errors[0].message);
-  return json.data;
+  const request = (async () => {
+    const res = await fetchFn(JP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': 'ruterlive-web' },
+      body: JSON.stringify({ query }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`JP ${res.status}`);
+    const json = await res.json();
+    if (json.errors?.length) throw new Error(json.errors[0].message);
+    return json.data;
+  })();
+  try {
+    return await Promise.race([request, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 let idCache = null; // { at, ids: Map<"AUTH:CODE", jpId> }
@@ -95,18 +112,19 @@ let idsInFlight = null;
 const inFlight = new Map(); // slug -> Promise
 const FAILURE_TTL_MS = 60 * 1000;
 
-async function getLineIds(fetchFn) {
+async function getLineIds(fetchFn, timeoutMs) {
   if (idCache && Date.now() - idCache.at < CACHE_TTL_MS) return idCache.ids;
   if (idsInFlight) return idsInFlight;
-  idsInFlight = fetchLineIds(fetchFn).finally(() => { idsInFlight = null; });
+  idsInFlight = fetchLineIds(fetchFn, timeoutMs).finally(() => { idsInFlight = null; });
   return idsInFlight;
 }
 
-async function fetchLineIds(fetchFn) {
+async function fetchLineIds(fetchFn, timeoutMs) {
   const codes = [...new Set(LINES.map((l) => l.code))];
   const data = await jpQuery(
     `{ lines(publicCodes: ${JSON.stringify(codes)}) { id publicCode } }`,
-    fetchFn
+    fetchFn,
+    timeoutMs
   );
   const ids = new Map();
   for (const l of data?.lines ?? []) {
@@ -121,11 +139,11 @@ async function fetchLineIds(fetchFn) {
  * Henter stoppliste for en linje fra Entur JP (cache 24 t). Gir null ved feil.
  * @returns {Promise<{ stops: string[], from: string, to: string, name: string, fetchedAt: string } | null>}
  */
-export async function getLineStops(line, fetchFn = fetch) {
+export async function getLineStops(line, fetchFn = fetch, timeoutMs = TIMEOUT_MS) {
   const cached = stopsCache.get(line.slug);
   if (cached && Date.now() - cached.at < (cached.value ? CACHE_TTL_MS : FAILURE_TTL_MS)) return cached.value;
   if (inFlight.has(line.slug)) return inFlight.get(line.slug);
-  const promise = fetchLineStops(line, fetchFn).then((value) => {
+  const promise = fetchLineStops(line, fetchFn, timeoutMs).then((value) => {
     stopsCache.set(line.slug, { at: Date.now(), value });
     return value;
   }).finally(() => inFlight.delete(line.slug));
@@ -133,14 +151,15 @@ export async function getLineStops(line, fetchFn = fetch) {
   return promise;
 }
 
-async function fetchLineStops(line, fetchFn) {
+async function fetchLineStops(line, fetchFn, timeoutMs) {
   try {
-    const ids = await getLineIds(fetchFn);
+    const ids = await getLineIds(fetchFn, timeoutMs);
     const jpId = ids.get(`${line.authority}:${line.code.toUpperCase()}`);
     if (!jpId) return null;
     const data = await jpQuery(
       `{ line(id: ${JSON.stringify(jpId)}) { name journeyPatterns { quays { name } serviceJourneys { id } } } }`,
-      fetchFn
+      fetchFn,
+      timeoutMs
     );
     const main = pickMainPattern(data?.line?.journeyPatterns);
     if (!main) return null;

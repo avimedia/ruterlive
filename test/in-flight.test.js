@@ -30,3 +30,17 @@ test('loadGtfsStops: samtidige kall gir én nedlasting', async () => {
   assert.equal(a, null);
   assert.equal(b, null);
 });
+
+test('dedupeInFlight med tidsgrense: hengende henting avvises og låser ikke neste kall', async () => {
+  let calls = 0;
+  const f = dedupeInFlight(() => { calls++; return new Promise(() => {}); }, { timeoutMs: 30 });
+  await assert.rejects(f(), /tidsavbrudd/);
+  await assert.rejects(f(), /tidsavbrudd/);
+  assert.equal(calls, 2);
+});
+
+test('loadGtfsStops avviser ikke når nedlastingen henger (tidsavbrudd gir null/forrige cache)', async () => {
+  // Bruker en fetch som feiler raskt; kontrakten er at loadGtfsStops aldri kaster.
+  const result = await loadGtfsStops(async () => { throw new Error('nede'); });
+  assert.ok(result === null || result instanceof Map);
+});

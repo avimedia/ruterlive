@@ -109,10 +109,14 @@ const downloadDeduped = dedupeInFlight(async (fetchFn) => {
     if (gtfsQuayCache) return gtfsQuayCache;
     return null;
   }
-});
+}, { timeoutMs: 180000 }); // GTFS: nedlasting (2 min) + parsing
 
 function downloadGtfsStops(fetchFn) {
-  return downloadDeduped(fetchFn);
+  // Avviser aldri: ved tidsavbrudd brukes forrige cache (eller null), som før.
+  return downloadDeduped(fetchFn).catch((e) => {
+    console.warn('[RuterLive] GTFS stops:', e.message);
+    return gtfsQuayCache;
+  });
 }
 
 /**

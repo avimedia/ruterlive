@@ -61,11 +61,22 @@ export async function getMergedVehicles() {
   return (await getLiveData()).vehicles;
 }
 
-/** Teller kjøretøy som kjører linjen, inkl. x-varianter (aliaser). */
+const VEHICLE_MODES = {
+  metro: ['metro'],
+  tram: ['tram'],
+  rail: ['rail'],
+  flytog: ['rail', 'flytog'],
+  flybuss: ['bus', 'coach'],
+};
+
+/** Teller kjøretøy som kjører linjen, inkl. x-varianter (aliaser). Filtrerer også på transportmåte, siden
+ * linjekoder som 5 og 12 også brukes av busser utenfor Oslo. */
 export function countVehiclesForLine(vehicles, line) {
   const codes = new Set([line.code, ...(line.aliases ?? [])].map((c) => c.toUpperCase()));
+  const modes = VEHICLE_MODES[line.mode];
   let n = 0;
   for (const v of vehicles ?? []) {
+    if (modes && !modes.includes(String(v?.mode ?? '').toLowerCase())) continue;
     const code = v?.line?.publicCode;
     if (code && codes.has(String(code).toUpperCase())) n++;
   }

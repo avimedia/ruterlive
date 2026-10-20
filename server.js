@@ -139,11 +139,12 @@ app.get('/linje/:slug', async (req, res) => {
       getLineStops(line),
       getMergedVehicles().catch(() => []),
     ]);
-    res.set('Cache-Control', 'public, max-age=300');
+    res.set('Cache-Control', stops ? 'public, max-age=300' : 'no-store');
     res.type('html').send(renderLinePage(line, stops, countVehiclesForLine(vehicles, line)));
   } catch (err) {
+    console.warn('[RuterLive] Linjeside:', err.message);
     res.set('Cache-Control', 'no-store');
-    res.type('html').send(renderLinePage(line, null, 0));
+    res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
   }
 });
 

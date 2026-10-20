@@ -90,7 +90,9 @@ async function jpQuery(query, fetchFn) {
 }
 
 let idCache = null; // { at, ids: Map<"AUTH:CODE", jpId> }
-const stopsCache = new Map(); // slug -> { at, value }
+const stopsCache = new Map(); // slug -> { at, value } (value null = feil, cachet kort)
+const inFlight = new Map(); // slug -> Promise
+const FAILURE_TTL_MS = 60 * 1000;
 
 async function getLineIds(fetchFn) {
   if (idCache && Date.now() - idCache.at < CACHE_TTL_MS) return idCache.ids;
@@ -114,7 +116,17 @@ async function getLineIds(fetchFn) {
  */
 export async function getLineStops(line, fetchFn = fetch) {
   const cached = stopsCache.get(line.slug);
-  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.value;
+  if (cached && Date.now() - cached.at < (cached.value ? CACHE_TTL_MS : FAILURE_TTL_MS)) return cached.value;
+  if (inFlight.has(line.slug)) return inFlight.get(line.slug);
+  const promise = fetchLineStops(line, fetchFn).then((value) => {
+    stopsCache.set(line.slug, { at: Date.now(), value });
+    return value;
+  }).finally(() => inFlight.delete(line.slug));
+  inFlight.set(line.slug, promise);
+  return promise;
+}
+
+async function fetchLineStops(line, fetchFn) {
   try {
     const ids = await getLineIds(fetchFn);
     const jpId = ids.get(`${line.authority}:${line.code.toUpperCase()}`);
@@ -126,7 +138,6 @@ export async function getLineStops(line, fetchFn = fetch) {
     const main = pickMainPattern(data?.line?.journeyPatterns);
     if (!main) return null;
     const value = { ...main, name: data?.line?.name ?? '', fetchedAt: new Date().toISOString() };
-    stopsCache.set(line.slug, { at: Date.now(), value });
     return value;
   } catch (e) {
     console.warn(`[RuterLive] Stoppliste ${line.slug}:`, e.message);

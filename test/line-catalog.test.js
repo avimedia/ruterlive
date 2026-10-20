@@ -56,9 +56,9 @@ test('pickMainPattern gir null uten mønstre', () => {
 test('countVehiclesForLine teller aliaser, uavhengig av store/små bokstaver', () => {
   const r13 = getLineBySlug('tog-r13');
   const vehicles = [
-    { line: { publicCode: 'R13x' } },
-    { line: { publicCode: 'r13' } },
-    { line: { publicCode: 'R14' } },
+    { mode: 'RAIL', line: { publicCode: 'R13x' } },
+    { mode: 'rail', line: { publicCode: 'r13' } },
+    { mode: 'rail', line: { publicCode: 'R14' } },
     {},
   ];
   assert.equal(countVehiclesForLine(vehicles, r13), 2);
@@ -81,4 +81,13 @@ test('aliaser for x-varianter', () => {
   assert.deepEqual(getLineBySlug('tog-r23').aliases, ['R23x']);
   assert.deepEqual(getLineBySlug('tog-re11').aliases, ['RX11']);
   assert.deepEqual(getLineBySlug('tog-re20').aliases, ['RX20']);
+});
+
+test('countVehiclesForLine ignorerer buss med samme linjekode som T-bane', () => {
+  const vehicles = [
+    { mode: 'bus', line: { publicCode: '5' } },
+    { mode: 'metro', line: { publicCode: '5' } },
+  ];
+  assert.equal(countVehiclesForLine(vehicles, getLineBySlug('t-bane-5')), 1);
+  assert.equal(countVehiclesForLine([{ mode: 'BUS', line: { publicCode: 'FB1' } }], getLineBySlug('flybuss-fb1')), 1);
 });

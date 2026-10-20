@@ -21,6 +21,7 @@ export function renderLinePage(line, stopsResult, vehicleCount) {
     ? `<p>Ute akkurat nå: <strong>${escapeHtml(vehicleCount)}</strong> kjøretøy</p>\n`
     : '';
 
+  // Antar at Entur skiller stoppnavn i linjenavnet med «-» uten mellomrom (f.eks. «Stabekk-Oslo S-Moss»).
   const routeNames = hasStops && stopsResult.stops.length < 3
     ? String(stopsResult.name ?? '').split(/\s*-\s*/).filter(Boolean)
     : [];
@@ -41,14 +42,15 @@ ${stopsResult.stops.map((s) => `      <li>${escapeHtml(s)}</li>`).join('\n')}
 
   const body = `    <h1>${escapeHtml(line.title)}</h1>
     <p class="byline">livetrafikk.no · oppdatert ${escapeHtml(formatDate(hasStops ? stopsResult.fetchedAt : null))}</p>
-    <p>${escapeHtml(line.intro)}</p>
-    ${vehicles}    ${stopsHtml}
+    ${line.intro ? `<p>${escapeHtml(line.intro)}</p>\n    ` : ''}    ${vehicles}    ${stopsHtml}
     <p><a href="${escapeHtml(mapHref)}">Se linjen på kartet</a></p>
     ${othersHtml}`;
 
   return renderPage({
     title: `${line.title} – stopp og kjøretøy i sanntid | livetrafikk.no`,
-    description: `${line.title}: stoppliste og antall kjøretøy akkurat nå, med data fra Entur.`,
+    description: hasStops && stopsResult.stops.length < 3
+      ? `${line.title}: antall kjøretøy akkurat nå, med data fra Entur.`
+      : `${line.title}: stoppliste og antall kjøretøy akkurat nå, med data fra Entur.`,
     path: `/linje/${line.slug}`,
     body,
   });

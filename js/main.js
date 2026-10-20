@@ -17,24 +17,6 @@ import {
   getLoadingIndicator,
 } from './ux.js';
 
-function initAboutSection() {
-  const toggle = document.getElementById('about-toggle');
-  const content = document.getElementById('about-content');
-  const closeBtn = content?.querySelector('.about-close');
-  if (!toggle || !content) return;
-  toggle.addEventListener('click', () => {
-    const expanded = content.hidden;
-    content.hidden = !expanded;
-    toggle.setAttribute('aria-expanded', String(expanded));
-    toggle.textContent = expanded ? 'Skjul' : 'Om tjenesten';
-  });
-  closeBtn?.addEventListener('click', () => {
-    content.hidden = true;
-    toggle.setAttribute('aria-expanded', 'false');
-    toggle.textContent = 'Om tjenesten';
-  });
-}
-
 let graphqlVehicles = [];
 let etVehicles = [];
 let routeShapes = [];
@@ -133,7 +115,6 @@ function mergeAndUpdate() {
 initMap();
 initTheme();
 initStopSearch();
-initAboutSection();
 initShareLink();
 initLoadingIndicator();
 initTipToast();

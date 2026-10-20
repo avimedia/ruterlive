@@ -24,6 +24,13 @@ import { renderLinePage } from './server/pages/line-page.js';
 import { getGuideBySlug, loadGuideBody, loadAboutBody, GUIDES } from './server/guide-catalog.js';
 import { renderGuidePage } from './server/pages/guide-page.js';
 import { renderGuideIndex, renderAboutPage } from './server/pages/guide-index.js';
+import { buildSitemap, isMapPath } from './server/pages/sitemap.js';
+import { renderNotFound } from './server/pages/not-found.js';
+
+function sendNotFound(res) {
+  res.set('Cache-Control', 'no-store');
+  res.status(404).type('html').send(renderNotFound());
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -97,7 +104,16 @@ app.get('/robots.txt', (_req, res) => {
   res.type('text/plain');
   res.send(`User-agent: *
 Allow: /
+
+Sitemap: https://livetrafikk.no/sitemap.xml
 `);
+});
+
+app.get('/sitemap.xml', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.type('application/xml').send(
+    buildSitemap({ lines: LINES, guides: GUIDES, today: new Date().toISOString().slice(0, 10) })
+  );
 });
 
 function getAllShapes() {
@@ -136,7 +152,7 @@ app.get('/api/initial-data', async (_req, res) => {
 // Linjeside med stoppliste (Entur JP) og antall kjøretøy akkurat nå
 app.get('/linje/:slug', async (req, res) => {
   const line = getLineBySlug(req.params.slug);
-  if (!line) return res.status(404).send('Ikke funnet');
+  if (!line) return sendNotFound(res);
   try {
     const [stops, vehicles] = await Promise.all([
       getLineStops(line),
@@ -159,7 +175,7 @@ app.get('/guider', (_req, res) => {
 
 app.get('/guider/:slug', async (req, res) => {
   const guide = getGuideBySlug(req.params.slug);
-  if (!guide) return res.status(404).send('Ikke funnet');
+  if (!guide) return sendNotFound(res);
   try {
     const body = await loadGuideBody(guide.slug);
     res.set('Cache-Control', 'public, max-age=3600');
@@ -380,6 +396,7 @@ app.use(
 
 app.use(express.static(path.join(__dirname, 'dist')));
 app.get('*', (req, res) => {
+  if (!isMapPath(req.path)) return sendNotFound(res);
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 

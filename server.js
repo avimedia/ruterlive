@@ -18,7 +18,9 @@ import { getFallbackRailShapes } from './server/rail-fallback-shapes.js';
 import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
-import { getEtVehiclesAndShapes } from './server/et-vehicles-service.js';
+import { getLiveData, getMergedVehicles, countVehiclesForLine, mergeShapes } from './server/live-vehicles.js';
+import { getLineBySlug, getLineStops, prewarmLineStops } from './server/line-catalog.js';
+import { renderLinePage } from './server/pages/line-page.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -117,58 +119,31 @@ app.get('/api/static-network-shapes', (_req, res) => {
   res.json([...railShapesCache, ...flybussShapesCache]);
 });
 
-function shapeKey(s) {
-  return `${(s.mode || '').toLowerCase()}|${(s.line || '').toString()}|${s.from || ''}|${s.to || ''}`;
-}
-
-function mergeShapes(a, b) {
-  const byKey = new Map();
-  for (const s of a || []) byKey.set(shapeKey(s), s);
-  for (const s of b || []) {
-    const k = shapeKey(s);
-    const ex = byKey.get(k);
-    const ptsNew = s.points?.length ?? 0;
-    const ptsOld = ex?.points?.length ?? 0;
-    if (!ex || ptsNew >= ptsOld) byKey.set(k, s);
-  }
-  return [...byKey.values()];
-}
-
 // Alt på en gang – kjøretøy + rutekart. Server beregner alt; klient får ferdig data.
 app.get('/api/initial-data', async (_req, res) => {
   try {
-    const [vehiclesData, etResult, shapes] = await Promise.all([
-      getCachedVehicles(),
-      getEtVehiclesAndShapes(),
-      Promise.resolve(getAllShapes()),
-    ]);
-    const graphqlVehicles = Array.isArray(vehiclesData?.data?.vehicles)
-      ? vehiclesData.data.vehicles
-      : [];
-    const etVehicles = etResult?.vehicles ?? [];
-    const etShapes = etResult?.shapes ?? [];
-
-    const etByid = new Map(etVehicles.map((v) => [v.vehicleId, v]));
-    const merged = [];
-    for (const v of graphqlVehicles) {
-      const et = etByid.get(v.vehicleId);
-      merged.push(
-        et
-          ? { ...v, from: v.from ?? et.from, to: v.to ?? et.to, via: v.via ?? et.via }
-          : v
-      );
-    }
-    const seen = new Set(graphqlVehicles.map((v) => v.vehicleId));
-    for (const v of etVehicles) {
-      if (!seen.has(v.vehicleId)) merged.push(v);
-    }
-
-    const routeShapes = mergeShapes(shapes, etShapes);
-
+    const { vehicles, routeShapes } = await getLiveData(getAllShapes);
     res.set('Cache-Control', 'public, max-age=15');
-    res.json({ vehicles: merged, routeShapes });
+    res.json({ vehicles, routeShapes });
   } catch (err) {
     res.status(503).json({ vehicles: [], routeShapes: [] });
+  }
+});
+
+// Linjeside med stoppliste (Entur JP) og antall kjøretøy akkurat nå
+app.get('/linje/:slug', async (req, res) => {
+  const line = getLineBySlug(req.params.slug);
+  if (!line) return res.status(404).send('Ikke funnet');
+  try {
+    const [stops, vehicles] = await Promise.all([
+      getLineStops(line),
+      getMergedVehicles().catch(() => []),
+    ]);
+    res.set('Cache-Control', 'public, max-age=300');
+    res.type('html').send(renderLinePage(line, stops, countVehiclesForLine(vehicles, line)));
+  } catch (err) {
+    res.set('Cache-Control', 'no-store');
+    res.type('html').send(renderLinePage(line, null, 0));
   }
 });
 
@@ -390,6 +365,7 @@ async function startup() {
     setInterval(loadRailShapes, 7 * 24 * 60 * 60 * 1000); // Ukentlig (30d overstiger Node sin 32-bit timeout)
 
     // Flybussruter fra Entur JP – ukentlig automatisk oppdatering
+    setTimeout(prewarmLineStops, 20000); // Stopplister til linjesidene
     setTimeout(refreshFlybussFromJp, 15000); // Etter oppstart
     setInterval(refreshFlybussFromJp, FLYBUSS_REFRESH_MS);
   });

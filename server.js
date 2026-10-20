@@ -112,7 +112,7 @@ Sitemap: https://livetrafikk.no/sitemap.xml
 app.get('/sitemap.xml', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=3600');
   res.type('application/xml').send(
-    buildSitemap({ lines: LINES, guides: GUIDES, today: new Date().toISOString().slice(0, 10) })
+    buildSitemap({ lines: LINES, guides: GUIDES })
   );
 });
 

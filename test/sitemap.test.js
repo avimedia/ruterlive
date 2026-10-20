@@ -6,7 +6,7 @@ import { GUIDES } from '../server/guide-catalog.js';
 import { LINES } from '../server/line-catalog.js';
 
 test('buildSitemap inneholder faste sider, linjer og guider', () => {
-  const xml = buildSitemap({ lines: LINES, guides: GUIDES, today: '2026-10-20' });
+  const xml = buildSitemap({ lines: LINES, guides: GUIDES });
   for (const p of ['/', '/guider', '/om', '/personvern.html']) {
     assert.ok(xml.includes(`<loc>https://livetrafikk.no${p}</loc>`), p);
   }
@@ -15,11 +15,12 @@ test('buildSitemap inneholder faste sider, linjer og guider', () => {
     assert.ok(xml.includes(`<loc>https://livetrafikk.no/guider/${g.slug}</loc>`));
     assert.ok(xml.includes(`<lastmod>${g.updated}</lastmod>`));
   }
+  assert.equal((xml.match(/<lastmod>/g) || []).length, GUIDES.length);
   assert.equal((xml.match(/<url>/g) || []).length, 4 + LINES.length + GUIDES.length);
 });
 
 test('buildSitemap escaper slug', () => {
-  const xml = buildSitemap({ lines: [{ slug: 'a&b' }], guides: [], today: '2026-10-20' });
+  const xml = buildSitemap({ lines: [{ slug: 'a&b' }], guides: [] });
   assert.ok(xml.includes('/linje/a&amp;b</loc>'));
 });
 

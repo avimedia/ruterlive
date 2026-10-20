@@ -9,18 +9,19 @@ export function isMapPath(path) {
 }
 
 function urlEntry(path, lastmod) {
-  return `  <url>\n    <loc>${escapeHtml(BASE_URL + path)}</loc>\n    <lastmod>${escapeHtml(lastmod)}</lastmod>\n  </url>`;
+  const mod = lastmod ? `\n    <lastmod>${escapeHtml(lastmod)}</lastmod>` : '';
+  return `  <url>\n    <loc>${escapeHtml(BASE_URL + path)}</loc>${mod}\n  </url>`;
 }
 
-/** Bygger sitemap.xml. `today` brukes som lastmod for sider uten egen dato. */
-export function buildSitemap({ lines, guides, today }) {
+/** Bygger sitemap.xml. lastmod settes bare for guider (updated). */
+export function buildSitemap({ lines, guides }) {
   const entries = [
-    urlEntry('/', today),
-    urlEntry('/guider', today),
-    urlEntry('/om', today),
-    urlEntry('/personvern.html', today),
-    ...lines.map((l) => urlEntry(`/linje/${l.slug}`, today)),
-    ...guides.map((g) => urlEntry(`/guider/${g.slug}`, g.updated || today)),
+    urlEntry('/'),
+    urlEntry('/guider'),
+    urlEntry('/om'),
+    urlEntry('/personvern.html'),
+    ...lines.map((l) => urlEntry(`/linje/${l.slug}`)),
+    ...guides.map((g) => urlEntry(`/guider/${g.slug}`, g.updated)),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.join('\n')}\n</urlset>\n`;
 }

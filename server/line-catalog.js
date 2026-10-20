@@ -53,7 +53,8 @@ export function getLineBySlug(slug) {
 }
 
 /**
- * Velger hovedmønsteret: flest serviceJourneys, ved likhet flest quays.
+ * Velger hovedmønsteret: flest serviceJourneys * quays, ved likhet flest quays.
+ * (Unngår korte pendelmønstre med mange avganger, f.eks. FLY2 med 2 stopp.)
  * @returns {{ stops: string[], from: string, to: string } | null}
  */
 export function pickMainPattern(journeyPatterns) {
@@ -62,7 +63,7 @@ export function pickMainPattern(journeyPatterns) {
   let bestJ = -1;
   let bestQ = -1;
   for (const p of journeyPatterns) {
-    const j = p?.serviceJourneys?.length ?? 0;
+    const j = (p?.serviceJourneys?.length ?? 0) * (p?.quays?.length ?? 0);
     const q = p?.quays?.length ?? 0;
     if (j > bestJ || (j === bestJ && q > bestQ)) {
       best = p;
@@ -109,7 +110,7 @@ async function getLineIds(fetchFn) {
 
 /**
  * Henter stoppliste for en linje fra Entur JP (cache 24 t). Gir null ved feil.
- * @returns {Promise<{ stops: string[], from: string, to: string, fetchedAt: string } | null>}
+ * @returns {Promise<{ stops: string[], from: string, to: string, name: string, fetchedAt: string } | null>}
  */
 export async function getLineStops(line, fetchFn = fetch) {
   const cached = stopsCache.get(line.slug);
@@ -119,12 +120,12 @@ export async function getLineStops(line, fetchFn = fetch) {
     const jpId = ids.get(`${line.authority}:${line.code.toUpperCase()}`);
     if (!jpId) return null;
     const data = await jpQuery(
-      `{ line(id: ${JSON.stringify(jpId)}) { journeyPatterns { quays { name } serviceJourneys { id } } } }`,
+      `{ line(id: ${JSON.stringify(jpId)}) { name journeyPatterns { quays { name } serviceJourneys { id } } } }`,
       fetchFn
     );
     const main = pickMainPattern(data?.line?.journeyPatterns);
     if (!main) return null;
-    const value = { ...main, fetchedAt: new Date().toISOString() };
+    const value = { ...main, name: data?.line?.name ?? '', fetchedAt: new Date().toISOString() };
     stopsCache.set(line.slug, { at: Date.now(), value });
     return value;
   } catch (e) {

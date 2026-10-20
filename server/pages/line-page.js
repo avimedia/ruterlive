@@ -21,7 +21,12 @@ export function renderLinePage(line, stopsResult, vehicleCount) {
     ? `<p>Ute akkurat nå: <strong>${escapeHtml(vehicleCount)}</strong> kjøretøy</p>\n`
     : '';
 
-  const stopsHtml = hasStops
+  const routeNames = hasStops && stopsResult.stops.length < 3
+    ? String(stopsResult.name ?? '').split(/\s*-\s*/).filter(Boolean)
+    : [];
+  const stopsHtml = hasStops && stopsResult.stops.length < 3
+    ? `${routeNames.length >= 2 ? `<p>Linjen går ${escapeHtml(routeNames.join(' – '))}.</p>\n    ` : ''}<p>Entur har ikke en fullstendig stoppliste for denne linjen.</p>`
+    : hasStops
     ? `<h2>Stopp</h2>
     <p>Fra ${escapeHtml(stopsResult.from)} til ${escapeHtml(stopsResult.to)}, ${escapeHtml(stopsResult.stops.length)} stopp</p>
     <ol class="stop-list">

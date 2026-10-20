@@ -17,12 +17,35 @@ test('pickMainPattern velger mønsteret med flest avganger', () => {
   assert.equal(result.to, 'Stopp 42');
 });
 
-test('pickMainPattern bruker flest quays ved likt antall avganger', () => {
+test('pickMainPattern bruker flest quays ved likt produkt', () => {
   const result = pickMainPattern([
-    { quays: quays(5), serviceJourneys: journeys(10) },
+    { quays: quays(5), serviceJourneys: journeys(18) },
     { quays: quays(9), serviceJourneys: journeys(10) },
+    { quays: quays(10), serviceJourneys: journeys(9) },
   ]);
-  assert.equal(result.stops.length, 9);
+  assert.equal(result.stops.length, 10);
+});
+
+test('pickMainPattern: FLY2 velger mønsteret med 6 stopp', () => {
+  const result = pickMainPattern([
+    { quays: quays(2), serviceJourneys: journeys(2268) },
+    { quays: quays(6), serviceJourneys: journeys(2184) },
+  ]);
+  assert.equal(result.stops.length, 6);
+});
+
+test('pickMainPattern: linje 5 og linje 13', () => {
+  const l5 = pickMainPattern([
+    { quays: quays(43), serviceJourneys: journeys(566) },
+    { quays: quays(43), serviceJourneys: journeys(550) },
+    { quays: quays(46), serviceJourneys: journeys(16) },
+  ]);
+  assert.equal(l5.stops.length, 43);
+  const l13 = pickMainPattern([
+    { quays: quays(19), serviceJourneys: journeys(327) },
+    { quays: quays(20), serviceJourneys: journeys(323) },
+  ]);
+  assert.equal(l13.stops.length, 20);
 });
 
 test('pickMainPattern gir null uten mønstre', () => {

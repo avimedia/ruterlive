@@ -31,3 +31,10 @@ test('flybuss uten kjøretøy utelater telling', () => {
   const html = renderLinePage(getLineBySlug('flybuss-fb1'), stops, 0);
   assert.ok(!html.includes('Ute akkurat nå'));
 });
+
+test('renderLinePage med to stopp og linjenavn viser strekning i stedet for liste', () => {
+  const html = renderLinePage(getLineBySlug('tog-r23'), { stops: ['Ski', 'Oslo S'], from: 'Ski', to: 'Oslo S', name: 'Stabekk-Oslo S-Moss' }, 1);
+  assert.ok(html.includes('Linjen går Stabekk – Oslo S – Moss.'));
+  assert.ok(html.includes('Entur har ikke en fullstendig stoppliste for denne linjen.'));
+  assert.doesNotMatch(html, /<ol/);
+});

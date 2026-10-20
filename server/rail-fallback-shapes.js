@@ -54,7 +54,7 @@ export function getFallbackRailShapes() {
     buildRailLine([KONGSBERG, SKOYWEN, OSLO_S], 'Kongsberg', 'Oslo S', 'R22'),
     buildRailLine([OSLO_S, SKOYWEN, SKI, SKIEN], 'Oslo S', 'Skien', 'R10'),
     buildRailLine([SKIEN, SKI, SKOYWEN, OSLO_S], 'Skien', 'Oslo S', 'R10'),
-    buildRailLine([OSLO_S, LILLESTROM, GARDERMOEN], 'Oslo S', 'Oslo lufthavn', 'F1'),
-    buildRailLine([GARDERMOEN, LILLESTROM, OSLO_S], 'Oslo lufthavn', 'Oslo S', 'F1'),
-  ].map((s) => (s.line === 'F1' ? { ...s, mode: 'flytog' } : s));
+    buildRailLine([OSLO_S, LILLESTROM, GARDERMOEN], 'Oslo S', 'Oslo lufthavn', 'FLY1'),
+    buildRailLine([GARDERMOEN, LILLESTROM, OSLO_S], 'Oslo lufthavn', 'Oslo S', 'FLY1'),
+  ].map((s) => (s.line === 'FLY1' ? { ...s, mode: 'flytog' } : s));
 }

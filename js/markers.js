@@ -1,5 +1,6 @@
 import L from 'leaflet';
 import { getMap } from './map.js';
+import { isFlytogLineCode } from '../config.js';
 
 const MODE_TO_CLASS = {
   bus: 'bus',
@@ -17,11 +18,11 @@ function normalizeMode(vehicle) {
   let base = MODE_TO_CLASS[m] || m || 'bus';
   if ((base === 'bus' || base === 'coach') && vehicle?.line?.publicCode?.toUpperCase?.().startsWith('FB'))
     return 'flybuss';
-  // Flytoget: F1, F2, FX (Gardermoen-ekspressen)
+  // Flytoget: FLY1, FLY2. Destinasjon brukes bare når linjekode mangler – Vy-tog går også til lufthavna.
   if (base === 'rail') {
-    const code = (vehicle?.line?.publicCode || '').toUpperCase();
+    const code = vehicle?.line?.publicCode || '';
     const dest = (vehicle?.destinationName || '').toLowerCase();
-    if (/^F\d*$|^FX$/.test(code) || dest.includes('lufthavn') || dest.includes('gardermoen')) return 'flytog';
+    if (isFlytogLineCode(code) || (!code && (dest.includes('lufthavn') || dest.includes('gardermoen')))) return 'flytog';
   }
   return base;
 }

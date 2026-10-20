@@ -1,5 +1,6 @@
 import L from 'leaflet';
 import { getMap } from './map.js';
+import { isFlytogLineCode } from '../config.js';
 
 const MODE_COLORS = {
   bus: '#e63946',
@@ -56,7 +57,7 @@ const VEHICLE_CLICK_MODES = new Set(['bus', 'water', 'flybuss']);
 
 function vehicleMode(vehicle) {
   const m = (vehicle?.mode || '').toLowerCase();
-  if (m === 'rail' && /^F\d*$|^FX$/.test((vehicle?.line?.publicCode || ''))) return 'flytog';
+  if (m === 'rail' && isFlytogLineCode(vehicle?.line?.publicCode)) return 'flytog';
   if ((m === 'bus' || m === 'coach') && (vehicle?.line?.publicCode || '').toUpperCase().startsWith('FB'))
     return 'flybuss';
   return m || 'bus';

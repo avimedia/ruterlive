@@ -23,7 +23,7 @@ Modus hentes fra **Entur Journey Planner** (transportMode per linje).
 | Flybuss  | Ekspress til/fra lufthavn                      |
 | Båt      | Ferger og øybåter                             |
 | Regiontog| R10, R11, R12, R13 … (Vestfold, Østfold, Drammen) |
-| Flytoget | F1, F2, FX – Gardermoen-ekspressen            |
+| Flytoget | FLY1, FLY2 – Gardermoen-ekspressen            |
 
 Inspirert av [SL Live Map](https://sl-map.gunnar.se/).
 

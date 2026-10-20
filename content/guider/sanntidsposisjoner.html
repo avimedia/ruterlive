@@ -1,0 +1,40 @@
+<p>Prikkene på kartet til livetrafikk.no kommer fra to ulike kilder, og de er ikke like presise. Noen er ekte GPS-posisjoner som operatøren sender inn. Andre er regnet ut fra avgangstider. Hvilken type du ser på, avhenger av hvem som kjører kjøretøyet.</p>
+
+<h2>Kilde 1: GPS-posisjoner fra Entur</h2>
+<p>Entur har et eget API for kjøretøyposisjoner. Operatører som leverer posisjonsdata dit, sender jevnlig koordinater, retning og linjenummer for hvert kjøretøy. Tog er det tydeligste eksempelet: Vy-togene og <a href="/linje/flytoget-fly1">Flytoget</a> dukker opp med posisjonen de selv rapporterer.</p>
+<p>Serveren vår spør dette API-et om alle kjøretøy innenfor et rektangel rundt Stor-Oslo og holder svaret i 20 sekunder før det spørres på nytt. Alle som har kartet åpent, deler det samme svaret, så Entur får ett kall uansett hvor mange som ser på.</p>
+<p>Disse posisjonene er så gode som det operatøren sender. Et tog som står stille i en tunnel, kan bli stående på kartet til neste melding kommer, og noen ganger mangler et kjøretøy rett og slett fordi det ikke har sendt noe på en stund.</p>
+
+<h2>Kilde 2: Beregnet posisjon fra avgangsdata</h2>
+<p>Ruter leverer ikke GPS-posisjoner til Entur. For buss, T-bane, trikk og båt i Ruter-området har vi derfor bare avgangsdataene å gå på. De kommer i formatet SIRI ET (Estimated Timetable), som er en løpende oversikt over hver tur: hvilke stopp den allerede har passert med faktisk tid, og hvilke stopp den har igjen med forventet tid.</p>
+<p>Serveren henter hele Ruter-datasettet fra Entur hvert 90. sekund. Hvis Entur svarer at vi spør for ofte, venter serveren fem minutter og bruker de siste dataene den har så lenge.</p>
+<p>Ut fra dataene regner vi slik for hver tur:</p>
+<ul>
+<li>Vi finner siste stopp turen har forlatt, med faktisk avgangstid, og neste stopp, med forventet ankomsttid.</li>
+<li>Vi ser hvor stor del av tiden mellom de to som har gått. Har det gått halve tiden, plasseres kjøretøyet halvveis.</li>
+<li>Koordinatene til stoppene kommer fra Enturs stoppregister. Kjøretøyet plasseres på en rett linje mellom dem.</li>
+<li>Har turen ikke startet ennå, står kjøretøyet på første stopp.</li>
+</ul>
+<p>Beregningen kjøres på nytt hvert 15. sekund, siden svaret endrer seg med klokka selv om avgangsdataene er de samme.</p>
+<p>Info-knappen ved Buss, T-bane og Trikk i lagvelgeren på kartet sier det samme i kortform: posisjonen er omtrentlig.</p>
+
+<h2>Hva det betyr for nøyaktigheten</h2>
+<p>Den beregnede posisjonen er et godt anslag på hvor langt kjøretøyet har kommet mellom to stopp, men ikke mer. Noen konsekvenser er verdt å kjenne til.</p>
+<p>Rette linjer i stedet for veien. Fordi kjøretøyet flyttes langs en rett strek mellom to stopp, kutter det svinger. En trikk i en krapp kurve kan se ut som den går gjennom et kvartal, og en buss på en lang strekning uten stopp kan ligge et stykke fra veien.</p>
+<p>Venting ved stopp. Står en buss lenge på en holdeplass, vet ikke dataene det før ny tid blir rapportert. Kartet flytter den videre etter planen. Når faktisk avgangstid kommer inn, retter posisjonen seg.</p>
+<p>Forsinkelser. Er kjøretøyet seinere enn den forventede tiden i dataene, kommer prikken fram til neste stopp før kjøretøyet gjør det, og blir stående der til det kommer en ny tid. En prikk som har stått på en holdeplass en stund, betyr ofte at turen er forsinket mer enn dataene viste da de ble hentet.</p>
+<p>Hopp. Hver gang nye avgangsdata kommer inn, kan beregningen gi et annet svar enn sist. Kartet lar markøren gli til ny posisjon over noen sekunder, så små rettelser ser ut som vanlig bevegelse. Er hoppet lengre enn to kilometer, settes markøren direkte på nytt sted. Det skjer typisk når et kjøretøy byttes til en ny tur eller dataene for en tur har vært mangelfulle.</p>
+<p>Innstilte avganger. Beregningen ser på tidene i dataene og ikke på om en avgang er merket som innstilt. Kartet kan derfor vise et kjøretøy for en tur som ikke går. Skal du rekke noe viktig, sjekk avgangen i Ruters reiseplanlegger eller på holdeplassen.</p>
+<p>Alder. Avgangsdataene kan være opptil halvannet minutt gamle når de brukes, og nettleseren henter nye data fra serveren hvert 30. sekund. Til sammen betyr det at det du ser, ligger litt bak virkeligheten, også for GPS-posisjonene.</p>
+
+<h2>Når begge kildene finnes</h2>
+<p>Noen kjøretøy finnes i begge kildene. Da brukes GPS-posisjonen, og avgangsdataene brukes bare til å fylle inn hvor turen kom fra og hvor den skal. For tog som mangler slik informasjon, slår kartet opp linjen i Enturs reiseplanlegger ut fra linjenummer og destinasjon.</p>
+<p>Flybussen er et eget tilfelle. Den er ikke en del av Ruters avgangsdata, så den vises bare når operatøren sender posisjoner til Entur. Det er ikke alltid tilfelle, og da står det ingen flybusser på kartet selv om de kjører. Les mer om de ulike flyplasslinjene i guiden <a href="/guider/flytoget-eller-flybussen">Flytoget eller flybussen</a>.</p>
+
+<h2>Avgangstavlen er mer presis enn prikken</h2>
+<p>Klikker du på en holdeplass, får du avgangstavlen for den. Den henter tidene direkte fra Enturs reiseplanlegger og viser hvilke avganger som har sanntidsdata, og hvilke som er mer enn ett minutt forsinket. Vil du vite når bussen kommer, er tavlen et bedre svar enn å se på hvor prikken er. Prikken forteller deg omtrent hvor kjøretøyet er, tavlen forteller deg når det er ventet.</p>
+<p>Slik finner du fram til tavlen og resten av funksjonene: <a href="/guider/slik-bruker-du-kartet">Slik bruker du kartet</a>.</p>
+
+<h2>Hvorfor ikke bare bruke GPS for alt?</h2>
+<p>Fordi dataene ikke finnes åpent for Ruters kjøretøy. Vi bruker de åpne dataene Entur gjør tilgjengelig, og for Ruter er det avgangstider. Hvis Ruter på et tidspunkt begynner å levere posisjoner til Entur, vil de komme med i den første kilden, og kartet vil bruke dem i stedet for beregningen.</p>
+<p>Det er også verdt å vite at livetrafikk.no er en uavhengig tjeneste. Vi er ikke Ruter eller Entur og har ingen tilgang til data utover det som er åpent tilgjengelig. Mer om det på <a href="/om">Om livetrafikk.no</a>.</p>

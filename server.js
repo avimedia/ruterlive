@@ -19,8 +19,11 @@ import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
 import { getLiveData, getMergedVehicles, countVehiclesForLine, mergeShapes } from './server/live-vehicles.js';
-import { getLineBySlug, getLineStops, prewarmLineStops } from './server/line-catalog.js';
+import { LINES, getLineBySlug, getLineStops, prewarmLineStops } from './server/line-catalog.js';
 import { renderLinePage } from './server/pages/line-page.js';
+import { getGuideBySlug, loadGuideBody, loadAboutBody, GUIDES } from './server/guide-catalog.js';
+import { renderGuidePage } from './server/pages/guide-page.js';
+import { renderGuideIndex, renderAboutPage } from './server/pages/guide-index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -143,6 +146,38 @@ app.get('/linje/:slug', async (req, res) => {
     res.type('html').send(renderLinePage(line, stops, countVehiclesForLine(vehicles, line)));
   } catch (err) {
     console.warn('[RuterLive] Linjeside:', err.message);
+    res.set('Cache-Control', 'no-store');
+    res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
+  }
+});
+
+// Guideoversikt, guider og Om-side (statisk innhold fra content/)
+app.get('/guider', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.type('html').send(renderGuideIndex(GUIDES, LINES));
+});
+
+app.get('/guider/:slug', async (req, res) => {
+  const guide = getGuideBySlug(req.params.slug);
+  if (!guide) return res.status(404).send('Ikke funnet');
+  try {
+    const body = await loadGuideBody(guide.slug);
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.type('html').send(renderGuidePage(guide, body));
+  } catch (err) {
+    console.warn('[RuterLive] Guide:', err.message);
+    res.set('Cache-Control', 'no-store');
+    res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
+  }
+});
+
+app.get('/om', async (_req, res) => {
+  try {
+    const body = await loadAboutBody();
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.type('html').send(renderAboutPage(body));
+  } catch (err) {
+    console.warn('[RuterLive] Om-side:', err.message);
     res.set('Cache-Control', 'no-store');
     res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
   }

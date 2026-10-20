@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { getLineBySlug } from '../server/line-catalog.js';
 import { renderLinePage } from '../server/pages/line-page.js';
 
-const stops = { stops: ['A & B', 'C'], from: 'A & B', to: 'C' };
+const stops = { stops: ['A & B', 'C', 'D'], from: 'A & B', to: 'D' };
 
 test('renderLinePage for T-bane: stoppliste, antall og kartlenke', () => {
   const html = renderLinePage(getLineBySlug('t-bane-5'), stops, 3);

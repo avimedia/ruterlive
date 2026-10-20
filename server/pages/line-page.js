@@ -18,7 +18,7 @@ export function renderLinePage(line, stopsResult, vehicleCount) {
   const zoom = MAP_ZOOM[line.mode] ?? 10;
   const mapHref = `/?lat=59.925&lng=10.75&z=${zoom}`;
 
-  const vehicles = vehicleCount > 0 || line.mode !== 'flybuss'
+  const vehicles = vehicleCount != null && (vehicleCount > 0 || line.mode !== 'flybuss')
     ? `<p class="live-count${vehicleCount > 0 ? '' : ' live-count--none'}"><span class="live-dot" aria-hidden="true"></span>Ute akkurat nå: <strong>${escapeHtml(vehicleCount)}</strong> kjøretøy</p>`
     : '';
 

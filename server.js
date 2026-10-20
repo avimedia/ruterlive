@@ -156,10 +156,14 @@ app.get('/linje/:slug', async (req, res) => {
   try {
     const [stops, vehicles] = await Promise.all([
       getLineStops(line),
-      getMergedVehicles().catch(() => []),
+      // Kald start: ikke vent på kjøretøy (GTFS/ET) lenger enn 1,5 s; da rendres siden uten telling.
+      Promise.race([
+        getMergedVehicles().catch(() => null),
+        new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+      ]),
     ]);
-    res.set('Cache-Control', stops ? 'public, max-age=300' : 'no-store');
-    res.type('html').send(renderLinePage(line, stops, countVehiclesForLine(vehicles, line)));
+    res.set('Cache-Control', stops && vehicles ? 'public, max-age=300' : 'no-store');
+    res.type('html').send(renderLinePage(line, stops, vehicles ? countVehiclesForLine(vehicles, line) : null));
   } catch (err) {
     console.warn('[RuterLive] Linjeside:', err.message);
     res.set('Cache-Control', 'no-store');

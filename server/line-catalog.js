@@ -91,11 +91,18 @@ async function jpQuery(query, fetchFn) {
 
 let idCache = null; // { at, ids: Map<"AUTH:CODE", jpId> }
 const stopsCache = new Map(); // slug -> { at, value } (value null = feil, cachet kort)
+let idsInFlight = null;
 const inFlight = new Map(); // slug -> Promise
 const FAILURE_TTL_MS = 60 * 1000;
 
 async function getLineIds(fetchFn) {
   if (idCache && Date.now() - idCache.at < CACHE_TTL_MS) return idCache.ids;
+  if (idsInFlight) return idsInFlight;
+  idsInFlight = fetchLineIds(fetchFn).finally(() => { idsInFlight = null; });
+  return idsInFlight;
+}
+
+async function fetchLineIds(fetchFn) {
   const codes = [...new Set(LINES.map((l) => l.code))];
   const data = await jpQuery(
     `{ lines(publicCodes: ${JSON.stringify(codes)}) { id publicCode } }`,

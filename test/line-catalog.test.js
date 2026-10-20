@@ -91,3 +91,19 @@ test('countVehiclesForLine ignorerer buss med samme linjekode som T-bane', () =>
   assert.equal(countVehiclesForLine(vehicles, getLineBySlug('t-bane-5')), 1);
   assert.equal(countVehiclesForLine([{ mode: 'BUS', line: { publicCode: 'FB1' } }], getLineBySlug('flybuss-fb1')), 1);
 });
+
+test('getLineStops: samtidige kall for ulike linjer henter linje-IDer bare én gang', async () => {
+  const { getLineBySlug, getLineStops } = await import('../server/line-catalog.js');
+  let idCalls = 0;
+  const fetchFn = async (_url, opts) => {
+    const q = String(opts?.body ?? '');
+    if (q.includes('lines(publicCodes')) idCalls++;
+    await new Promise((r) => setTimeout(r, 20));
+    return { ok: true, json: async () => ({ data: q.includes('lines(publicCodes') ? { lines: [] } : { line: null } }) };
+  };
+  await Promise.all([
+    getLineStops(getLineBySlug('t-bane-5'), fetchFn),
+    getLineStops(getLineBySlug('trikk-17'), fetchFn),
+  ]);
+  assert.equal(idCalls, 1);
+});

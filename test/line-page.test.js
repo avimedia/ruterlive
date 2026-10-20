@@ -51,9 +51,24 @@ test('renderLinePage setter modus og viser linjekoden som brikke i h1', () => {
 
 test('menyen markerer aktiv side med aria-current', async () => {
   const html = renderLinePage(getLineBySlug('t-bane-5'), stops, 3);
-  assert.ok(!html.includes('aria-current'));
+  assert.ok(html.includes('<a href="/guider" aria-current="page">Guider og linjer</a>'));
+  assert.ok(!html.includes('<a href="/om" aria-current'));
   const { renderPage } = await import('../server/pages/layout.js');
-  const guide = renderPage({ title: 'T', description: 'D', path: '/guider/x', body: '' });
-  assert.ok(guide.includes('<a href="/guider" aria-current="page">Guider og linjer</a>'));
-  assert.ok(!guide.includes('<a href="/om" aria-current'));
+  const at = (path, extra = {}) => renderPage({ title: 'T', description: 'D', path, body: '', ...extra });
+  for (const path of ['/linje/x', '/guider', '/guider/x']) {
+    assert.ok(at(path).includes('<a href="/guider" aria-current="page">Guider og linjer</a>'), path);
+    assert.ok(!at(path).includes('<a href="/om" aria-current'), path);
+  }
+  const om = at('/om');
+  assert.ok(om.includes('<a href="/om" aria-current="page">Om</a>'));
+  assert.ok(!om.includes('<a href="/guider" aria-current'));
+  const nf = at('/', { noindex: true, ads: false });
+  assert.ok(!nf.includes('aria-current'));
+});
+
+test('renderLinePage uten kjøretøytelling (null) utelater «Ute akkurat nå»', () => {
+  for (const slug of ['t-bane-5', 'flybuss-fb3']) {
+    const html = renderLinePage(getLineBySlug(slug), stops, null);
+    assert.ok(!html.includes('Ute akkurat nå'), slug);
+  }
 });

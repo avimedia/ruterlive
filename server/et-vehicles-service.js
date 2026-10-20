@@ -10,6 +10,7 @@ import { journeyVehicleId, selectJourneysForVehicles } from '../shared/et-journe
 import { ensureEtCache } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
+import { dedupeInFlight } from './in-flight.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CLIENT_NAME = 'ruterlive-web';
@@ -294,7 +295,10 @@ export async function getEtVehiclesAndShapes() {
   if (cached && Date.now() - lastCompute < CACHE_TTL_MS) {
     return cached;
   }
+  return computeDeduped();
+}
 
+const computeDeduped = dedupeInFlight(async () => {
   try {
     await ensureGtfsStopsLoaded();
     const gtfs = getGtfsQuayCache();
@@ -332,4 +336,4 @@ export async function getEtVehiclesAndShapes() {
     if (cached) return cached;
     return { vehicles: [], shapes: [] };
   }
-}
+});

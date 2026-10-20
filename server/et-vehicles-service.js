@@ -6,6 +6,7 @@
 
 import { DOMParser } from '@xmldom/xmldom';
 import { MAX_ROUTE_SPAN_KM, MAX_ROUTE_SPAN_KM_BUS } from '../config.js';
+import { journeyVehicleId, selectJourneysForVehicles } from '../shared/et-journeys.js';
 import { ensureEtCache } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
@@ -62,6 +63,7 @@ function parseSiriXml(xmlText) {
     if (!mode) continue;
 
     const vehicleRef = jel.getElementsByTagNameNS(SIRI_NS, 'VehicleRef')[0]?.textContent || '';
+    const datedVehicleJourneyRef = jel.getElementsByTagNameNS(SIRI_NS, 'DatedVehicleJourneyRef')[0]?.textContent || '';
     const destEl = jel.getElementsByTagNameNS(SIRI_NS, 'DestinationDisplay')[0];
     const destinationName = (destEl?.textContent || '').trim();
 
@@ -93,7 +95,13 @@ function parseSiriXml(xmlText) {
     if (recordedCalls.length === 0 && estimatedCalls.length === 0) continue;
 
     journeys.push({
-      vehicleId: vehicleRef || `et-${lineRef}-${journeys.length}`,
+      vehicleId: journeyVehicleId({
+        vehicleRef,
+        datedVehicleJourneyRef,
+        lineRef,
+        firstQuayId: (recordedCalls[0] || estimatedCalls[0])?.quayId,
+        firstTime: recordedCalls[0]?.time ?? (estimatedCalls[0]?.depTime || estimatedCalls[0]?.arrTime),
+      }),
       mode,
       lineRef,
       destinationName,
@@ -175,7 +183,8 @@ function buildVehiclesAndShapes(journeys, quayCoordCache) {
   const vehicles = [];
   const routeModes = new Set(['metro', 'tram', 'water', 'bus']);
 
-  for (const j of journeys) {
+  // Bare én tur per kjøretøy (ikke fullførte eller ikke-startede turer), men shapes bygges fra alle turer
+  for (const j of selectJourneysForVehicles(journeys, now)) {
     let fromCall = null;
     let toCall = null;
     const lastRecorded = j.recordedCalls[j.recordedCalls.length - 1];

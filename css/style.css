@@ -210,6 +210,11 @@ header p {
   border-top: 1px solid var(--border);
 }
 
+.theme-select-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 #theme-select {
   font-size: 0.8rem;
   padding: 0.3rem 0.5rem;

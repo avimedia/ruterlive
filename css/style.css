@@ -360,7 +360,8 @@ body {
 
 .btn-float {
   position: absolute;
-  bottom: max(1rem, env(safe-area-inset-bottom));
+  /* Over Leaflets zoomknapper og kildehenvisning nederst til høyre */
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 6.5rem);
   right: max(1rem, env(safe-area-inset-right));
   z-index: 1000;
   width: 44px;

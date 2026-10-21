@@ -6,11 +6,9 @@
 
 import { DOMParser } from '@xmldom/xmldom';
 import { MAX_ROUTE_SPAN_KM, MAX_ROUTE_SPAN_KM_BUS } from '../config.js';
-import { journeyVehicleId, selectJourneysForVehicles } from '../shared/et-journeys.js';
 import { ensureEtCache } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
-import { dedupeInFlight } from './in-flight.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CLIENT_NAME = 'ruterlive-web';
@@ -64,7 +62,6 @@ function parseSiriXml(xmlText) {
     if (!mode) continue;
 
     const vehicleRef = jel.getElementsByTagNameNS(SIRI_NS, 'VehicleRef')[0]?.textContent || '';
-    const datedVehicleJourneyRef = jel.getElementsByTagNameNS(SIRI_NS, 'DatedVehicleJourneyRef')[0]?.textContent || '';
     const destEl = jel.getElementsByTagNameNS(SIRI_NS, 'DestinationDisplay')[0];
     const destinationName = (destEl?.textContent || '').trim();
 
@@ -96,13 +93,7 @@ function parseSiriXml(xmlText) {
     if (recordedCalls.length === 0 && estimatedCalls.length === 0) continue;
 
     journeys.push({
-      vehicleId: journeyVehicleId({
-        vehicleRef,
-        datedVehicleJourneyRef,
-        lineRef,
-        firstQuayId: (recordedCalls[0] || estimatedCalls[0])?.quayId,
-        firstTime: recordedCalls[0]?.time ?? (estimatedCalls[0]?.depTime || estimatedCalls[0]?.arrTime),
-      }),
+      vehicleId: vehicleRef || `et-${lineRef}-${journeys.length}`,
       mode,
       lineRef,
       destinationName,
@@ -184,8 +175,7 @@ function buildVehiclesAndShapes(journeys, quayCoordCache) {
   const vehicles = [];
   const routeModes = new Set(['metro', 'tram', 'water', 'bus']);
 
-  // Bare én tur per kjøretøy (ikke fullførte eller ikke-startede turer), men shapes bygges fra alle turer
-  for (const j of selectJourneysForVehicles(journeys, now)) {
+  for (const j of journeys) {
     let fromCall = null;
     let toCall = null;
     const lastRecorded = j.recordedCalls[j.recordedCalls.length - 1];
@@ -295,14 +285,7 @@ export async function getEtVehiclesAndShapes() {
   if (cached && Date.now() - lastCompute < CACHE_TTL_MS) {
     return cached;
   }
-  // Avviser aldri: ved tidsavbrudd brukes forrige resultat, som før.
-  return computeDeduped().catch((e) => {
-    console.warn('[RuterLive] ET vehicles:', e.message);
-    return cached ?? { vehicles: [], shapes: [] };
-  });
-}
 
-const computeDeduped = dedupeInFlight(async () => {
   try {
     await ensureGtfsStopsLoaded();
     const gtfs = getGtfsQuayCache();
@@ -340,4 +323,4 @@ const computeDeduped = dedupeInFlight(async () => {
     if (cached) return cached;
     return { vehicles: [], shapes: [] };
   }
-}, { timeoutMs: 60000 }); // ET-beregning: maks 1 min, deretter nytt forsøk
+}

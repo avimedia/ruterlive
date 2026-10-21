@@ -4,7 +4,6 @@
  */
 
 import { MAX_ROUTE_SPAN_KM } from '../config.js';
-import { journeyVehicleId, selectJourneysForVehicles } from '../shared/et-journeys.js';
 
 const ET_URL = import.meta.env.DEV ? '/api/entur-et/et?datasetId=RUT&maxSize=3000' : '/api/et-cached';
 const JP_GRAPHQL_URL = '/api/entur-jp/graphql';
@@ -133,7 +132,6 @@ function parseSiriXml(xmlText) {
     if (!mode) continue;
 
     const vehicleRef = jel.getElementsByTagNameNS(SIRI_NS, 'VehicleRef')[0]?.textContent || '';
-    const datedVehicleJourneyRef = jel.getElementsByTagNameNS(SIRI_NS, 'DatedVehicleJourneyRef')[0]?.textContent || '';
     const destEl = jel.getElementsByTagNameNS(SIRI_NS, 'DestinationDisplay')[0];
     const destinationName = (destEl?.textContent || '').trim();
 
@@ -165,13 +163,7 @@ function parseSiriXml(xmlText) {
     if (recordedCalls.length === 0 && estimatedCalls.length === 0) continue;
 
     journeys.push({
-      vehicleId: journeyVehicleId({
-        vehicleRef,
-        datedVehicleJourneyRef,
-        lineRef,
-        firstQuayId: (recordedCalls[0] || estimatedCalls[0])?.quayId,
-        firstTime: recordedCalls[0]?.time ?? (estimatedCalls[0]?.depTime || estimatedCalls[0]?.arrTime),
-      }),
+      vehicleId: vehicleRef || `et-${lineRef}-${journeys.length}`,
       mode,
       lineRef,
       destinationName,
@@ -288,8 +280,7 @@ export async function fetchEstimatedVehicles(onProgress) {
     const now = Date.now();
     const vehicles = [];
 
-    // Bare én tur per kjøretøy (ikke fullførte eller ikke-startede turer), men ruter bygges fra alle turer
-    for (const j of selectJourneysForVehicles(journeys, now)) {
+    for (const j of journeys) {
       let fromCall = null;
       let toCall = null;
 

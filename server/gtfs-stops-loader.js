@@ -6,7 +6,6 @@
 
 import AdmZip from 'adm-zip';
 import { fetchWithRetry } from './fetch-with-retry.js';
-import { dedupeInFlight } from './in-flight.js';
 
 const GTFS_URL =
   'https://storage.googleapis.com/marduk-production/outbound/gtfs/rb_norway-aggregated-gtfs-basic.zip';
@@ -79,17 +78,13 @@ function parseCsvLine(line) {
  * Laster GTFS basic zip, ekstraherer stops.txt og bygger quay-cache.
  * @returns {Promise<Map<string, [number, number]>|null>}
  */
-export async function loadGtfsStops(fetchFn = fetchWithRetry) {
+export async function loadGtfsStops() {
   if (gtfsQuayCache && Date.now() - lastLoadTime < CACHE_TTL_MS) {
     return gtfsQuayCache;
   }
-  return downloadGtfsStops(fetchFn);
-}
 
-// Én delt nedlasting om gangen, så samtidige kall ved kald start ikke laster 95 MB flere ganger.
-const downloadDeduped = dedupeInFlight(async (fetchFn) => {
   try {
-    const res = await fetchFn(
+    const res = await fetchWithRetry(
       GTFS_URL,
       { method: 'GET' },
       { timeout: DOWNLOAD_TIMEOUT_MS, retries: 2 }
@@ -109,14 +104,6 @@ const downloadDeduped = dedupeInFlight(async (fetchFn) => {
     if (gtfsQuayCache) return gtfsQuayCache;
     return null;
   }
-}, { timeoutMs: 180000 }); // GTFS: nedlasting (2 min) + parsing
-
-function downloadGtfsStops(fetchFn) {
-  // Avviser aldri: ved tidsavbrudd brukes forrige cache (eller null), som før.
-  return downloadDeduped(fetchFn).catch((e) => {
-    console.warn('[RuterLive] GTFS stops:', e.message);
-    return gtfsQuayCache;
-  });
 }
 
 /**

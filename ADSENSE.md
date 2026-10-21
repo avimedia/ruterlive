@@ -1,21 +1,30 @@
 # Google AdSense
 
-## Hvorfor sidene er bygd slik
+## Tilført innhold for godkjenning
 
-AdSense avviste første søknad (oktober 2026) for «ads on screens without publisher-content» og «low value content». Kartet er en navigasjonsskjerm, og den eneste teksten lå skjult. Derfor:
+For å møte AdSense-krav er følgende lagt til:
 
-- **Kartet (`/`) har ingen annonser.**
-- **Annonser (Auto ads) vises bare på innholdssider:** guider (`/guider/<slug>`), linjesider (`/linje/<slug>`), `/guider` og `/om`. Scriptet legges inn av `server/pages/layout.js` (`ads: true` er standard; 404 bruker `ads: false`).
-- **Ekte innhold:** seks guider og 28 linjesider med stoppliste og antall kjøretøy fra Entur. Tekstene ligger i `content/`.
-- **Sitemap:** `/sitemap.xml`, oppført i `robots.txt`. Ukjente URL-er gir 404.
-- **Personvernserklæring:** [/personvern.html](/personvern.html). Samtykke håndteres av Googles «Privacy & messaging» i AdSense.
+- **Personvernserklæring** ([/personvern.html](/personvern.html)) – informasjonskapsler, datainnsamling, rettigheter
+- **Samtykke** – håndteres av Googles «Privacy and cookie settings» (Privacy & messaging i AdSense)
+- **«Om tjenesten»-seksjon** med utvidbar innhold:
+  - Om livetrafikk.no
+  - Hvordan bruke kartet
+  - Kollektivtransport i Oslo (Ruter, T-bane, trikk, buss)
+  - Flybuss og Flytoget
+  - Datakilder (Entur)
 
-## Oppsett
+Innholdet er synlig i headeren og kan utvides via «Om tjenesten»-knappen.
 
-1. Slå på **Auto ads** for livetrafikk.no i AdSense. Ingen annonseenhet/slot trengs.
-2. Send inn `https://livetrafikk.no/sitemap.xml` i Google Search Console.
-3. Be om ny gjennomgang i AdSense.
+## AdSense-oppsett
+
+Reklame vises nederst på siden. For å aktivere:
+
+1. Gå til [google.com/adsense](https://www.google.com/adsense)
+2. Opprett annonseenhet og kopier koden
+3. Erstatt i `index.html`:
+   - `ca-pub-XXXXXXXXXX` → din utgiver-ID
+   - `data-ad-slot="XXXXXXXXXX"` → ditt annonsespor-ID
 
 ## ads.txt
 
-`public/ads.txt` serveres på [livetrafikk.no/ads.txt](https://livetrafikk.no/ads.txt) (egen rute i `server.js`).
+`public/ads.txt` må være tilgjengelig på [livetrafikk.no/ads.txt](https://livetrafikk.no/ads.txt).

@@ -1,6 +1,5 @@
 import { setRoutesVisible } from './routes.js';
 import { setOpenRailwayMapVisible, isOpenRailwayMapVisible } from './map.js';
-import { formatVehicleCounts } from './vehicle-count-text.js';
 
 const MODE_CONFIG = {
   bus: { label: 'Buss', key: 'bus' },
@@ -200,7 +199,17 @@ export function updateVehicleCount(counts, error, routesLoading = false) {
     return;
   }
 
-  let text = formatVehicleCounts(counts);
+  const total = counts.total ?? 0;
+  const parts = [];
+  if (counts.bus > 0) parts.push(`${counts.bus} buss`);
+  if (counts.flybuss > 0) parts.push(`${counts.flybuss} flybuss`);
+  if (counts.metro > 0) parts.push(`${counts.metro} T-bane`);
+  if (counts.tram > 0) parts.push(`${counts.tram} trikk`);
+  if (counts.water > 0) parts.push(`${counts.water} båt`);
+  if (counts.rail > 0) parts.push(`${counts.rail} regiontog`);
+  if (counts.flytog > 0) parts.push(`${counts.flytog} flytog`);
+
+  let text = parts.length > 0 ? `${total} kjøretøy: ${parts.join(', ')}` : `${total} kjøretøy`;
   if (routesLoading) text += ' · Rutelinjer lastes…';
   if (error) text += ' · Oppdatering feilet';
   el.textContent = text;

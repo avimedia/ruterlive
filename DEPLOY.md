@@ -15,19 +15,6 @@ Appen trenger en server som proxier API-kall til Entur (unngår CORS, bedre for 
    - **Root directory:** (tom)
 5. Deploy
 
-## Kartfliser (CARTO)
-
-Bakgrunnskartet fra CARTO krever API-nøkkel ([carto.com/basemaps/apikey](https://carto.com/basemaps/apikey)). Nøkkelen bygges inn i klienten, så den må finnes **ved bygg**:
-
-- **Render:** Environment → legg til `VITE_CARTO_API_KEY`, deretter ny deploy.
-- **Lokalt:** `.env.local` med `VITE_CARTO_API_KEY=...` (ignoreres av git).
-
-Uten nøkkel fungerer kartet, men CARTO viser vannmerke.
-
-Nøkkelen er alltid synlig i flis-URL-ene i nettleseren (CARTO-vilkårene forbyr proxy/caching av fliser på server, så den kan ikke skjules). Beskyttelsen er å gjøre den **website-restricted** i [CARTO-dashbordet](https://dashboard.basemaps.carto.com/): tillatte verter `livetrafikk.no` og `*.livetrafikk.no` (wildcard dekker ikke rotdomenet). Bruk en egen nøkkel med `localhost` for lokal utvikling.
-
-Med annonser regnes bruken som kommersiell: gratis inntil 1 million flisforespørsler per måned, deretter betalt plan. Følg forbruket i dashbordet.
-
 ## Railway
 
 1. [railway.app](https://railway.app) → New Project → Deploy from GitHub
@@ -53,4 +40,4 @@ For Cloudflare Workers trengs en annen tilnærming (Workers støtter ikke Expres
 - **CORS:** Entur sine API-er tillater ikke alle domener – proxy løser dette
 - **Rutelinjer:** Serveren cacher rutekartet (ET + Journey Planner) i 24t; sjekk hvert time. Brukeren får linjene øyeblikkelig
 - **Holdeplasser:** GTFS lastes ved oppstart; stops-in-bbox og søk via server
-- **Kjøretøy:** Brukerens nettleser poller `/api/initial-data` hvert 30. sek; serveren cacher GraphQL-kjøretøy i 20 s og ET-beregnede posisjoner i 15 s, felles for alle brukere
+- **Kjøretøy:** Brukerens nettleser poller via proxy hvert 20–30 sek; serveren cacher ikke kjøretøy

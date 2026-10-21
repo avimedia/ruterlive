@@ -4,7 +4,6 @@
 
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { getGtfsQuayCache } from './gtfs-stops-loader.js';
-import { isFlytogLineCode } from '../config.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CLIENT_NAME = 'ruterlive-web';
@@ -270,7 +269,7 @@ async function fetchTripShapes(trips, modes, acceptAllBus = false) {
           const pointsOnLinkEncoded = leg.pointsOnLink?.points;
           if (quayIds.length < 2 && !pointsOnLinkEncoded) continue;
 
-          const isFlytog = isFlytogLineCode(lineCode);
+          const isFlytog = /^F\d*$|^FX$/.test(lineCode);
           const mode = modes.includes('rail') ? (isFlytog ? 'flytog' : 'rail') : 'flybuss';
           // For tog: bruk hele ruten (trip.fromName/toName), ikke leg-delstrekning
           const fromName = useTripEndpoints ? trip.fromName : (quayIds[0]?.name || leg.fromPlace?.name || '');

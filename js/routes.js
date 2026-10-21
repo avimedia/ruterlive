@@ -1,6 +1,5 @@
 import L from 'leaflet';
 import { getMap } from './map.js';
-import { isFlytogLineCode } from '../config.js';
 
 const MODE_COLORS = {
   bus: '#e63946',
@@ -40,7 +39,6 @@ let lastRenderedModesKey = '';
 let lastSelectedVehicleKey = '';
 let lastRenderedStopsKey = '';
 let lastRenderedBboxKey = '';
-let lastRenderedRoutesVisible = null;
 let bboxFetchId = 0;
 
 /** Zoom-nivå før holdeplasser vises (med navn). */
@@ -58,7 +56,7 @@ const VEHICLE_CLICK_MODES = new Set(['bus', 'water', 'flybuss']);
 
 function vehicleMode(vehicle) {
   const m = (vehicle?.mode || '').toLowerCase();
-  if (m === 'rail' && isFlytogLineCode(vehicle?.line?.publicCode)) return 'flytog';
+  if (m === 'rail' && /^F\d*$|^FX$/.test((vehicle?.line?.publicCode || ''))) return 'flytog';
   if ((m === 'bus' || m === 'coach') && (vehicle?.line?.publicCode || '').toUpperCase().startsWith('FB'))
     return 'flybuss';
   return m || 'bus';
@@ -111,11 +109,10 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   const stopsVisibleKey = mapZoom >= ZOOM_STOPS_VISIBLE ? '1' : '0';
   const b = map.getBounds();
   const bboxKey = mapZoom >= ZOOM_STOPS_VISIBLE ? `${b.getSouth().toFixed(2)},${b.getNorth().toFixed(2)},${b.getWest().toFixed(2)},${b.getEast().toFixed(2)}` : '';
-  if (shapesKey === lastRenderedShapesKey && modesKey === lastRenderedModesKey && selectedKey === lastSelectedVehicleKey && stopsVisibleKey === lastRenderedStopsKey && bboxKey === lastRenderedBboxKey && routesVisible === lastRenderedRoutesVisible) {
+  if (shapesKey === lastRenderedShapesKey && modesKey === lastRenderedModesKey && selectedKey === lastSelectedVehicleKey && stopsVisibleKey === lastRenderedStopsKey && bboxKey === lastRenderedBboxKey) {
     return;
   }
   lastRenderedBboxKey = bboxKey;
-  lastRenderedRoutesVisible = routesVisible;
   lastRenderedShapesKey = shapesKey;
   lastRenderedModesKey = modesKey;
   lastSelectedVehicleKey = selectedKey;

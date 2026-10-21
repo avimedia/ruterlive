@@ -10,7 +10,6 @@ Viser buss, T-bane, trikk, båt, regiontog og Flytoget basert på Entur API. Rut
 - **Rutelinjer** – T-bane, trikk og jernbane vises alltid; buss og båt ved valgt kjøretøy
 - **Holdeplasser** – vises ved zoom 15+, klikk for avgangstavle
 - **Søk** – finn holdeplass etter navn
-- **Guider og linjesider** – `/guider`, én side per T-bane-, trikk-, tog-, Flytoget- og flybusslinje (`/linje/<slug>`) med stoppliste fra Entur
 
 ## Transporttyper
 
@@ -24,7 +23,7 @@ Modus hentes fra **Entur Journey Planner** (transportMode per linje).
 | Flybuss  | Ekspress til/fra lufthavn                      |
 | Båt      | Ferger og øybåter                             |
 | Regiontog| R10, R11, R12, R13 … (Vestfold, Østfold, Drammen) |
-| Flytoget | FLY1, FLY2 – Gardermoen-ekspressen            |
+| Flytoget | F1, F2, FX – Gardermoen-ekspressen            |
 
 Inspirert av [SL Live Map](https://sl-map.gunnar.se/).
 
@@ -44,11 +43,6 @@ npm run start
 ```
 Åpne http://localhost:3000
 
-**Tester:**
-```bash
-npm test
-```
-
 ## Deploy
 
 Se [DEPLOY.md](DEPLOY.md) for oppsett på Render, Railway m.m. Produksjonsvisning krever en server som proxier API-kall til Entur (CORS, båndbredde).
@@ -61,7 +55,7 @@ Se [DEPLOY.md](DEPLOY.md) for oppsett på Render, Railway m.m. Produksjonsvisnin
 | **Holdeplasser**| Server           | GTFS stops + bbox-forespørsler (zoom 15+)        |
 | **Kjøretøy**    | Klient           | Nettleseren poller via proxy hvert 20–30 sek     |
 
-**Rutelinjer** (T-bane, trikk, jernbane, buss, båt) caches på serveren i 24 timer. Kartet vises umiddelbart når brukeren åpner siden. **Kjøretøyposisjoner** hentes av nettleseren hvert 30. sekund fra serveren, som cacher dem kort (20 s GraphQL, 15 s ET) og deler cachen mellom alle brukere.
+**Rutelinjer** (T-bane, trikk, jernbane, buss, båt) caches på serveren i 24 timer. Kartet vises umiddelbart når brukeren åpner siden. **Kjøretøyposisjoner** hentes av hver brukers nettleser gjennom API-proxy – serveren cacher ikke kjøretøy.
 
 ## Teknologi
 

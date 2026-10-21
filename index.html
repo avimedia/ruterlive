@@ -31,11 +31,33 @@
     <header>
       <h1>livetrafikk.no</h1>
       <span class="header-links">
-        <a href="/guider" class="header-btn">Guider</a>
         <a href="/personvern.html" class="header-btn">Personvern</a>
         <a href="https://apptastic.no/pages/contact/" target="_blank" rel="noopener" class="header-btn">Kontakt</a>
-        <a href="/om" class="header-btn">Om</a>
+        <button type="button" id="about-toggle" class="about-toggle" aria-expanded="false" aria-controls="about-content">Om tjenesten</button>
       </span>
+      <section id="about-content" class="about-content" aria-labelledby="about-heading" hidden>
+        <h2 id="about-heading">Om livetrafikk.no</h2>
+        <p>livetrafikk.no er en gratis tjeneste som viser sanntidsposisjoner for kollektivtransport i Oslo og omegn. Kartet henter data fra Entur og viser kjøretøy fra Ruter (buss, T-bane, trikk), Vy (regiontog, Flytoget), flybuss og båt.</p>
+        <h3>Hvordan bruke kartet</h3>
+        <p>Velg transporttyper i lagvelgeren til venstre. Klikk på et kjøretøy for å se ruten og holdeplasser. Søk etter holdeplass for å finne avganger. Rutelinjer vises for T-bane, trikk, tog og flytog; for buss og flybuss vises ruten når du klikker på kjøretøyet.</p>
+        <h3>Kollektivtransport i Oslo</h3>
+        <p>Ruter driver T-bane, trikk og buss i Oslo og Akershus. T-banen har seks linjer som betjener sentrum og forstedene. Trikken går i indre by og vest. Bussnettet dekker hele regionen. Vy og andre operatører kjører regiontog til Drammen, Ski, Lillestrøm, Kongsberg og flere destinasjoner.</p>
+        <h3>Flybuss og Flytoget</h3>
+        <p>Flybussen (FB1, FB3, FB5) går mellom Oslo lufthavn Gardermoen og ulike steder i Oslo. Flytoget (F1, F2, FX) tar 20 minutter fra Oslo S til flyplassen. Begge vises på kartet når du har valgt riktig lag.</p>
+        <h3>Datakilder</h3>
+        <p>Posisjoner og rutekart kommer fra Entur, Norges nasjonale reiseinformasjonssystem. Buss- og trikkeposisjoner er estimert ut fra avgangsdata; Ruter leverer ikke GPS til Entur. Tog og flytog har sanntidsposisjoner.</p>
+        <h3>Personvern</h3>
+        <p><a href="/personvern.html">Personvernserklæring</a> – informasjonskapsler og data vi samler inn.</p>
+        <p><a href="/ads.txt">ads.txt</a> · <a href="/robots.txt">robots.txt</a></p>
+        <h3>Lenker</h3>
+        <p class="about-links">
+          <a href="https://ruter.no" target="_blank" rel="noopener">Ruter</a> ·
+          <a href="https://entur.no" target="_blank" rel="noopener">Entur</a> ·
+          <a href="https://reise.ruter.no" target="_blank" rel="noopener">Reiseplanlegger</a> ·
+          <a href="https://vy.no" target="_blank" rel="noopener">Vy</a>
+        </p>
+        <button type="button" class="about-close" aria-label="Lukk">Lukk</button>
+      </section>
     </header>
 
     <main id="map-container">
@@ -51,11 +73,10 @@
         </div>
         <div class="panel-body">
         <div class="theme-select-wrap">
-          <label for="theme-select" class="theme-select-label">Tema</label>
-          <select id="theme-select">
-            <option value="light">☀️ Lyst</option>
-            <option value="dark">🌙 Mørkt</option>
-            <option value="system" selected>◐ Som enheten</option>
+          <select id="theme-select" aria-label="Lys, mørk eller system">
+            <option value="light">Lys</option>
+            <option value="dark">Mørk</option>
+            <option value="system" selected>System</option>
           </select>
         </div>
         <div class="layer-controls">
@@ -96,6 +117,19 @@
         </div>
       </div>
     </main>
+
+    <footer id="ad-footer" class="ad-footer">
+      <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1298230222793785" crossorigin="anonymous"></script>
+      <ins class="adsbygoogle"
+           style="display:block"
+           data-ad-client="ca-pub-1298230222793785"
+           data-ad-slot="XXXXXXXXXX"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+      <script>
+        (window.adsbygoogle = window.adsbygoogle || []).push({});
+      </script>
+    </footer>
   </div>
 
   <script type="module" src="/js/main.js"></script>

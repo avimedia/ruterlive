@@ -54,7 +54,7 @@ export async function getLiveData(getAllShapes = () => []) {
     if (!seen.has(v.vehicleId)) merged.push(v);
   }
 
-  return { vehicles: merged, routeShapes: mergeShapes(shapes, etShapes) };
+  return { vehicles: merged, routeShapes: mergeShapes(shapes, etShapes), sources: { vehiclesData, etResult } };
 }
 
 export async function getMergedVehicles() {

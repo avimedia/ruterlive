@@ -1,6 +1,8 @@
 // Felles sidemal for server-rendrede innholdssider.
 
 const BASE_URL = 'https://livetrafikk.no';
+// Samme logo som favicon.svg og kartsiden (index.html).
+const LOGO_SVG = '<svg class="site-logo" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="14" fill="#14213d"/><path d="M13 51 C13 36 29 40 32 32 S51 28 51 13" fill="none" stroke="#2a9d8f" stroke-width="8" stroke-linecap="round"/><circle cx="32" cy="32" r="9.5" fill="#e63946" stroke="#fff" stroke-width="4"/></svg>';
 const ADSENSE_SCRIPT = '<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1298230222793785" crossorigin="anonymous"></script>';
 
 /** Escaper tekst til trygg bruk i HTML (innhold og attributter). */
@@ -66,7 +68,7 @@ ${ads ? `  ${ADSENSE_SCRIPT}\n` : ''}</head>
 <body${bodyAttrs}>
   <header class="site-header">
     <div class="site-header-inner">
-      <a class="site-name" href="/"><span class="site-logo" aria-hidden="true"></span>livetrafikk.no</a>
+      <a class="site-name" href="/">${LOGO_SVG}<span>livetrafikk<span class="site-tld">.no</span></span></a>
       <nav aria-label="Hovedmeny">
         <a href="/">Kart</a>
         ${navLink('/guider', 'Guider og linjer')}

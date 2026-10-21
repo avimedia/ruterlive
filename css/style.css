@@ -75,55 +75,6 @@ body {
   flex-direction: column;
 }
 
-header {
-  flex-shrink: 0;
-  padding: 0.5rem 0.75rem 0.6rem;
-  background: var(--bg-panel-solid);
-  border-bottom: 1px solid var(--border);
-}
-
-header h1 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.header-tagline {
-  font-size: 0.8rem;
-  color: var(--text-dim);
-  margin-top: 0.25rem;
-  line-height: 1.35;
-}
-
-.header-links {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.4rem;
-}
-
-.header-btn {
-  font-size: 0.75rem;
-  padding: 0.2rem 0.5rem;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-muted);
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.header-btn:hover {
-  background: var(--bg-input);
-  color: var(--text-secondary);
-}
-
-header p {
-  font-size: 0.875rem;
-  color: var(--text-dim);
-  margin-top: 0.25rem;
-}
-
 .theme-select-wrap {
   display: flex;
   align-items: center;
@@ -446,6 +397,14 @@ header p {
   box-shadow: 0 2px 12px var(--shadow);
 }
 
+/* Under ~1024 px er toppen opptatt av logo, meny og lagvelger: vis lastestatus nederst */
+@media (max-width: 1023px) {
+  .loading-indicator {
+    top: auto;
+    bottom: max(6.5rem, calc(env(safe-area-inset-bottom) + 5.5rem));
+  }
+}
+
 .tip-toast {
   position: absolute;
   bottom: max(4rem, calc(env(safe-area-inset-bottom) + 3rem));
@@ -473,16 +432,127 @@ header p {
   background: var(--bg-page);
 }
 
-/* Søk holdeplass */
-.stop-search-wrap {
+/* ---------- Logo, søk og meny (flytende øverst til venstre) ---------- */
+.map-chrome {
+  --brand-navy: #14213d;
+  --brand-teal: #2a9d8f;
+  --brand-red: #e63946;
   position: absolute;
   top: max(0.5rem, env(safe-area-inset-top));
   left: max(0.5rem, env(safe-area-inset-left));
-  z-index: 1000;
-  width: min(280px, calc(100vw - 6rem));
+  z-index: 1001;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.map-chrome > * {
+  pointer-events: auto;
+}
+
+.brand-card,
+.map-nav {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 12px var(--shadow);
+}
+
+.brand-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 17.5rem;
+  padding: 0.5rem;
+  border-radius: 0.875rem;
+}
+
+.brand {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.125rem 0.25rem 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.brand-icon {
+  flex-shrink: 0;
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.375rem;
+  box-shadow: 0 1px 3px var(--shadow);
+}
+
+[data-theme="dark"] .brand-icon {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.brand-tld {
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+/* Liten «Live»-merkelapp med pulserende prikk */
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  margin-left: auto;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(230, 57, 70, 0.12);
+  color: var(--brand-red);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+[data-theme="dark"] .live-badge {
+  background: rgba(230, 57, 70, 0.18);
+  color: #ff6b75;
+}
+
+.live-dot {
+  position: relative;
+  flex-shrink: 0;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background: var(--brand-red);
+}
+
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--brand-red);
+  animation: live-pulse 2s ease-out infinite;
+}
+
+@keyframes live-pulse {
+  0% { transform: scale(1); opacity: 0.6; }
+  70%, 100% { transform: scale(2.6); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot::after { animation: none; opacity: 0; }
+}
+
+/* Søk holdeplass (inne i logokortet) */
+.stop-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 
 .stop-search-trigger {
@@ -491,44 +561,229 @@ header p {
 
 .stop-search-input {
   width: 100%;
+  min-height: 2.5rem;
   padding: 0.5rem 0.75rem;
-  font-size: 0.9rem;
-  background: var(--bg-panel);
+  font: inherit;
+  font-size: 0.9375rem;
+  background: var(--bg-panel-solid);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0.5rem;
   color: var(--text-primary);
-  box-shadow: 0 2px 8px var(--shadow);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-/* Mobil: søkefelt vokser ved fokus */
+/* Meny-pille ved siden av logokortet */
+.map-nav {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+}
+
+.map-chrome .map-nav-link,
+.map-chrome .map-nav-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.25rem;
+  border-radius: 999px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.map-nav-link {
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.map-nav-more {
+  min-width: 2.25rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.map-chrome .map-nav-link:hover,
+.map-chrome .map-nav-more:hover,
+.map-chrome .map-nav-more[aria-expanded="true"] {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.map-nav-glyph--burger {
+  display: none;
+}
+
+.map-menu {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 10.5rem;
+  padding: 0.375rem;
+  background: var(--bg-panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  box-shadow: 0 0.5rem 1.5rem var(--shadow-strong);
+}
+
+.map-menu[hidden] {
+  display: none;
+}
+
+.map-chrome .map-menu a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.5rem;
+  padding: 0 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.map-chrome .map-menu a:hover {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.map-menu-ext {
+  color: var(--text-dim);
+  font-size: 0.875rem;
+}
+
+.map-chrome .map-menu .map-menu-mobile {
+  display: none;
+}
+
+.map-nav-link:focus-visible,
+.map-nav-more:focus-visible,
+.map-menu a:focus-visible,
+.stop-search-trigger:focus-visible {
+  outline: 0.125rem solid var(--brand-teal);
+  outline-offset: 0.125rem;
+}
+
+/* Mobil: ikon + søk, og én ☰-knapp som åpner alle lenkene */
+@media (max-width: 600px) {
+  .brand-card {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.375rem;
+    width: auto;
+    padding: 0.25rem;
+    border-radius: 0.75rem;
+  }
+
+  .brand {
+    padding: 0 0 0 0.125rem;
+  }
+
+  .brand-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.5rem;
+  }
+
+  .brand-name,
+  .live-badge {
+    display: none;
+  }
+
+  .stop-search-wrap {
+    width: 13rem;
+  }
+
+  .stop-search-input {
+    min-height: 2.75rem;
+  }
+
+  .map-nav {
+    padding: 0.25rem;
+  }
+
+  .map-chrome .map-nav-link {
+    display: none;
+  }
+
+  .map-chrome .map-nav-more {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    font-size: 1.25rem;
+  }
+
+  .map-nav-glyph--more {
+    display: none;
+  }
+
+  .map-nav-glyph--burger {
+    display: inline;
+  }
+
+  /* Menyen forankres i .map-chrome, så den starter ved venstre kant */
+  .map-nav {
+    position: static;
+  }
+
+  .map-menu {
+    top: calc(100% + 0.5rem);
+    left: 0;
+    right: auto;
+    width: min(18rem, calc(100vw - 1rem));
+  }
+
+  .map-chrome .map-menu a {
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+
+  .map-chrome .map-menu .map-menu-mobile {
+    display: flex;
+  }
+}
+
+/* Smal mobil: søket er en knapp som vokser ved fokus */
 @media (max-width: 480px) {
   .stop-search-wrap {
-    width: 44px;
-    min-width: 44px;
-    transition: width 0.25s ease, min-width 0.25s ease;
-    overflow: hidden;
+    width: 2.75rem;
+    transition: width 0.25s ease;
   }
 
   .stop-search-wrap.search-expanded {
-    width: min(280px, calc(100vw - 5rem));
+    width: calc(100vw - 12.5rem);
+    min-width: 9rem;
+  }
+
+  /* Gi søket plass mens det er åpent */
+  .map-chrome:has(.search-expanded) .map-nav {
+    display: none;
   }
 
   .stop-search-trigger {
     display: flex;
     flex-shrink: 0;
-    width: 44px;
-    height: 40px;
+    width: 2.75rem;
+    height: 2.75rem;
     align-items: center;
     justify-content: center;
     padding: 0;
     border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--bg-panel);
+    border-radius: 0.5rem;
+    background: var(--bg-panel-solid);
     color: var(--text-muted);
     font-size: 1.1rem;
     cursor: pointer;
-    box-shadow: 0 2px 8px var(--shadow);
   }
 
   .stop-search-wrap.search-expanded .stop-search-trigger {
@@ -538,24 +793,19 @@ header p {
   .stop-search-input {
     width: 0;
     min-width: 0;
-    padding: 0.5rem 0;
+    padding: 0;
     border: none;
-    box-shadow: none;
   }
 
   .stop-search-wrap.search-expanded .stop-search-input {
     width: 100%;
-    min-width: 120px;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border);
-    box-shadow: 0 2px 8px var(--shadow);
   }
 }
 
-@media (min-width: 481px) {
-  .stop-search-trigger {
-    display: none !important;
-  }
+@media (prefers-reduced-motion: reduce) {
+  .stop-search-wrap { transition: none; }
 }
 
 .stop-search-input::placeholder {
@@ -564,8 +814,8 @@ header p {
 
 .stop-search-input:focus {
   outline: none;
-  border-color: var(--text-muted);
-  box-shadow: 0 2px 12px var(--shadow);
+  border-color: var(--brand-teal);
+  box-shadow: 0 0 0 0.1875rem rgba(42, 157, 143, 0.25);
 }
 
 .stop-search-results {

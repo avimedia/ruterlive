@@ -29,21 +29,34 @@
 </head>
 <body>
   <div id="app">
-    <header>
-      <h1>livetrafikk.no</h1>
-      <span class="header-links">
-        <a href="/guider" class="header-btn">Guider</a>
-        <a href="/personvern.html" class="header-btn">Personvern</a>
-        <a href="https://apptastic.no/pages/contact/" target="_blank" rel="noopener" class="header-btn">Kontakt</a>
-        <a href="/om" class="header-btn">Om</a>
-      </span>
-    </header>
-
     <main id="map-container">
-      <div id="stop-search-wrap" class="stop-search-wrap">
-        <button type="button" class="stop-search-trigger" aria-label="Søk holdeplass" aria-expanded="false" aria-controls="stop-search-input">🔍</button>
-        <input type="search" id="stop-search-input" class="stop-search-input" placeholder="Søk holdeplass…" autocomplete="off" aria-autocomplete="list" aria-controls="stop-search-results">
-        <ul id="stop-search-results" class="stop-search-results" role="listbox" aria-label="Søkeresultater" hidden></ul>
+      <div id="map-chrome" class="map-chrome">
+        <div class="brand-card">
+          <h1 class="brand">
+            <svg class="brand-icon" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="14" fill="#14213d"/><path d="M13 51 C13 36 29 40 32 32 S51 28 51 13" fill="none" stroke="#2a9d8f" stroke-width="8" stroke-linecap="round"/><circle cx="32" cy="32" r="9.5" fill="#e63946" stroke="#fff" stroke-width="4"/></svg>
+            <span class="brand-name">livetrafikk<span class="brand-tld">.no</span></span>
+            <span class="live-badge" aria-hidden="true"><span class="live-dot"></span>Live</span>
+          </h1>
+          <div id="stop-search-wrap" class="stop-search-wrap">
+            <button type="button" class="stop-search-trigger" aria-label="Søk holdeplass" aria-expanded="false" aria-controls="stop-search-input">🔍</button>
+            <input type="search" id="stop-search-input" class="stop-search-input" placeholder="Søk holdeplass…" autocomplete="off" aria-autocomplete="list" aria-controls="stop-search-results">
+            <ul id="stop-search-results" class="stop-search-results" role="listbox" aria-label="Søkeresultater" hidden></ul>
+          </div>
+        </div>
+        <nav class="map-nav" aria-label="Hovedmeny">
+          <a href="/guider" class="map-nav-link">Guider</a>
+          <a href="/om" class="map-nav-link">Om</a>
+          <button type="button" id="map-menu-btn" class="map-nav-more" aria-expanded="false" aria-controls="map-menu" aria-label="Meny">
+            <span class="map-nav-glyph map-nav-glyph--more" aria-hidden="true">⋯</span>
+            <span class="map-nav-glyph map-nav-glyph--burger" aria-hidden="true">☰</span>
+          </button>
+          <div id="map-menu" class="map-menu" hidden>
+            <a href="/guider" class="map-menu-mobile">Guider</a>
+            <a href="/om" class="map-menu-mobile">Om</a>
+            <a href="/personvern.html">Personvern</a>
+            <a href="https://apptastic.no/pages/contact/" target="_blank" rel="noopener">Kontakt <span class="map-menu-ext" aria-hidden="true">↗</span></a>
+          </div>
+        </nav>
       </div>
       <aside id="layers-panel">
         <div class="panel-header">

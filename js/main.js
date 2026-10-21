@@ -2,6 +2,7 @@ import { runWhenVisible } from './visibility.js';
 import { initMap, getMap } from './map.js';
 import { initTheme } from './theme.js';
 import { initStopSearch } from './search.js';
+import { initSiteMenu } from './site-menu.js';
 import { connectVehicles } from './api.js';
 import { fetchEstimatedVehicles } from './et-api.js';
 import { createFeedPolicy, shouldFallBackToLegacy } from './feed-policy.js';
@@ -133,6 +134,7 @@ function mergeAndUpdate() {
 initMap();
 initTheme();
 initStopSearch();
+initSiteMenu();
 initShareLink();
 initLoadingIndicator();
 initTipToast();

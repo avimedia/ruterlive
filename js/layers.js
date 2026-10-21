@@ -48,7 +48,7 @@ export function initLayers(callback) {
   if (startCollapsed) {
     panel.classList.add('collapsed');
     toggleBtn.textContent = '+';
-    toggleBtn.setAttribute('aria-label', 'Utvid panel');
+    toggleBtn.setAttribute('aria-label', 'Lagvelger');
     toggleBtn.setAttribute('aria-expanded', 'false');
   }
 
@@ -57,7 +57,7 @@ export function initLayers(callback) {
     const collapsed = panel.classList.toggle('collapsed');
     localStorage.setItem(STORAGE_KEY, String(collapsed));
     toggleBtn.textContent = collapsed ? '+' : '−';
-    toggleBtn.setAttribute('aria-label', collapsed ? 'Utvid panel' : 'Minimer panel');
+    toggleBtn.setAttribute('aria-label', collapsed ? 'Lagvelger' : 'Minimer panel');
     toggleBtn.setAttribute('aria-expanded', String(!collapsed));
   });
 

@@ -1,6 +1,6 @@
 /**
  * Flytende logo/søk/meny øverst til venstre på kartet.
- * «⋯» (☰ på mobil) åpner en liten meny som lukkes med Escape, klikk utenfor og klikk på lenke.
+ * «⋯» (☰ på mobil) åpner en liten meny (skjult ≥ 1100 px der alle lenker ligger i pillen) som lukkes med Escape, klikk utenfor og klikk på lenke.
  */
 
 import L from 'leaflet';
@@ -52,6 +52,11 @@ export function initSiteMenu() {
     const next = e.key === 'ArrowDown' ? (i + 1) % links.length : (i <= 0 ? links.length - 1 : i - 1);
     links[next].focus();
   }
+
+  // Ved bred skjerm er lenkene innebygd og menyen skjult: lukk den
+  window.matchMedia('(min-width: 1100px)').addEventListener('change', (e) => {
+    if (e.matches) close();
+  });
 
   btn.addEventListener('click', () => {
     if (isOpen()) {

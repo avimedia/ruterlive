@@ -103,6 +103,7 @@ body {
 }
 
 #layers-panel {
+  --layers-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M12 3 2 8l10 5 10-5z'/%3E%3Cpath d='m2 12 10 5 10-5'/%3E%3Cpath d='m2 16 10 5 10-5'/%3E%3C/svg%3E");
   position: absolute;
   top: max(0.5rem, env(safe-area-inset-top));
   right: max(0.5rem, env(safe-area-inset-right));
@@ -664,8 +665,22 @@ body {
   font-size: 0.875rem;
 }
 
-.map-chrome .map-menu .map-menu-mobile {
+/* Hver lenke vises kun ett sted: innebygd i pillen eller i menyen */
+.map-chrome .map-nav-link--lg,
+.map-chrome .map-menu .map-menu-om {
   display: none;
+}
+
+/* Stor skjerm: alle lenker i pillen, ingen meny-knapp */
+@media (min-width: 1100px) {
+  .map-chrome .map-nav-link--lg {
+    display: inline-flex;
+  }
+
+  .map-chrome .map-nav-more,
+  .map-chrome .map-menu {
+    display: none;
+  }
 }
 
 .map-nav-link:focus-visible,
@@ -715,6 +730,10 @@ body {
   }
 
   .map-chrome .map-nav-link {
+    min-height: 2.75rem;
+  }
+
+  .map-chrome .map-nav-link--md {
     display: none;
   }
 
@@ -749,8 +768,40 @@ body {
     font-size: 1rem;
   }
 
-  .map-chrome .map-menu .map-menu-mobile {
+  .map-chrome .map-menu .map-menu-om {
     display: flex;
+  }
+
+  /* Lagvelger minimert: kun ikon, så Guider + ☰ får plass */
+  #layers-panel.collapsed {
+    min-width: 0;
+    padding: 0.25rem;
+  }
+
+  #layers-panel.collapsed .panel-title {
+    display: none;
+  }
+
+  #layers-panel.collapsed .panel-header {
+    gap: 0;
+  }
+
+  #layers-panel.collapsed .panel-toggle {
+    width: 2.75rem;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    min-height: 2.75rem;
+    font-size: 0;
+    background: transparent;
+  }
+
+  #layers-panel.collapsed .panel-toggle::before {
+    content: "";
+    width: 1.375rem;
+    height: 1.375rem;
+    background: currentColor;
+    -webkit-mask: var(--layers-icon) center / contain no-repeat;
+    mask: var(--layers-icon) center / contain no-repeat;
   }
 }
 

@@ -1,3 +1,5 @@
+import { normalizeGpsVehicles } from '../shared/gps-vehicles.js';
+
 const POLL_MS = 20000;
 const POLL_BACKOFF_MS = 45000; // Ved 502/503: lengre intervall for å ikke spamme
 const RETRY_DELAYS = [2000, 4000, 8000]; // Backoff ved 502/503 (cold start)
@@ -11,12 +13,12 @@ let consecutiveErrors = 0;
 
 function parseVehicles(data) {
   const vehicles = data?.data?.vehicles ?? [];
-  return Array.isArray(vehicles) ? vehicles : [vehicles];
+  return normalizeGpsVehicles(Array.isArray(vehicles) ? vehicles : [vehicles]);
 }
 
 function buildQuery(bounds) {
   const b = bounds || OSLO_BOUNDS;
-  return `{ vehicles(boundingBox: { minLat: ${b.minLat}, maxLat: ${b.maxLat}, minLon: ${b.minLon}, maxLon: ${b.maxLon} }) { vehicleId lastUpdated location { latitude longitude } line { publicCode } mode bearing destinationName } }`;
+  return `{ vehicles(boundingBox: { minLat: ${b.minLat}, maxLat: ${b.maxLat}, minLon: ${b.minLon}, maxLon: ${b.maxLon} }) { vehicleId lastUpdated location { latitude longitude } line { publicCode lineRef } mode bearing destinationName } }`;
 }
 
 function isRetryable(status) {

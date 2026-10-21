@@ -2,6 +2,7 @@
  * Server-side cache av GraphQL kjøretøy. Reduserer kall mot Entur og 502-feil.
  */
 
+import { normalizeGpsVehicles } from '../shared/gps-vehicles.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
 
 const GRAPHQL_URL = 'https://api.entur.io/realtime/v2/vehicles/graphql';
@@ -15,7 +16,7 @@ const VEHICLES_QUERY = `{
     vehicleId
     lastUpdated
     location { latitude longitude }
-    line { publicCode }
+    line { publicCode lineRef }
     mode
     bearing
     destinationName
@@ -38,6 +39,7 @@ async function doFetch() {
   );
   const data = await res.json();
   if (data.errors) throw new Error(data.errors[0]?.message || 'GraphQL-feil');
+  if (data?.data) data.data.vehicles = normalizeGpsVehicles(data.data.vehicles);
   return data;
 }
 

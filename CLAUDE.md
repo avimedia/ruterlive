@@ -19,7 +19,7 @@ npm test         # node --test (all of test/)
 node --test test/line-catalog.test.js   # single test file
 ```
 
-The CARTO basemap needs `VITE_CARTO_API_KEY` at **build** time (see DEPLOY.md); without it the map works with a watermark.
+The basemap is Kartverket `topograatone` (no key); dark theme is a CSS filter on `.basemap-tiles`, so route lines and markers are not inverted.
 
 `npm run start` needs a fresh `npm run build`, because Express serves `dist/`. Deploys go to Render through `render.yaml` (Node 20, health check `/health`). `start` caps the heap at 384 MB for Render's free plan, so be careful with memory use on the server. For example, GTFS stops are filtered to an Oslo bbox for this reason.
 
@@ -71,5 +71,3 @@ Every request to Entur must send the header `ET-Client-Name: ruterlive-web`. Rat
 ### Static and AdSense
 
 `public/` (ads.txt, sw.js, manifest, personvern.html, content.css) is copied into `dist/`. New server routes must be placed before `express.static`/the catch-all. Consent for ads is handled by Google's own CMP (see `ADSENSE.md`), so no custom consent banner should be added. `public/sw.js` never caches `/api/`.
-
-Planned: switch the basemap from CARTO to Kartverket (see `ROADMAP.md`).

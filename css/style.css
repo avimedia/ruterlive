@@ -910,3 +910,8 @@ path.leaflet-interactive:focus {
 .overlay-close:hover {
   background: var(--bg-input-hover);
 }
+
+/* Mørkt kart: Kartverket-fliser inverteres bare på bakgrunnslaget */
+[data-theme="dark"] .basemap-tiles {
+  filter: invert(1) hue-rotate(180deg) brightness(.75) contrast(1.05) grayscale(1);
+}

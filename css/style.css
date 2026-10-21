@@ -915,3 +915,10 @@ path.leaflet-interactive:focus {
 [data-theme="dark"] .basemap-tiles {
   filter: invert(1) hue-rotate(180deg) brightness(.75) contrast(1.05) grayscale(1);
 }
+
+/* Kildehenvisning: bryt linjen i stedet for å kutte den på smale skjermer */
+.leaflet-control-attribution {
+  white-space: normal;
+  max-width: calc(100vw - 4rem);
+  text-align: right;
+}

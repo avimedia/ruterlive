@@ -104,7 +104,7 @@ export function initLayers(callback) {
   // OpenRailwayMap-toggle (jernbanekart)
   const ormToggle = document.getElementById('openrailwaymap-toggle');
   if (ormToggle) {
-    ormToggle.checked = localStorage.getItem('ruterlive-openrailwaymap') !== 'false';
+    ormToggle.checked = localStorage.getItem('ruterlive-openrailwaymap') === 'true';
     ormToggle.addEventListener('change', (e) => {
       e.stopPropagation();
       setOpenRailwayMapVisible(ormToggle.checked);

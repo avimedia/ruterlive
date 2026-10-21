@@ -2,6 +2,7 @@ import L from 'leaflet';
 import { getMap } from './map.js';
 import { isFlytogLineCode } from '../config.js';
 import { positionAt } from '../shared/vehicle-path.js';
+import { gpsGlideMs } from './feed-policy.js';
 
 const MODE_TO_CLASS = {
   bus: 'bus',
@@ -38,12 +39,11 @@ const ANIM_SKIP_THRESHOLD_KM = 2; // Ved sprang > 2 km: sett posisjon direkte (u
  * Kontinuerlig bevegelse: én felles løkke (ca. 1 Hz) flytter alle synlige markører.
  * - ET-kjøretøy med path: posisjon beregnes fra rutetidene (positionAt). Når en ny path gir en
  *   annen posisjon enn den som vises, blandes det over EASE_MS mot den bevegelige path-posisjonen.
- * - GPS-kjøretøy (uten path): lineær glidning mot ny posisjon over GPS_GLIDE_MS.
+ * - GPS-kjøretøy (uten path): lineær glidning mot ny posisjon, varighet fra observert oppdateringsintervall (8–20 s).
  * Ingen timere per kjøretøy. CSS-overgang på transform jevner ut stegene mellom tikkene.
  */
 const TICK_MS = 1000;
 const EASE_MS = 2000;
-const GPS_GLIDE_MS = 25000;
 const MIN_MOVE_DEG = 2e-6; // ca. 0,2 m – mindre endringer gir ikke setLatLng
 const BOUNDS_PAD = 0.15;
 
@@ -51,6 +51,7 @@ const BOUNDS_PAD = 0.15;
 const motion = new Map();
 const tickListeners = [];
 let tickTimer = null;
+let snapAll = false; // etter skjult fane: sett alle markører direkte på riktig plass
 
 /** Zoom-nivå før linjenummer vises på kjøretøymerkene. */
 const ZOOM_LINE_VISIBLE = 14;
@@ -126,10 +127,25 @@ function setMotionTarget(id, marker, path, lat, lon) {
     const same = st.to && Math.abs(st.to[0] - target[0]) < 1e-7 && Math.abs(st.to[1] - target[1]) < 1e-7;
     if (!same) {
       const moved = Math.abs(cur.lat - target[0]) > 1e-6 || Math.abs(cur.lng - target[1]) > 1e-6;
-      Object.assign(st, { to: target, from: moved ? [cur.lat, cur.lng] : null, start: perfNow, dur: GPS_GLIDE_MS });
+      const interval = st.changedAt ? perfNow - st.changedAt : NaN;
+      st.changedAt = perfNow;
+      Object.assign(st, { to: target, from: moved ? [cur.lat, cur.lng] : null, start: perfNow, dur: gpsGlideMs(interval) });
     }
   }
   if (!prev) motion.set(id, st);
+}
+
+/** Flytter markøren uten CSS-overgang (ellers sklir den over kartet fra utdatert posisjon). */
+function setLatLngNoGlide(marker, pos) {
+  const icon = marker._icon;
+  if (!icon) {
+    marker.setLatLng(pos);
+    return;
+  }
+  icon.style.transition = 'none';
+  marker.setLatLng(pos);
+  void icon.offsetWidth; // tving stilberegning før overgangen slås på igjen
+  icon.style.transition = '';
 }
 
 function tickMarkers() {
@@ -147,10 +163,22 @@ function tickMarkers() {
     const cur = marker._latlng;
     const pos = motionPosition(st, wallNow, perfNow);
     if (!pos) continue;
-    if (!inView(cur.lat, cur.lng) && !inView(pos[0], pos[1])) continue;
-    if (Math.abs(cur.lat - pos[0]) < MIN_MOVE_DEG && Math.abs(cur.lng - pos[1]) < MIN_MOVE_DEG) continue;
-    marker.setLatLng(pos);
+    if (!inView(cur.lat, cur.lng) && !inView(pos[0], pos[1])) {
+      marker._rlSkipped = true; // posisjonen er utdatert til den kommer i bilde
+      continue;
+    }
+    if (Math.abs(cur.lat - pos[0]) < MIN_MOVE_DEG && Math.abs(cur.lng - pos[1]) < MIN_MOVE_DEG) {
+      marker._rlSkipped = false;
+      continue;
+    }
+    if (marker._rlSkipped || snapAll) {
+      marker._rlSkipped = false;
+      setLatLngNoGlide(marker, pos);
+    } else {
+      marker.setLatLng(pos);
+    }
   }
+  snapAll = false;
   for (const fn of tickListeners) fn();
 }
 
@@ -159,7 +187,8 @@ function ensureTicker() {
   tickTimer = setInterval(tickMarkers, TICK_MS);
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') tickMarkers();
+      if (document.visibilityState === 'hidden') snapAll = true;
+      else tickMarkers();
     });
   }
   const map = getMap();
@@ -315,6 +344,7 @@ export function applyFilter(visibleModes) {
 
     if (visibleModes.has(mode)) {
       if (!map.hasLayer(marker)) {
+        marker._rlSkipped = true; // posisjonen kan være utdatert mens den var skjult
         marker.addTo(map);
       }
       const lineCode = v.line?.publicCode || '?';

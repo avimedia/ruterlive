@@ -3,6 +3,7 @@ import { initTheme } from './theme.js';
 import { initStopSearch } from './search.js';
 import { connectVehicles } from './api.js';
 import { fetchEstimatedVehicles } from './et-api.js';
+import { createFeedPolicy, shouldFallBackToLegacy } from './feed-policy.js';
 import { fetchLineRouteFromJp } from './jp-line-lookup.js';
 import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons, onMarkerTick, getMarkerLatLng } from './markers.js';
 import { initLayers, getVisibleModes, updateVehicleCount, setRetryHandler } from './layers.js';
@@ -233,7 +234,7 @@ function applyInitialData(data) {
 }
 
 let loadedShapesVersion = null;
-let useLegacyFeed = false;
+const feedPolicy = createFeedPolicy();
 
 async function fetchShapesFor(version) {
   const res = await fetch(`/api/route-shapes-all?v=${encodeURIComponent(version)}`);
@@ -271,14 +272,15 @@ async function fetchInitialData(attempt = 0) {
   const loading = getLoadingIndicator();
   if (attempt === 0) loading?.show('Henter kjøretøy…');
   try {
-    if (!useLegacyFeed) {
+    if (feedPolicy.shouldTryLive()) {
       try {
         await fetchVehiclesLive();
+        feedPolicy.recordSuccess();
         loading?.hide();
         return true;
       } catch (err) {
-        if (loadedShapesVersion !== null) {
-          // Allerede i gang: behold gamle data, prøv igjen ved neste poll
+        if (loadedShapesVersion !== null && !shouldFallBackToLegacy(err)) {
+          // Allerede i gang og serverfeil: behold gamle data, prøv igjen ved neste poll
           loading?.hide();
           return false;
         }
@@ -287,7 +289,8 @@ async function fetchInitialData(attempt = 0) {
           return fetchInitialData(attempt + 1);
         }
         if (import.meta.env.DEV) console.warn('[RuterLive] vehicles-live:', err.message);
-        useLegacyFeed = true;
+        // Gammel feed for denne pollen; ny feed prøves igjen hver 3. poll
+        feedPolicy.recordFailure();
       }
     }
     const res = await fetch('/api/initial-data');
@@ -379,7 +382,13 @@ fetchInitialData().then((ok) => {
         mergeAndUpdate();
       }
     }
-    pollEt();
-    setInterval(pollEt, POLL_MS);
+    // /api/et-cached er fjernet i prod: der brukes bare GPS-fallback (js/api.js)
+    if (import.meta.env.DEV) {
+      pollEt();
+      setInterval(pollEt, POLL_MS);
+    } else {
+      etLoaded = true;
+      mergeAndUpdate();
+    }
   }
 });

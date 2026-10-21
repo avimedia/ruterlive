@@ -112,3 +112,57 @@ test('buildVehiclePath: kutter ved urimelig langt sprang', () => {
   const est = [{ quayId: 'A', arrTime: 0, depTime: 0 }, { quayId: 'B', arrTime: 1, depTime: 1 }, { quayId: 'E', arrTime: 2, depTime: 2 }];
   assert.equal(buildVehiclePath([], est, get, { maxHopKm: 20 }).length, 2);
 });
+
+import { encodeVehiclePath, decodeVehiclePath } from '../shared/vehicle-path.js';
+
+// Kompakt format: tider i sekunder relativt til t0 (epoch-sekunder); [lat, lon, sek] når ankomst = avgang
+const T0 = 1_792_574_800;
+const msPath = [
+  [59.9, 10.8, (T0 + 65) * 1000, (T0 + 65) * 1000],
+  [59.91, 10.79, (T0 + 180) * 1000, (T0 + 195) * 1000],
+  [59.92, 10.78, (T0 - 20) * 1000 + 400, (T0 - 20) * 1000 + 400],
+];
+
+test('encodeVehiclePath: sekunder relativt til t0, kollaps når ankomst = avgang', () => {
+  assert.deepEqual(encodeVehiclePath(msPath, T0), [
+    [59.9, 10.8, 65],
+    [59.91, 10.79, 180, 195],
+    [59.92, 10.78, -20],
+  ]);
+});
+
+test('encode/decode rundtur gir samme path (hele sekunder)', () => {
+  const dec = decodeVehiclePath(encodeVehiclePath(msPath, T0), T0);
+  assert.deepEqual(dec, [
+    [59.9, 10.8, (T0 + 65) * 1000, (T0 + 65) * 1000],
+    [59.91, 10.79, (T0 + 180) * 1000, (T0 + 195) * 1000],
+    [59.92, 10.78, (T0 - 20) * 1000, (T0 - 20) * 1000],
+  ]);
+});
+
+test('encode/decode: ugyldig input', () => {
+  assert.equal(encodeVehiclePath(null, T0), null);
+  assert.equal(decodeVehiclePath(undefined, T0), null);
+  assert.equal(decodeVehiclePath([[59, 10, 1]], NaN), null);
+});
+
+test('positionAt med t0: samme posisjon som ms-formatet', () => {
+  const comp = encodeVehiclePath(path.map((p) => [p[0], p[1], T0 * 1000 + p[2], T0 * 1000 + p[3]]), T0);
+  for (const t of [-5000, 500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 99999]) {
+    near(positionAt(comp, T0 * 1000 + t, T0), positionAt(path, t));
+  }
+});
+
+test('positionAt med t0: punkter med tre elementer og interpolering', () => {
+  const comp = [[59.0, 10.0, 0], [59.2, 10.0, 10, 20], [59.4, 10.0, 30]];
+  const at = (s) => positionAt(comp, (T0 + s) * 1000, T0);
+  near(at(-1), [59.0, 10.0]);
+  near(at(5), [59.1, 10.0]);
+  near(at(15), [59.2, 10.0]);
+  near(at(25), [59.3, 10.0]);
+  near(at(40), [59.4, 10.0]);
+});
+
+test('positionAt uten t0 godtar også tre-element-punkter (ms)', () => {
+  near(positionAt([[59.0, 10.0, 0], [59.2, 10.0, 1000]], 500), [59.1, 10.0]);
+});

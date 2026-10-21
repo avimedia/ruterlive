@@ -3,7 +3,12 @@
  * Brukes av klienten for å flytte ET-kjøretøy jevnt mellom pollingene.
  * Ren funksjon, ingen avhengigheter.
  *
- * path: [[lat, lon, arrMs, depMs], ...] i kjørerekkefølge (epoch ms).
+ * To formater:
+ * - ms (internt på serveren): [[lat, lon, arrMs, depMs], ...], epoch ms.
+ * - kompakt (/api/vehicles-live): [[lat, lon, arrSek, depSek] | [lat, lon, sek], ...],
+ *   sekunder relativt til svarets `t0` (epoch-sekunder). Tre elementer = ankomst lik avgang.
+ *
+ * positionAt(path, nowMs, t0): med t0 tolkes tidene som kompakte, uten t0 som epoch ms.
  * - før første avgang: på første punkt
  * - mellom ankomst og avgang: venter på holdeplassen
  * - mellom avgang(i) og ankomst(i+1): lineært
@@ -12,8 +17,32 @@
 
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
 
-export function positionAt(path, nowMs) {
+/** ms-path → kompakt path relativt til t0 (epoch-sekunder). */
+export function encodeVehiclePath(path, t0) {
+  if (!Array.isArray(path) || !Number.isFinite(t0)) return null;
+  const rel = (ms) => (num(ms) === null ? null : Math.round(ms / 1000) - t0);
+  return path.map((p) => {
+    const arr = rel(p[2]);
+    const dep = rel(p[3]);
+    return arr === dep || dep === null ? [p[0], p[1], arr] : [p[0], p[1], arr, dep];
+  });
+}
+
+/** Kompakt path → ms-path ([lat, lon, arrMs, depMs]). */
+export function decodeVehiclePath(path, t0) {
+  if (!Array.isArray(path) || !Number.isFinite(t0)) return null;
+  const abs = (s) => (num(s) === null ? null : (t0 + s) * 1000);
+  return path.map((p) => {
+    const arr = abs(p?.[2]);
+    const dep = p?.length > 3 ? abs(p[3]) : arr;
+    return [p?.[0], p?.[1], arr, dep];
+  });
+}
+
+export function positionAt(path, nowMs, t0) {
   if (!Array.isArray(path) || path.length === 0 || !Number.isFinite(nowMs)) return null;
+  // Kompakt format: regn i sekunder relativt til t0 (interpolering er skala-uavhengig)
+  if (Number.isFinite(t0)) nowMs = nowMs / 1000 - t0;
   for (const p of path) {
     if (!Array.isArray(p) || num(p[0]) === null || num(p[1]) === null) return null;
   }

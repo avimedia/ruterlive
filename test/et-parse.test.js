@@ -166,3 +166,16 @@ test('ugyldig tegnreferanse kaster ikke', async () => {
   const { parseEtJourneys } = await import('../server/et-parse.js');
   assert.doesNotThrow(() => parseEtJourneys('<Siri><EstimatedVehicleJourney><LineRef>RUT:Line:1</LineRef><DestinationDisplay>A&#1114112;B</DestinationDisplay></EstimatedVehicleJourney></Siri>'));
 });
+
+test('strømparser: samme turer uansett hvordan XML-en deles opp', async () => {
+  const { createEtStreamParser } = await import('../server/et-parse.js');
+  for (const xml of [FIXTURE, SYNTHETIC]) {
+    const expected = parseEtJourneys(xml);
+    for (const size of [1, 7, 100, 4096, xml.length]) {
+      const p = createEtStreamParser();
+      for (let i = 0; i < xml.length; i += size) p.push(xml.slice(i, i + size));
+      assert.deepEqual(p.end(), expected, `bitstørrelse ${size}`);
+    }
+  }
+  assert.deepEqual(createEtStreamParser().end(), []);
+});

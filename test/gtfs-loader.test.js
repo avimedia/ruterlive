@@ -78,6 +78,21 @@ test('getGtfsQuayCache returnerer samme Map hver gang', async () => {
   assert.deepEqual(mod.getStopsInBbox(59, 60, 10, 11), [{ id: 'NSR:Quay:1', lat: 59.911, lon: 10.75, name: 'Jernbanetorget' }]);
 });
 
+test('loadGtfsStops: anførselstegn, CRLF og kolonner i annen rekkefølge', async () => {
+  const mod = await import('../server/gtfs-stops-loader.js?csv');
+  const stops =
+    'stop_name,stop_id,stop_lon,stop_lat\r\n' +
+    '"Storo, plattform A",NSR:Quay:7,10.77,59.94\r\n' +
+    'Nydalen,NSR:Quay:8,10.765,59.95\r\n' +
+    '\r\n';
+  const zip = new AdmZip();
+  zip.addFile('stops.txt', Buffer.from(stops));
+  await mod.loadGtfsStops(rangeFetch(zip.toBuffer(), []));
+  assert.deepEqual(mod.searchStops('storo'), [{ id: 'NSR:Quay:7', lat: 59.94, lon: 10.77, name: 'Storo, plattform A' }]);
+  assert.deepEqual(mod.getGtfsQuayCache().get('NSR:Quay:8'), [59.95, 10.765]);
+  assert.equal(mod.getGtfsQuayCache().size, 2);
+});
+
 test('loadGtfsStops avviser aldri når både Range og fallback feiler', async () => {
   const mod = await import('../server/gtfs-stops-loader.js?feil');
   const r = await mod.loadGtfsStops(async () => { throw new Error('nett nede'); });

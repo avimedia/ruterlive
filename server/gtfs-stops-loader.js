@@ -29,10 +29,10 @@ const OSLO_BBOX = { minLat: 59.2, maxLat: 60.8, minLon: 10.0, maxLon: 11.6 };
  */
 function parseStopsTxt(content) {
   const map = new Map();
-  const lines = content.split(/\r?\n/);
-  if (lines.length < 2) return map;
+  let pos = content.indexOf('\n');
+  if (pos < 0) return map;
 
-  const header = lines[0].toLowerCase().split(',');
+  const header = content.slice(0, pos).trim().toLowerCase().split(',');
   const stopIdIdx = header.indexOf('stop_id');
   const nameIdx = header.indexOf('stop_name');
   const latIdx = header.indexOf('stop_lat');
@@ -40,20 +40,34 @@ function parseStopsTxt(content) {
   if (stopIdIdx < 0 || latIdx < 0 || lonIdx < 0) return map;
 
   const { minLat, maxLat, minLon, maxLon } = OSLO_BBOX;
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
+  // Linje for linje uten å splitte hele filen; split(',') når feltet ikke har anførselstegn
+  while (pos < content.length) {
+    let end = content.indexOf('\n', pos + 1);
+    if (end < 0) end = content.length;
+    const line = content.slice(pos + 1, end);
+    pos = end;
     if (!line.trim()) continue;
-    const cols = parseCsvLine(line);
+    const cols = line.includes('"') ? parseCsvLine(line) : line.split(',');
     const stopId = cols[stopIdIdx]?.trim();
-    const name = (nameIdx >= 0 ? cols[nameIdx]?.trim() : '') || '';
     const lat = parseFloat(cols[latIdx]);
     const lon = parseFloat(cols[lonIdx]);
     if (!stopId || isNaN(lat) || isNaN(lon)) continue;
     if (!/^NSR:Quay:\d+$/.test(stopId)) continue;
     if (lat < minLat || lat > maxLat || lon < minLon || lon > maxLon) continue;
-    map.set(stopId, { lat, lon, name });
+    const name = (nameIdx >= 0 ? cols[nameIdx]?.trim() : '') || '';
+    map.set(ownString(stopId), { lat, lon, name: ownString(name) });
   }
+  // RegExp.input (siste regex-input) er en delstreng av filen og ville holdt den i live
+  /(?:)/.exec('');
   return map;
+}
+
+/**
+ * Egen, flat kopi av en streng. Delstrenger fra slice/split kan holde hele stops.txt (~10 MB)
+ * i live, og strenger bygget tegn for tegn er trær av små objekter.
+ */
+function ownString(s) {
+  return s ? Buffer.from(s, 'utf8').toString('utf8') : '';
 }
 
 /** Enkel CSV-rad-parsing (håndterer innhold i anførselstegn). */

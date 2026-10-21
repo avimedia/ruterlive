@@ -1,7 +1,8 @@
 // Minnemåling: starter serveren, sampler RSS og sender forespørsler.
-// Bruk: npm run memcheck -- [--max-mb 350] [--duration 90] [--port 3917]
+// Bruk: npm run memcheck -- [--max-mb 350] [--seconds 200] [--port 3917]
+// 200 s dekker minst to ET-oppdateringer (hvert 90. s). --duration er alias for --seconds.
 import { spawn, execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -13,7 +14,7 @@ function arg(navn, standard) {
 }
 
 const MAX_MB = arg('max-mb', 350);
-const VARIGHET_S = arg('duration', 90);
+const VARIGHET_S = arg('seconds', arg('duration', 200));
 const PORT = arg('port', 3917);
 const SAMPLE_MS = 2000;
 const FORESPORSEL_MS = 5000;
@@ -24,6 +25,9 @@ const STIER = [
   '/guider',
   '/api/vehicles-live',
   '/api/route-shapes-all',
+  '/api/static-network-shapes',
+  '/api/rail-shapes',
+  '/api/route-shapes',
 ];
 
 if (!existsSync(path.join(rot, 'dist', 'index.html'))) {
@@ -32,7 +36,10 @@ if (!existsSync(path.join(rot, 'dist', 'index.html'))) {
 }
 
 // Starter node direkte (ikke via npm/shell) slik at pid er selve node-prosessen.
-const server = spawn(process.execPath, ['--max-old-space-size=384', 'server.js'], {
+// Samme node-flagg som `npm run start` (f.eks. --max-old-space-size), så målingen speiler produksjon.
+const startScript = JSON.parse(readFileSync(path.join(rot, 'package.json'), 'utf8')).scripts.start;
+const nodeFlagg = startScript.split(/\s+/).filter((t) => t.startsWith('--'));
+const server = spawn(process.execPath, [...nodeFlagg, 'server.js'], {
   cwd: rot,
   env: { ...process.env, PORT: String(PORT) },
   stdio: 'ignore',
@@ -61,7 +68,7 @@ const start = Date.now();
 const serie = [];
 let topp = 0;
 
-console.log(`Måler RSS i ${VARIGHET_S} s (port ${PORT}, grense ${MAX_MB} MB)`);
+console.log(`Måler RSS i ${VARIGHET_S} s (port ${PORT}, grense ${MAX_MB} MB, flagg ${nodeFlagg.join(' ')})`);
 send();
 const reqTimer = setInterval(send, FORESPORSEL_MS);
 
@@ -86,6 +93,10 @@ const krasjet = serverDod;
 server.kill('SIGTERM');
 setTimeout(() => server.kill('SIGKILL'), 3000).unref();
 
+// Stabil = median etter oppvarming (første minutt utelatt)
+const etter = serie.filter(([s]) => s >= 60).map(([, mb]) => mb).sort((a, b) => a - b);
+const stabil = etter.length ? etter[Math.floor(etter.length / 2)] : null;
 console.log(`\nTopp RSS: ${topp.toFixed(0)} MB (grense ${MAX_MB} MB)`);
+if (stabil !== null) console.log(`Stabil RSS (median etter 60 s): ${stabil.toFixed(0)} MB`);
 if (krasjet) console.error('Serveren avsluttet før tiden var ute.');
 process.exit(krasjet || topp >= MAX_MB ? 1 : 0);

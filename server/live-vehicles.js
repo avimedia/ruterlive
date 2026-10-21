@@ -24,20 +24,15 @@ export function mergeShapes(a, b) {
 }
 
 /**
- * @param {() => object[]} [getAllShapes] statiske rutekart (eies av server.js)
- * @returns {Promise<{ vehicles: object[], routeShapes: object[] }>}
+ * GPS-kjøretøy (GraphQL) beriket med fra/til/via fra ET, pluss ET-kjøretøy uten GPS.
+ * @param {object} vehiclesData svar fra getCachedVehicles
+ * @param {{ vehicles?: object[] }} etResult svar fra getEtVehiclesAndShapes
  */
-export async function getLiveData(getAllShapes = () => []) {
-  const [vehiclesData, etResult, shapes] = await Promise.all([
-    getCachedVehicles(),
-    getEtVehiclesAndShapes(),
-    Promise.resolve(getAllShapes()),
-  ]);
+export function mergeVehicles(vehiclesData, etResult) {
   const graphqlVehicles = Array.isArray(vehiclesData?.data?.vehicles)
     ? vehiclesData.data.vehicles
     : [];
   const etVehicles = etResult?.vehicles ?? [];
-  const etShapes = etResult?.shapes ?? [];
 
   const etByid = new Map(etVehicles.map((v) => [v.vehicleId, v]));
   const merged = [];
@@ -53,8 +48,22 @@ export async function getLiveData(getAllShapes = () => []) {
   for (const v of etVehicles) {
     if (!seen.has(v.vehicleId)) merged.push(v);
   }
+  return merged;
+}
 
-  return { vehicles: merged, routeShapes: mergeShapes(shapes, etShapes), sources: { vehiclesData, etResult } };
+/**
+ * @param {() => object[]} [getAllShapes] statiske rutekart (eies av server.js)
+ * @returns {Promise<{ vehicles: object[], routeShapes: object[] }>}
+ */
+export async function getLiveData(getAllShapes = () => []) {
+  const [vehiclesData, etResult] = await Promise.all([
+    getCachedVehicles(),
+    getEtVehiclesAndShapes(),
+  ]);
+  return {
+    vehicles: mergeVehicles(vehiclesData, etResult),
+    routeShapes: mergeShapes(getAllShapes(), etResult?.shapes ?? []),
+  };
 }
 
 export async function getMergedVehicles() {

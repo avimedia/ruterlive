@@ -86,10 +86,6 @@ export function initKeyboardNav() {
       if (overlay && !overlay.classList.contains('hidden')) {
         overlay.querySelector('.overlay-close')?.click();
       }
-      const about = document.getElementById('about-content');
-      if (about && !about.hidden) {
-        document.getElementById('about-toggle')?.click();
-      }
     }
   });
 }

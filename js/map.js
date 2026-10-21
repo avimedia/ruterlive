@@ -4,15 +4,14 @@ import { clearRouteSelection } from './routes.js';
 const OSLO_CENTER = [59.9110, 10.7525]; // Oslo S / Jernbanetorget
 const DEFAULT_ZOOM = 14;
 
-const TILE_URLS = {
-  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-};
+// Kartverket gråtone (CC BY 4.0, ingen nøkkel). Mørkt tema = samme fliser med CSS-filter
+// på .basemap-tiles (se css/style.css), så rutelinjer, markører og jernbaneoverlay påvirkes ikke.
+const TILE_URL = 'https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png';
 
 const TILE_OPTS = {
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-  subdomains: 'abcd',
-  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.kartverket.no/">Kartverket</a>',
+  maxZoom: 18,
+  className: 'basemap-tiles',
 };
 
 const OPENRAILWAYMAP_ATTR = 'Data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, Style <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA 2.0</a> <a href="https://openrailwaymap.org/">OpenRailwayMap</a>';
@@ -20,7 +19,6 @@ const OPENRAILWAYMAP_ATTR = 'Data &copy; <a href="https://www.openstreetmap.org/
 let map = null;
 let tileLayer = null;
 let openRailwayMapLayer = null;
-let currentTileTheme = null;
 
 export function initMap() {
   map = L.map('map-container', {
@@ -29,9 +27,7 @@ export function initMap() {
     zoomControl: true,
   });
 
-  const theme = document.documentElement.dataset.theme || 'dark';
-  currentTileTheme = theme;
-  tileLayer = L.tileLayer(TILE_URLS[theme] || TILE_URLS.dark, TILE_OPTS).addTo(map);
+  tileLayer = L.tileLayer(TILE_URL, TILE_OPTS).addTo(map);
 
   // OpenRailwayMap overlay – jernbanelinjer. Toggle via setOpenRailwayMapVisible.
   openRailwayMapLayer = L.tileLayer('https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
@@ -78,14 +74,8 @@ export function getMap() {
   return map;
 }
 
-export function setMapTheme(theme) {
-  if (!map || !tileLayer) return;
-  const t = theme || 'dark';
-  if (currentTileTheme === t) return;
-  currentTileTheme = t;
-  map.removeLayer(tileLayer);
-  tileLayer = L.tileLayer(TILE_URLS[t] || TILE_URLS.dark, TILE_OPTS).addTo(map);
-}
+// Temaet styres av CSS ([data-theme="dark"] .basemap-tiles); ingen nytt flislag ved bytte.
+export function setMapTheme() {}
 
 export function setOpenRailwayMapVisible(visible) {
   if (!map || !openRailwayMapLayer) return;

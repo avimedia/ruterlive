@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "start": "node --max-old-space-size=384 server.js",
     "deploy": "npm run build && npm run start",
-    "test": "node --test"
+    "test": "node --test",
+    "memcheck": "node scripts/memcheck.mjs"
   },
   "dependencies": {
     "@xmldom/xmldom": "^0.8.11",

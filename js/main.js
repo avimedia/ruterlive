@@ -17,24 +17,6 @@ import {
   getLoadingIndicator,
 } from './ux.js';
 
-function initAboutSection() {
-  const toggle = document.getElementById('about-toggle');
-  const content = document.getElementById('about-content');
-  const closeBtn = content?.querySelector('.about-close');
-  if (!toggle || !content) return;
-  toggle.addEventListener('click', () => {
-    const expanded = content.hidden;
-    content.hidden = !expanded;
-    toggle.setAttribute('aria-expanded', String(expanded));
-    toggle.textContent = expanded ? 'Skjul' : 'Om tjenesten';
-  });
-  closeBtn?.addEventListener('click', () => {
-    content.hidden = true;
-    toggle.setAttribute('aria-expanded', 'false');
-    toggle.textContent = 'Om tjenesten';
-  });
-}
-
 let graphqlVehicles = [];
 let etVehicles = [];
 let routeShapes = [];
@@ -133,7 +115,6 @@ function mergeAndUpdate() {
 initMap();
 initTheme();
 initStopSearch();
-initAboutSection();
 initShareLink();
 initLoadingIndicator();
 initTipToast();
@@ -226,10 +207,64 @@ function applyInitialData(data) {
   }
 }
 
+let loadedShapesVersion = null;
+let useLegacyFeed = false;
+
+async function fetchShapesFor(version) {
+  const res = await fetch(`/api/route-shapes-all?v=${encodeURIComponent(version)}`);
+  if (!res.ok) throw new Error(`route-shapes-all ${res.status}`);
+  const shapes = await res.json();
+  return Array.isArray(shapes) ? shapes : [];
+}
+
+/** Ny feed: bare kjøretøy hvert 30. s, rutekart hentes først og deretter bare ved ny versjon. */
+async function fetchVehiclesLive() {
+  const res = await fetch('/api/vehicles-live');
+  if (!res.ok) throw Object.assign(new Error(`vehicles-live ${res.status}`), { status: res.status });
+  const data = await res.json();
+  const vehicles = Array.isArray(data?.vehicles) ? data.vehicles : [];
+  const version = data?.shapesVersion;
+  if (!version) throw new Error('vehicles-live uten shapesVersion');
+  if (loadedShapesVersion === null) {
+    const shapes = await fetchShapesFor(version);
+    loadedShapesVersion = version;
+    applyInitialData({ vehicles, routeShapes: shapes });
+    return;
+  }
+  if (version !== loadedShapesVersion) {
+    try {
+      const shapes = await fetchShapesFor(version);
+      routeShapes = mergeRouteShapes(shapes, routeShapes);
+      loadedShapesVersion = version;
+    } catch (_) { /* prøver igjen ved neste poll */ }
+  }
+  graphqlVehicles = vehicles;
+  mergeAndUpdate();
+}
+
 async function fetchInitialData(attempt = 0) {
   const loading = getLoadingIndicator();
   if (attempt === 0) loading?.show('Henter kjøretøy…');
   try {
+    if (!useLegacyFeed) {
+      try {
+        await fetchVehiclesLive();
+        loading?.hide();
+        return true;
+      } catch (err) {
+        if (loadedShapesVersion !== null) {
+          // Allerede i gang: behold gamle data, prøv igjen ved neste poll
+          loading?.hide();
+          return false;
+        }
+        if ((err.status === 502 || err.status === 503) && attempt < RETRY_DELAYS.length) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
+          return fetchInitialData(attempt + 1);
+        }
+        if (import.meta.env.DEV) console.warn('[RuterLive] vehicles-live:', err.message);
+        useLegacyFeed = true;
+      }
+    }
     const res = await fetch('/api/initial-data');
     if ((res.status === 502 || res.status === 503) && attempt < RETRY_DELAYS.length) {
       await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));

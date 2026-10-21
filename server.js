@@ -18,7 +18,20 @@ import { getFallbackRailShapes } from './server/rail-fallback-shapes.js';
 import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
-import { getEtVehiclesAndShapes } from './server/et-vehicles-service.js';
+import { getLiveData, getMergedVehicles, countVehiclesForLine, mergeShapes } from './server/live-vehicles.js';
+import { makeJsonEntry, sendJson, hashString } from './server/json-cache.js';
+import { LINES, getLineBySlug, getLineStops, prewarmLineStops } from './server/line-catalog.js';
+import { renderLinePage } from './server/pages/line-page.js';
+import { getGuideBySlug, loadGuideBody, loadAboutBody, GUIDES } from './server/guide-catalog.js';
+import { renderGuidePage } from './server/pages/guide-page.js';
+import { renderGuideIndex, renderAboutPage } from './server/pages/guide-index.js';
+import { buildSitemap, isMapPath } from './server/pages/sitemap.js';
+import { renderNotFound } from './server/pages/not-found.js';
+
+function sendNotFound(res) {
+  res.set('Cache-Control', 'no-store');
+  res.status(404).type('html').send(renderNotFound());
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -92,7 +105,16 @@ app.get('/robots.txt', (_req, res) => {
   res.type('text/plain');
   res.send(`User-agent: *
 Allow: /
+
+Sitemap: https://livetrafikk.no/sitemap.xml
 `);
+});
+
+app.get('/sitemap.xml', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.type('application/xml').send(
+    buildSitemap({ lines: LINES, guides: GUIDES })
+  );
 });
 
 function getAllShapes() {
@@ -117,58 +139,134 @@ app.get('/api/static-network-shapes', (_req, res) => {
   res.json([...railShapesCache, ...flybussShapesCache]);
 });
 
-function shapeKey(s) {
-  return `${(s.mode || '').toLowerCase()}|${(s.line || '').toString()}|${s.from || ''}|${s.to || ''}`;
+// Forhåndskomprimerte svar. Bygges på nytt bare når kildecachene er byttet ut; gamle entries slippes.
+let liveState = null; // { sources, rail, flybuss, base, vehicles, routeShapes }
+let vehiclesEntry = null;
+let shapesEntry = null;
+let shapesVersion = null;
+let initialEntry = null;
+let livePromise = null;
+
+async function getLiveEntries() {
+  if (livePromise) return livePromise;
+  livePromise = (async () => {
+    try {
+      const live = await getLiveData(getAllShapes);
+      const same = liveState && vehiclesEntry
+        && liveState.sources.vehiclesData === live.sources.vehiclesData
+        && liveState.sources.etResult === live.sources.etResult
+        && liveState.rail === railShapesCache
+        && liveState.flybuss === flybussShapesCache
+        && liveState.base === getCachedShapes();
+      if (!same) {
+        const shapesJson = JSON.stringify(live.routeShapes);
+        const version = hashString(shapesJson);
+        if (version !== shapesVersion) {
+          shapesEntry = makeJsonEntry(shapesJson); // komprimeres bare når rutekartene faktisk er endret
+          shapesVersion = version;
+        }
+        vehiclesEntry = makeJsonEntry({ vehicles: live.vehicles, shapesVersion });
+        initialEntry = null; // bygges ved behov (kun gamle klienter)
+        liveState = {
+          sources: live.sources, rail: railShapesCache, flybuss: flybussShapesCache,
+          base: getCachedShapes(), vehicles: live.vehicles, routeShapes: live.routeShapes,
+        };
+      }
+      return { vehiclesEntry, shapesEntry, shapesVersion };
+    } finally {
+      livePromise = null;
+    }
+  })();
+  return livePromise;
 }
 
-function mergeShapes(a, b) {
-  const byKey = new Map();
-  for (const s of a || []) byKey.set(shapeKey(s), s);
-  for (const s of b || []) {
-    const k = shapeKey(s);
-    const ex = byKey.get(k);
-    const ptsNew = s.points?.length ?? 0;
-    const ptsOld = ex?.points?.length ?? 0;
-    if (!ex || ptsNew >= ptsOld) byKey.set(k, s);
-  }
-  return [...byKey.values()];
-}
-
-// Alt på en gang – kjøretøy + rutekart. Server beregner alt; klient får ferdig data.
-app.get('/api/initial-data', async (_req, res) => {
+// Bare kjøretøy – klienten poller denne hvert 30. s. Rutekart hentes separat og bare ved ny versjon.
+app.get('/api/vehicles-live', async (req, res) => {
   try {
-    const [vehiclesData, etResult, shapes] = await Promise.all([
-      getCachedVehicles(),
-      getEtVehiclesAndShapes(),
-      Promise.resolve(getAllShapes()),
-    ]);
-    const graphqlVehicles = Array.isArray(vehiclesData?.data?.vehicles)
-      ? vehiclesData.data.vehicles
-      : [];
-    const etVehicles = etResult?.vehicles ?? [];
-    const etShapes = etResult?.shapes ?? [];
+    const { vehiclesEntry: e } = await getLiveEntries();
+    sendJson(req, res, e, { cacheControl: 'public, max-age=15' });
+  } catch (err) {
+    res.status(503).json({ vehicles: [], shapesVersion: null });
+  }
+});
 
-    const etByid = new Map(etVehicles.map((v) => [v.vehicleId, v]));
-    const merged = [];
-    for (const v of graphqlVehicles) {
-      const et = etByid.get(v.vehicleId);
-      merged.push(
-        et
-          ? { ...v, from: v.from ?? et.from, to: v.to ?? et.to, via: v.via ?? et.via }
-          : v
-      );
+// Alle rutekart. Versjonert via ?v=, så nettleseren kan cache dem lenge.
+app.get('/api/route-shapes-all', async (req, res) => {
+  try {
+    const { shapesEntry: e, shapesVersion: ver } = await getLiveEntries();
+    const cacheControl = req.query.v && req.query.v === ver
+      ? 'public, max-age=86400, immutable'
+      : 'public, max-age=30';
+    sendJson(req, res, e, { cacheControl });
+  } catch (err) {
+    res.status(503).json([]);
+  }
+});
+
+// Alt på en gang – beholdt uendret i format for gamle klienter (bufret JS i nettleseren).
+app.get('/api/initial-data', async (req, res) => {
+  try {
+    await getLiveEntries();
+    if (!initialEntry) {
+      initialEntry = makeJsonEntry({ vehicles: liveState.vehicles, routeShapes: liveState.routeShapes });
     }
-    const seen = new Set(graphqlVehicles.map((v) => v.vehicleId));
-    for (const v of etVehicles) {
-      if (!seen.has(v.vehicleId)) merged.push(v);
-    }
-
-    const routeShapes = mergeShapes(shapes, etShapes);
-
-    res.set('Cache-Control', 'public, max-age=15');
-    res.json({ vehicles: merged, routeShapes });
+    sendJson(req, res, initialEntry, { cacheControl: 'public, max-age=15' });
   } catch (err) {
     res.status(503).json({ vehicles: [], routeShapes: [] });
+  }
+});
+
+// Linjeside med stoppliste (Entur JP) og antall kjøretøy akkurat nå
+app.get('/linje/:slug', async (req, res) => {
+  const line = getLineBySlug(req.params.slug);
+  if (!line) return sendNotFound(res);
+  try {
+    const [stops, vehicles] = await Promise.all([
+      getLineStops(line),
+      // Kald start: ikke vent på kjøretøy (GTFS/ET) lenger enn 1,5 s; da rendres siden uten telling.
+      Promise.race([
+        getMergedVehicles().catch(() => null),
+        new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+      ]),
+    ]);
+    res.set('Cache-Control', stops && vehicles ? 'public, max-age=300' : 'no-store');
+    res.type('html').send(renderLinePage(line, stops, vehicles ? countVehiclesForLine(vehicles, line) : null));
+  } catch (err) {
+    console.warn('[RuterLive] Linjeside:', err.message);
+    res.set('Cache-Control', 'no-store');
+    res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
+  }
+});
+
+// Guideoversikt, guider og Om-side (statisk innhold fra content/)
+app.get('/guider', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.type('html').send(renderGuideIndex(GUIDES, LINES));
+});
+
+app.get('/guider/:slug', async (req, res) => {
+  const guide = getGuideBySlug(req.params.slug);
+  if (!guide) return sendNotFound(res);
+  try {
+    const body = await loadGuideBody(guide.slug);
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.type('html').send(renderGuidePage(guide, body));
+  } catch (err) {
+    console.warn('[RuterLive] Guide:', err.message);
+    res.set('Cache-Control', 'no-store');
+    res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
+  }
+});
+
+app.get('/om', async (_req, res) => {
+  try {
+    const body = await loadAboutBody();
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.type('html').send(renderAboutPage(body));
+  } catch (err) {
+    console.warn('[RuterLive] Om-side:', err.message);
+    res.set('Cache-Control', 'no-store');
+    res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
   }
 });
 
@@ -369,6 +467,7 @@ app.use(
 
 app.use(express.static(path.join(__dirname, 'dist')));
 app.get('*', (req, res) => {
+  if (!isMapPath(req.path)) return sendNotFound(res);
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
@@ -393,6 +492,7 @@ async function startup() {
     setInterval(loadRailShapes, 7 * 24 * 60 * 60 * 1000); // Ukentlig (30d overstiger Node sin 32-bit timeout)
 
     // Flybussruter fra Entur JP – ukentlig automatisk oppdatering
+    setTimeout(prewarmLineStops, 20000); // Stopplister til linjesidene
     setTimeout(refreshFlybussFromJp, 15000); // Etter oppstart
     setInterval(refreshFlybussFromJp, FLYBUSS_REFRESH_MS);
   });

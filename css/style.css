@@ -75,21 +75,6 @@ body {
   flex-direction: column;
 }
 
-.ad-footer {
-  flex-shrink: 0;
-  min-height: 50px;
-  background: var(--bg-panel);
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 0;
-}
-
-.ad-footer .adsbygoogle {
-  margin: 0 auto;
-}
-
 header {
   flex-shrink: 0;
   padding: 0.5rem 0.75rem 0.6rem;
@@ -130,67 +115,6 @@ header h1 {
 
 .header-btn:hover {
   background: var(--bg-input);
-  color: var(--text-secondary);
-}
-
-.about-toggle {
-  font-size: 0.75rem;
-  padding: 0.2rem 0.5rem;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.about-toggle:hover {
-  background: var(--bg-input);
-  color: var(--text-secondary);
-}
-
-.about-content {
-  margin-top: 0.75rem;
-  padding: 0.75rem 0;
-  border-top: 1px solid var(--border);
-  font-size: 0.8rem;
-  line-height: 1.5;
-  color: var(--text-muted);
-  max-height: 40vh;
-  overflow-y: auto;
-}
-
-.about-content h2 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 0.4rem;
-}
-
-.about-content h3 {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-top: 0.6rem;
-  margin-bottom: 0.25rem;
-}
-
-.about-content p {
-  margin-bottom: 0.4rem;
-}
-
-.about-close {
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
-  padding: 0.2rem 0.5rem;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.about-close:hover {
-  background: var(--bg-input-hover);
   color: var(--text-secondary);
 }
 
@@ -540,19 +464,6 @@ header p {
 
 .tip-toast.tip-toast-fade {
   opacity: 0;
-}
-
-.about-links {
-  margin-top: 0.25rem;
-}
-
-.about-links a {
-  color: var(--text-muted);
-  text-decoration: underline;
-}
-
-.about-links a:hover {
-  color: var(--text-secondary);
 }
 
 #map-container {
@@ -998,4 +909,9 @@ path.leaflet-interactive:focus {
 
 .overlay-close:hover {
   background: var(--bg-input-hover);
+}
+
+/* Mørkt kart: Kartverket-fliser inverteres bare på bakgrunnslaget */
+[data-theme="dark"] .basemap-tiles {
+  filter: invert(1) hue-rotate(180deg) brightness(.75) contrast(1.05) grayscale(1);
 }

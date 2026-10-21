@@ -4,6 +4,7 @@
  */
 
 import { fetchWithRetry } from './fetch-with-retry.js';
+import { parseEtJourneys } from './et-parse.js';
 
 const ET_URL = 'https://api.entur.io/realtime/v1/rest/et?datasetId=RUT&maxSize=3000';
 const CLIENT_NAME = 'ruterlive-web';
@@ -15,6 +16,9 @@ let lastFetch = 0;
 let last429At = 0;
 let last429LoggedAt = 0;
 let refreshPromise = null;
+let xmlVersion = 0; // Øker for hver ny XML fra Entur
+let parsedVersion = -1;
+let parsedJourneys = [];
 
 async function doRefresh() {
   const res = await fetchWithRetry(
@@ -28,6 +32,7 @@ async function doRefresh() {
   }
   if (!res.ok) throw new Error(`ET ${res.status}`);
   cachedXml = await res.text();
+  xmlVersion++;
   lastFetch = Date.now();
   return cachedXml;
 }
@@ -76,6 +81,20 @@ export async function ensureEtCache() {
   await refreshPromise;
   refreshPromise = null;
   return cachedXml;
+}
+
+/**
+ * Parsede ET-turer (se parseEtJourneys). Parses én gang per ny XML og deles av
+ * alle tjenester. Turene er frosset: kopier ({ ...j, mode }) før endring.
+ */
+export async function getEtJourneys() {
+  await ensureEtCache();
+  if (parsedVersion !== xmlVersion) {
+    parsedJourneys = parseEtJourneys(cachedXml);
+    for (const j of parsedJourneys) Object.freeze(j);
+    parsedVersion = xmlVersion;
+  }
+  return parsedJourneys;
 }
 
 export function startEtCachePoll() {

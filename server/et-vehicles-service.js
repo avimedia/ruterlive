@@ -6,6 +6,7 @@
 
 import { MAX_ROUTE_SPAN_KM, MAX_ROUTE_SPAN_KM_BUS } from '../config.js';
 import { selectJourneysForVehicles } from '../shared/et-journeys.js';
+import { buildVehiclePath } from '../shared/vehicle-path.js';
 import { getEtJourneys } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
@@ -151,6 +152,10 @@ function buildVehiclesAndShapes(journeys, quayCoordCache) {
       const endStation = j.destinationName || last?.name || null;
       const nextStop = toCall?.name && toCall.name !== endStation ? toCall.name : null;
       const originForFrom = j.mode === 'bus' ? first?.name : (fromCall?.name || first?.name);
+      // Siste passerte + tre neste stopp med tider, så klienten kan flytte kjøretøyet jevnt
+      const path = buildVehiclePath(j.recordedCalls, j.estimatedCalls, (q) => quayCoordCache.get(q), {
+        maxHopKm: j.mode === 'bus' || j.mode === 'water' ? MAX_ROUTE_SPAN_KM_BUS : MAX_ROUTE_SPAN_KM,
+      });
       vehicles.push({
         vehicleId: j.vehicleId,
         mode: j.mode,
@@ -162,6 +167,7 @@ function buildVehiclesAndShapes(journeys, quayCoordCache) {
         to: toCall?.name || last?.name || j.destinationName || null,
         nextStop,
         via: allCalls.length > 2 ? allCalls[midIdx]?.name : null,
+        ...(path ? { path } : {}),
       });
     }
 

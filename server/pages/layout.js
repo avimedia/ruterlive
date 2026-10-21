@@ -52,7 +52,8 @@ ${noindex ? '' : `  <link rel="canonical" href="${escapeHtml(url)}">\n`}${noinde
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:type" content="website">
 ${noindex ? '' : `  <meta property="og:url" content="${escapeHtml(url)}">\n`}  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="apple-touch-icon" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <script>
     (function(){
       var s = localStorage.getItem('ruterlive-theme') || 'system';

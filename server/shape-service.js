@@ -8,6 +8,7 @@ import { fetchWithRetry } from './fetch-with-retry.js';
 import { getEtJourneys } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { fetchJpRoutes } from './jp-route-fetcher.js';
+import { ensureLineModes, getLineMode } from './line-modes.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CLIENT_NAME = 'ruterlive-web';
@@ -16,15 +17,6 @@ const MAX_QUAYS_TO_FETCH = 500;
 const JP_BATCH_SIZE = 25;
 
 const quayCoordCache = new Map();
-const lineModeCache = new Map();
-
-function mapJpTransportMode(jpMode) {
-  if (!jpMode) return null;
-  const m = (typeof jpMode === 'object' ? jpMode?.name ?? jpMode?.transportMode : jpMode).toString().toLowerCase();
-  if (['metro', 'bus', 'tram', 'water', 'rail'].includes(m)) return m;
-  if (['ferry', 'ferje'].includes(m)) return 'water';
-  return null;
-}
 
 async function fetchJpGraphql(query) {
   const res = await fetchWithRetry(
@@ -65,21 +57,6 @@ async function fetchQuayCoordsBatch(quayIds) {
       }
     });
   }
-}
-
-async function fetchLineModes(lineRefs) {
-  const toFetch = lineRefs.filter((ref) => ref && !lineModeCache.has(ref)).slice(0, 20);
-  if (toFetch.length === 0) return;
-
-  const lines = toFetch.map((id, i) => `l${i}: line(id: "${id}") { transportMode }`).join('\n');
-  const data = await fetchJpGraphql(`query { ${lines} }`);
-  if (!data) return;
-
-  toFetch.forEach((ref, i) => {
-    const line = data[`l${i}`];
-    const mode = mapJpTransportMode(line?.transportMode);
-    lineModeCache.set(ref, mode);
-  });
 }
 
 function getLinePublicCode(lineRef) {
@@ -204,10 +181,10 @@ export async function refreshRouteShapes() {
     const parsed = await getEtJourneys();
 
     const uniqueLineRefs = [...new Set(parsed.map((j) => j.lineRef).filter(Boolean))];
-    await fetchLineModes(uniqueLineRefs);
+    await ensureLineModes(uniqueLineRefs);
 
     const journeys = parsed.map((j) => {
-      const jpMode = lineModeCache.get(j.lineRef);
+      const jpMode = getLineMode(j.lineRef);
       return jpMode && jpMode !== j.mode ? { ...j, mode: jpMode } : j;
     });
 

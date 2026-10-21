@@ -9,11 +9,8 @@ import { selectJourneysForVehicles } from '../shared/et-journeys.js';
 import { buildVehiclePath } from '../shared/vehicle-path.js';
 import { getEtJourneys, getEtVersion } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
-import { fetchWithRetry } from './fetch-with-retry.js';
+import { ensureLineModes, getLineMode } from './line-modes.js';
 import { dedupeInFlight } from './in-flight.js';
-
-const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
-const CLIENT_NAME = 'ruterlive-web';
 
 const CACHE_TTL_MS = 15000; // 15s – posisjoner avhenger av "nå"
 
@@ -23,41 +20,9 @@ let shapesKey = { etVersion: -1, gtfs: null };
 // Samme tomme resultat hver gang, så server.js kan gjenbruke ferdigkomprimerte svar ved feil
 const EMPTY = Object.freeze({ vehicles: Object.freeze([]), shapes: Object.freeze([]) });
 
-function mapJpTransportMode(jpMode) {
-  if (!jpMode) return null;
-  const m = (typeof jpMode === 'object' ? jpMode?.name ?? jpMode?.transportMode : jpMode).toString().toLowerCase();
-  if (['metro', 'bus', 'tram', 'water', 'rail'].includes(m)) return m;
-  if (['ferry', 'ferje'].includes(m)) return 'water';
-  return null;
-}
-
 function getLinePublicCode(lineRef) {
   const m = /:Line:(\d+)/.exec(lineRef || '');
   return m ? m[1] : '?';
-}
-
-async function fetchLineModes(lineRefs, lineModeCache) {
-  const toFetch = lineRefs.filter((ref) => ref && !lineModeCache.has(ref)).slice(0, 20);
-  if (toFetch.length === 0) return;
-  const lines = toFetch.map((id, i) => `l${i}: line(id: "${id}") { transportMode }`).join('\n');
-  try {
-    const res = await fetchWithRetry(
-      JP_URL,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ET-Client-Name': CLIENT_NAME },
-        body: JSON.stringify({ query: `query { ${lines} }` }),
-      },
-      { timeout: 15000 }
-    );
-    const data = (await res.json())?.data;
-    if (!data) return;
-    toFetch.forEach((ref, i) => {
-      const line = data[`l${i}`];
-      const mode = mapJpTransportMode(line?.transportMode);
-      if (mode) lineModeCache.set(ref, mode);
-    });
-  } catch (_) {}
 }
 
 function haversineKm(a, b) {
@@ -244,11 +209,11 @@ const computeDeduped = dedupeInFlight(async () => {
     const parsed = await getEtJourneys();
     const etVersion = getEtVersion();
 
-    const lineModeCache = new Map();
+    // Delt cache (24 t, feil 10 min): JP-kall bare for nye linjer, ikke hvert 15. s
     const uniqueLineRefs = [...new Set(parsed.map((j) => j.lineRef).filter(Boolean))];
-    await fetchLineModes(uniqueLineRefs, lineModeCache);
+    await ensureLineModes(uniqueLineRefs);
     const journeys = parsed.map((j) => {
-      const jpMode = lineModeCache.get(j.lineRef);
+      const jpMode = getLineMode(j.lineRef);
       return jpMode && jpMode !== j.mode ? { ...j, mode: jpMode } : j;
     });
 

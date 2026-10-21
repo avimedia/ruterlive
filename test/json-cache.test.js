@@ -43,3 +43,12 @@ test('hash endres bare når innholdet endres', () => {
   assert.equal(hashString('[1,2]'), hashString('[1,2]'));
   assert.notEqual(hashString('[1,2]'), hashString('[1,3]'));
 });
+
+test('accepts respekterer q=0 og vanlige formater', async () => {
+  const { accepts } = await import('../server/json-cache.js');
+  assert.equal(accepts('gzip, deflate, br', 'br'), true);
+  assert.equal(accepts('br;q=0, gzip', 'br'), false);
+  assert.equal(accepts('br;q=0, gzip', 'gzip'), true);
+  assert.equal(accepts('GZIP;q=0.5', 'gzip'), true);
+  assert.equal(accepts('', 'gzip'), false);
+});

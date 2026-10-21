@@ -59,7 +59,10 @@ export async function getCachedVehicles() {
   }
   if (!fetchPromise) fetchPromise = refresh();
   if (cachedData) {
-    fetchPromise.finally(() => { fetchPromise = null; });
+    // Bakgrunnsrevalidering: feil skal logges, ikke bli en uhåndtert rejection som dreper prosessen.
+    fetchPromise
+      .then(() => {}, (e) => console.warn('[RuterLive] Kjøretøy-revalidering:', e.message))
+      .finally(() => { fetchPromise = null; });
     return cachedData;
   }
   await fetchPromise;

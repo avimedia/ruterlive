@@ -22,11 +22,11 @@ test('dedupeInFlight nullstilles etter feil', async () => {
   assert.equal(calls, 2);
 });
 
-test('loadGtfsStops: samtidige kall gir én nedlasting', async () => {
+test('loadGtfsStops: samtidige kall gir én henting', async () => {
   let calls = 0;
-  // Teller bare full nedlasting (uten Range); Range-forsøket kommer i tillegg.
+  // Teller første Range-forespørsel (slutten av zip-en) – én per henting.
   const fetchFn = async (url, options = {}) => {
-    if (!options.headers?.Range) calls++;
+    if (String(options.headers?.Range || '').startsWith('bytes=-')) calls++;
     await new Promise((r) => setTimeout(r, 20));
     return { ok: false, status: 500 };
   };

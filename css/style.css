@@ -693,6 +693,15 @@ path.leaflet-interactive:focus {
   box-shadow: 0 1px 3px var(--shadow);
 }
 
+/* Jevner ut stegene fra bevegelsesløkka (1 Hz). Slås av under zoom (se js/markers.js). */
+.vehicle-glide .leaflet-marker-icon.vehicle-marker {
+  transition: transform 1s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vehicle-glide .leaflet-marker-icon.vehicle-marker { transition: none; }
+}
+
 .vehicle-marker.bus { background: #e63946; }
 .vehicle-marker.flybuss { background: #ff6b35; }
 .vehicle-marker.metro { background: #2a9d8f; }

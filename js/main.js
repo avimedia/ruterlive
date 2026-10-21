@@ -4,7 +4,7 @@ import { initStopSearch } from './search.js';
 import { connectVehicles } from './api.js';
 import { fetchEstimatedVehicles } from './et-api.js';
 import { fetchLineRouteFromJp } from './jp-line-lookup.js';
-import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons } from './markers.js';
+import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons, onMarkerTick, getMarkerLatLng } from './markers.js';
 import { initLayers, getVisibleModes, updateVehicleCount, setRetryHandler } from './layers.js';
 import { updateRouteLines, updateSelectedVehicleSplit } from './routes.js';
 import {
@@ -79,6 +79,22 @@ function enrichVehicleWithRouteShape(vehicle, shapes) {
   return vehicle;
 }
 
+/** Kjøretøyet med posisjonen markøren faktisk vises på (beveger seg mellom pollingene). */
+function withShownLocation(v) {
+  const ll = v && getMarkerLatLng(v.vehicleId);
+  return ll ? { ...v, location: { latitude: ll.lat, longitude: ll.lng } } : v;
+}
+
+let lastSplitLatLng = null;
+function followSelectedVehicle() {
+  if (!selectedVehicleForRoute) return;
+  const ll = getMarkerLatLng(selectedVehicleForRoute.vehicleId);
+  if (!ll || (lastSplitLatLng && lastSplitLatLng.lat === ll.lat && lastSplitLatLng.lng === ll.lng)) return;
+  lastSplitLatLng = { lat: ll.lat, lng: ll.lng };
+  updateSelectedVehicleSplit({ location: { latitude: ll.lat, longitude: ll.lng } });
+}
+onMarkerTick(followSelectedVehicle);
+
 function mergeAndUpdate() {
   const merged = [];
   const etByid = new Map(etVehicles.map((v) => [v.vehicleId, v]));
@@ -100,7 +116,8 @@ function mergeAndUpdate() {
   updateMarkers(merged, visibleModes, {
     onVehicleSelect: (v) => {
       selectedVehicleForRoute = v;
-      updateRouteLines(routeShapes, getVisibleModes(), v);
+      lastSplitLatLng = null;
+      updateRouteLines(routeShapes, getVisibleModes(), withShownLocation(v));
     },
     onVehicleDeselect: () => {
       selectedVehicleForRoute = null;
@@ -109,12 +126,13 @@ function mergeAndUpdate() {
     getSelectedVehicleId: () => selectedVehicleForRoute?.vehicleId,
   });
   updateVehicleCount(getVehicleCounts(merged), null, !etLoaded);
-  updateRouteLines(routeShapes, visibleModes, selectedVehicleForRoute);
+  updateRouteLines(routeShapes, visibleModes, withShownLocation(selectedVehicleForRoute));
   if (selectedVehicleForRoute) {
     const fresh = merged.find((v) => v.vehicleId === selectedVehicleForRoute.vehicleId);
     if (fresh) {
       selectedVehicleForRoute = fresh;
-      updateSelectedVehicleSplit(fresh);
+      lastSplitLatLng = null;
+      followSelectedVehicle();
     }
   }
 }
@@ -137,17 +155,17 @@ if (map) {
     }
   });
   map.on('zoomend', () => {
-    updateRouteLines(routeShapes, getVisibleModes(), selectedVehicleForRoute);
+    updateRouteLines(routeShapes, getVisibleModes(), withShownLocation(selectedVehicleForRoute));
     refreshMarkerIcons();
   });
   map.on('moveend', () => {
-    updateRouteLines(routeShapes, getVisibleModes(), selectedVehicleForRoute);
+    updateRouteLines(routeShapes, getVisibleModes(), withShownLocation(selectedVehicleForRoute));
   });
 }
 
 initLayers((visibleModes) => {
   applyFilter(visibleModes);
-  updateRouteLines(routeShapes, visibleModes, selectedVehicleForRoute);
+  updateRouteLines(routeShapes, visibleModes, withShownLocation(selectedVehicleForRoute));
 });
 
 updateVehicleCount(null, null, true);

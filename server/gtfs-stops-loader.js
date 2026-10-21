@@ -6,6 +6,8 @@
 
 import AdmZip from 'adm-zip';
 import { fetchWithRetry } from './fetch-with-retry.js';
+import { dedupeInFlight } from './in-flight.js';
+import { readZipEntry } from './zip-range.js';
 
 const GTFS_URL =
   'https://storage.googleapis.com/marduk-production/outbound/gtfs/rb_norway-aggregated-gtfs-basic.zip';
@@ -13,6 +15,8 @@ const CACHE_TTL_MS = 23 * 60 * 60 * 1000; // 23t – litt under 24t
 const DOWNLOAD_TIMEOUT_MS = 120000; // 2 min for ~95MB
 
 let gtfsQuayCache = null;
+/** Map<quayId, [lat, lon]> – bygges én gang per lasting og deles av alle kallere (skal ikke muteres). */
+let gtfsCoordMap = null;
 let lastLoadTime = 0;
 
 /** Stor-Oslo bbox – reduserer minne på server (Render gratisplan). */
@@ -78,24 +82,22 @@ function parseCsvLine(line) {
  * Laster GTFS basic zip, ekstraherer stops.txt og bygger quay-cache.
  * @returns {Promise<Map<string, [number, number]>|null>}
  */
-export async function loadGtfsStops() {
+export async function loadGtfsStops(fetchFn = fetchWithRetry) {
   if (gtfsQuayCache && Date.now() - lastLoadTime < CACHE_TTL_MS) {
     return gtfsQuayCache;
   }
+  return downloadGtfsStops(fetchFn);
+}
 
+// Én delt nedlasting om gangen, så samtidige kall ved kald start ikke laster 95 MB flere ganger.
+const downloadDeduped = dedupeInFlight(async (fetchFn) => {
   try {
-    const res = await fetchWithRetry(
-      GTFS_URL,
-      { method: 'GET' },
-      { timeout: DOWNLOAD_TIMEOUT_MS, retries: 2 }
-    );
-    if (!res.ok) throw new Error(`GTFS ${res.status}`);
-    const buf = Buffer.from(await res.arrayBuffer());
-    const zip = new AdmZip(buf);
-    const entry = zip.getEntry('stops.txt');
-    if (!entry) throw new Error('stops.txt mangler i GTFS');
-    const content = entry.getData().toString('utf8');
-    gtfsQuayCache = parseStopsTxt(content);
+    const content = (await fetchStopsTxt(fetchFn)).toString('utf8');
+    const stops = parseStopsTxt(content);
+    const coords = new Map();
+    for (const [id, v] of stops) coords.set(id, [v.lat, v.lon]);
+    gtfsQuayCache = stops;
+    gtfsCoordMap = coords;
     lastLoadTime = Date.now();
     console.log(`[RuterLive] GTFS stops: ${gtfsQuayCache.size} quays`);
     return gtfsQuayCache;
@@ -104,6 +106,37 @@ export async function loadGtfsStops() {
     if (gtfsQuayCache) return gtfsQuayCache;
     return null;
   }
+}, { timeoutMs: 180000 }); // GTFS: nedlasting (2 min) + parsing
+
+/**
+ * Henter stops.txt: først bare den delen av zip-en vi trenger (HTTP Range),
+ * ellers hele zip-en som før.
+ * @returns {Promise<Buffer>}
+ */
+async function fetchStopsTxt(fetchFn) {
+  try {
+    return await readZipEntry(GTFS_URL, 'stops.txt', fetchFn);
+  } catch (err) {
+    console.warn('[RuterLive] GTFS Range-lesing feilet, laster ned hele zip-en:', err.message);
+  }
+  const res = await fetchFn(
+    GTFS_URL,
+    { method: 'GET', headers: { 'ET-Client-Name': 'ruterlive-web' } },
+    { timeout: DOWNLOAD_TIMEOUT_MS, retries: 2 }
+  );
+  if (!res.ok) throw new Error(`GTFS ${res.status}`);
+  const zip = new AdmZip(Buffer.from(await res.arrayBuffer()));
+  const entry = zip.getEntry('stops.txt');
+  if (!entry) throw new Error('stops.txt mangler i GTFS');
+  return entry.getData();
+}
+
+function downloadGtfsStops(fetchFn) {
+  // Avviser aldri: ved tidsavbrudd brukes forrige cache (eller null), som før.
+  return downloadDeduped(fetchFn).catch((e) => {
+    console.warn('[RuterLive] GTFS stops:', e.message);
+    return gtfsQuayCache;
+  });
 }
 
 /**
@@ -115,15 +148,11 @@ export async function ensureGtfsStopsLoaded() {
 
 /**
  * Returnerer GTFS quay-cache. Formatert for quay-coords: Map<id, [lat,lon]>.
+ * Samme Map-instans hver gang (ingen kopiering) – kallere må ikke mutere den.
  * @returns {Map<string, [number, number]>|null}
  */
 export function getGtfsQuayCache() {
-  if (!gtfsQuayCache) return null;
-  const legacy = new Map();
-  for (const [id, v] of gtfsQuayCache) {
-    legacy.set(id, [v.lat, v.lon]);
-  }
-  return legacy;
+  return gtfsCoordMap;
 }
 
 /**

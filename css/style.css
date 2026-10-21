@@ -7,7 +7,7 @@
 /* Tema: mørk (standard) */
 :root,
 [data-theme="dark"] {
-  --route-highlight: #fff;
+  --route-casing: #111;
   --bg-page: #1a1a1a;
   --bg-panel: rgba(37, 37, 37, 0.95);
   --bg-panel-solid: #252525;
@@ -31,7 +31,7 @@
 
 /* Tema: lys */
 [data-theme="light"] {
-  --route-highlight: #1a1a1a;
+  --route-casing: #fff;
   --bg-page: #f5f5f5;
   --bg-panel: rgba(255, 255, 255, 0.95);
   --bg-panel-solid: #fff;

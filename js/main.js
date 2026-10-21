@@ -6,7 +6,7 @@ import { fetchEstimatedVehicles } from './et-api.js';
 import { fetchLineRouteFromJp } from './jp-line-lookup.js';
 import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons } from './markers.js';
 import { initLayers, getVisibleModes, updateVehicleCount, setRetryHandler } from './layers.js';
-import { updateRouteLines } from './routes.js';
+import { updateRouteLines, updateSelectedVehicleSplit } from './routes.js';
 import {
   initShareLink,
   initLoadingIndicator,
@@ -110,6 +110,13 @@ function mergeAndUpdate() {
   });
   updateVehicleCount(getVehicleCounts(merged), null, !etLoaded);
   updateRouteLines(routeShapes, visibleModes, selectedVehicleForRoute);
+  if (selectedVehicleForRoute) {
+    const fresh = merged.find((v) => v.vehicleId === selectedVehicleForRoute.vehicleId);
+    if (fresh) {
+      selectedVehicleForRoute = fresh;
+      updateSelectedVehicleSplit(fresh);
+    }
+  }
 }
 
 initMap();

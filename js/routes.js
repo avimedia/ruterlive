@@ -1,6 +1,7 @@
 import L from 'leaflet';
 import { getMap } from './map.js';
 import { isFlytogLineCode } from '../config.js';
+import { splitRouteAt } from './route-split.js';
 
 const MODE_COLORS = {
   bus: '#e63946',
@@ -34,6 +35,10 @@ function getShapeColor(mode, lineOrFrom) {
 
 let routeLayers = [];
 let selectedPolyline = null;
+/** Valgte kjøretøyruter (kjørt/gjenstående del + kant), oppdateres ved ny posisjon. */
+let highlightedRoutes = [];
+const DIM_OPACITY = 0.3;
+const AHEAD_DASH = '2, 10';
 let routesVisible = true;
 let lastRenderedShapesKey = '';
 let lastRenderedModesKey = '';
@@ -125,6 +130,7 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   if (map.stopsLayerGroup) map.stopsLayerGroup.clearLayers();
   routeLayers = [];
   selectedPolyline = null;
+  highlightedRoutes = [];
 
   if (import.meta.env.DEV) {
     console.debug('[RuterLive] updateRouteLines:', { routesVisible, shapesCount: shapes?.length ?? 0, selectedVehicle: !!selectedVehicle });
@@ -176,10 +182,10 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   const drawn = new Set();
   for (const shape of shapesToShow) {
     if (selectedMatches.includes(shape)) continue;
-    addRoutePolyline(map, shape, drawn, false);
+    addRoutePolyline(map, shape, drawn, false, null, !!selectedVehicle);
   }
   for (const shape of selectedMatches) {
-    addRoutePolyline(map, shape, drawn, true);
+    addRoutePolyline(map, shape, drawn, true, selectedVehicle, false);
   }
 
   // Holdeplasser: ved valgt kjøretøy kun rutens stopp (zoom 12+), ellers zoom 15+ med bbox
@@ -390,11 +396,49 @@ async function showDepartureBoard(popup, quayId) {
   }
 }
 
-function getRouteHighlightColor() {
-  return getComputedStyle(document.documentElement).getPropertyValue('--route-highlight').trim() || '#fff';
+function getRouteCasingColor() {
+  return getComputedStyle(document.documentElement).getPropertyValue('--route-casing').trim() || '#fff';
 }
 
-function addRoutePolyline(map, shape, drawn, isHighlighted) {
+function vehicleLatLng(vehicle) {
+  const lat = Number(vehicle?.location?.latitude);
+  const lon = Number(vehicle?.location?.longitude);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? [lat, lon] : null;
+}
+
+/** Tegner valgt rute: kant under, kjørt del helt, gjenstående del prikket. */
+function addHighlightedRoute(map, shape, latlngs, color, vehicle, tooltipText) {
+  const split = splitRouteAt(latlngs, vehicleLatLng(vehicle));
+  const base = { lineCap: 'round', lineJoin: 'round', interactive: false, className: 'route-line-selected' };
+  const casingColor = getRouteCasingColor();
+  const casingDriven = L.polyline(split.driven, { ...base, color: casingColor, weight: 9, opacity: 1 });
+  const casingAhead = L.polyline(split.ahead, { ...base, color: casingColor, weight: 9, opacity: 1, dashArray: AHEAD_DASH });
+  const driven = L.polyline(split.driven, { ...base, interactive: true, color, weight: 6, opacity: 1 });
+  const ahead = L.polyline(split.ahead, { ...base, interactive: true, color, weight: 6, opacity: 1, dashArray: AHEAD_DASH });
+  for (const pl of [driven, ahead]) pl.bindTooltip(tooltipText, { permanent: false, direction: 'top', opacity: 0.95 });
+  for (const pl of [casingDriven, casingAhead, driven, ahead]) pl.addTo(map.routeLayerGroup);
+  highlightedRoutes.push({ latlngs, casingDriven, casingAhead, driven, ahead });
+  // Kant først, så linjene over
+  casingDriven.bringToFront();
+  casingAhead.bringToFront();
+  driven.bringToFront();
+  ahead.bringToFront();
+}
+
+/** Flytt delingspunktet når valgt kjøretøy får ny posisjon. */
+export function updateSelectedVehicleSplit(vehicle) {
+  const pos = vehicleLatLng(vehicle);
+  if (!pos) return;
+  for (const r of highlightedRoutes) {
+    const { driven, ahead } = splitRouteAt(r.latlngs, pos);
+    r.casingDriven.setLatLngs(driven);
+    r.driven.setLatLngs(driven);
+    r.casingAhead.setLatLngs(ahead);
+    r.ahead.setLatLngs(ahead);
+  }
+}
+
+function addRoutePolyline(map, shape, drawn, isHighlighted, vehicle = null, dim = false) {
   const key = `${shape.mode}|${shape.line}|${shape.from}|${shape.to}`;
   if (drawn.has(key)) return;
   drawn.add(key);
@@ -412,18 +456,7 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
 
   const mode = shape.mode?.toLowerCase();
   const color = getShapeColor(mode, shape.line + (shape.from || ''));
-  const highlightColor = getRouteHighlightColor();
   const isRail = mode === 'rail' || mode === 'flytog';
-  const polyline = L.polyline(latlngs, {
-    color: isHighlighted ? highlightColor : color,
-    weight: isHighlighted ? 3 : 2,
-    opacity: isHighlighted ? 1 : 0.9,
-    dashArray: isRail ? '6, 6' : undefined,
-    className: 'route-line',
-  });
-  polyline._ruterOriginalColor = color;
-  polyline._ruterIsRail = isRail;
-
   const lineRaw = shape.line || '?';
   const line = lineRaw.replace(/-\d+$/, ''); // OSM: fjern -id fra tooltip
   const from = (shape.from || '').trim() || '—';
@@ -439,6 +472,22 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
           ? `Linje ${line}: ${from}`
           : `Linje ${line}: ${from} → ${to}`;
 
+
+  if (isHighlighted && vehicle) {
+    addHighlightedRoute(map, shape, latlngs, color, vehicle, tooltipText);
+    return;
+  }
+
+  const polyline = L.polyline(latlngs, {
+    color,
+    weight: 2,
+    opacity: dim ? DIM_OPACITY : 0.9,
+    dashArray: isRail ? '6, 6' : undefined,
+    className: 'route-line',
+  });
+  polyline._ruterOriginalColor = color;
+  polyline._ruterIsRail = isRail;
+
   polyline.bindTooltip(tooltipText, { permanent: false, direction: 'top', opacity: 0.95 });
   polyline.on('click', (e) => {
     L.DomEvent.stopPropagation(e);
@@ -453,16 +502,15 @@ function addRoutePolyline(map, shape, drawn, isHighlighted) {
     }
     selectedPolyline = polyline;
     polyline.setStyle({
-      weight: 3,
+      weight: 5,
       opacity: 1,
-      color: getRouteHighlightColor(),
+      color: polyline._ruterOriginalColor,
       dashArray: polyline._ruterIsRail ? '6, 6' : undefined,
     });
     polyline.bringToFront();
   });
   polyline.addTo(map.routeLayerGroup);
   routeLayers.push(polyline);
-  if (isHighlighted) polyline.bringToFront();
 }
 
 
@@ -483,8 +531,11 @@ export function focusStopFromSearch(quayId, lat, lon, name) {
 
 /** Oppdater farge på valgt rutelinje ved temaendring. */
 export function refreshRouteHighlightTheme() {
-  if (!selectedPolyline) return;
-  selectedPolyline.setStyle({ color: getRouteHighlightColor() });
+  const casing = getRouteCasingColor();
+  for (const r of highlightedRoutes) {
+    r.casingDriven.setStyle({ color: casing });
+    r.casingAhead.setStyle({ color: casing });
+  }
 }
 
 export function setRoutesVisible(visible) {

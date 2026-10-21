@@ -19,6 +19,7 @@ import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
 import { getLiveData, getMergedVehicles, countVehiclesForLine, mergeShapes } from './server/live-vehicles.js';
+import { makeJsonEntry, sendJson, hashString } from './server/json-cache.js';
 import { LINES, getLineBySlug, getLineStops, prewarmLineStops } from './server/line-catalog.js';
 import { renderLinePage } from './server/pages/line-page.js';
 import { getGuideBySlug, loadGuideBody, loadAboutBody, GUIDES } from './server/guide-catalog.js';
@@ -138,12 +139,78 @@ app.get('/api/static-network-shapes', (_req, res) => {
   res.json([...railShapesCache, ...flybussShapesCache]);
 });
 
-// Alt på en gang – kjøretøy + rutekart. Server beregner alt; klient får ferdig data.
-app.get('/api/initial-data', async (_req, res) => {
+// Forhåndskomprimerte svar. Bygges på nytt bare når kildecachene er byttet ut; gamle entries slippes.
+let liveState = null; // { sources, rail, flybuss, base, vehicles, routeShapes }
+let vehiclesEntry = null;
+let shapesEntry = null;
+let shapesVersion = null;
+let initialEntry = null;
+let livePromise = null;
+
+async function getLiveEntries() {
+  if (livePromise) return livePromise;
+  livePromise = (async () => {
+    try {
+      const live = await getLiveData(getAllShapes);
+      const same = liveState && vehiclesEntry
+        && liveState.sources.vehiclesData === live.sources.vehiclesData
+        && liveState.sources.etResult === live.sources.etResult
+        && liveState.rail === railShapesCache
+        && liveState.flybuss === flybussShapesCache
+        && liveState.base === getCachedShapes();
+      if (!same) {
+        const shapesJson = JSON.stringify(live.routeShapes);
+        const version = hashString(shapesJson);
+        if (version !== shapesVersion) {
+          shapesEntry = makeJsonEntry(shapesJson); // komprimeres bare når rutekartene faktisk er endret
+          shapesVersion = version;
+        }
+        vehiclesEntry = makeJsonEntry({ vehicles: live.vehicles, shapesVersion });
+        initialEntry = null; // bygges ved behov (kun gamle klienter)
+        liveState = {
+          sources: live.sources, rail: railShapesCache, flybuss: flybussShapesCache,
+          base: getCachedShapes(), vehicles: live.vehicles, routeShapes: live.routeShapes,
+        };
+      }
+      return { vehiclesEntry, shapesEntry, shapesVersion };
+    } finally {
+      livePromise = null;
+    }
+  })();
+  return livePromise;
+}
+
+// Bare kjøretøy – klienten poller denne hvert 30. s. Rutekart hentes separat og bare ved ny versjon.
+app.get('/api/vehicles-live', async (req, res) => {
   try {
-    const { vehicles, routeShapes } = await getLiveData(getAllShapes);
-    res.set('Cache-Control', 'public, max-age=15');
-    res.json({ vehicles, routeShapes });
+    const { vehiclesEntry: e } = await getLiveEntries();
+    sendJson(req, res, e, { cacheControl: 'public, max-age=15' });
+  } catch (err) {
+    res.status(503).json({ vehicles: [], shapesVersion: null });
+  }
+});
+
+// Alle rutekart. Versjonert via ?v=, så nettleseren kan cache dem lenge.
+app.get('/api/route-shapes-all', async (req, res) => {
+  try {
+    const { shapesEntry: e, shapesVersion: ver } = await getLiveEntries();
+    const cacheControl = req.query.v && req.query.v === ver
+      ? 'public, max-age=86400, immutable'
+      : 'public, max-age=30';
+    sendJson(req, res, e, { cacheControl });
+  } catch (err) {
+    res.status(503).json([]);
+  }
+});
+
+// Alt på en gang – beholdt uendret i format for gamle klienter (bufret JS i nettleseren).
+app.get('/api/initial-data', async (req, res) => {
+  try {
+    await getLiveEntries();
+    if (!initialEntry) {
+      initialEntry = makeJsonEntry({ vehicles: liveState.vehicles, routeShapes: liveState.routeShapes });
+    }
+    sendJson(req, res, initialEntry, { cacheControl: 'public, max-age=15' });
   } catch (err) {
     res.status(503).json({ vehicles: [], routeShapes: [] });
   }

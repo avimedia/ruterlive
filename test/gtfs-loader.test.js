@@ -55,7 +55,7 @@ test('loadGtfsStops: leser stops.txt via Range uten full nedlasting', async () =
   assert.deepEqual(mod.getGtfsQuayCache().get('NSR:Quay:1'), [59.911, 10.75]);
 });
 
-test('loadGtfsStops: faller tilbake til full nedlasting når Range ignoreres', async () => {
+test('loadGtfsStops: ingen full nedlasting når Range ignoreres (minne), gir null', async () => {
   const mod = await import('../server/gtfs-stops-loader.js?fallback');
   const buf = lagZip();
   const log = [];
@@ -63,9 +63,8 @@ test('loadGtfsStops: faller tilbake til full nedlasting når Range ignoreres', a
     log.push(options.headers?.Range ?? null);
     return svar(buf, 200);
   });
-  assert.equal(cache.size, 1);
-  assert.equal(log.filter((r) => r === null).length, 1, 'én full nedlasting');
-  assert.deepEqual(mod.getGtfsQuayCache().get('NSR:Quay:1'), [59.911, 10.75]);
+  assert.equal(cache, null);
+  assert.equal(log.filter((r) => r === null).length, 0, 'ingen full nedlasting');
 });
 
 test('getGtfsQuayCache returnerer samme Map hver gang', async () => {

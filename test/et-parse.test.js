@@ -161,3 +161,8 @@ test('tom eller ugyldig input gir tom liste', () => {
   assert.deepEqual(parseEtJourneys(''), []);
   assert.deepEqual(parseEtJourneys('<Siri><EstimatedVehicleJourney><LineRef>RUT:Line:31'), []);
 });
+
+test('ugyldig tegnreferanse kaster ikke', async () => {
+  const { parseEtJourneys } = await import('../server/et-parse.js');
+  assert.doesNotThrow(() => parseEtJourneys('<Siri><EstimatedVehicleJourney><LineRef>RUT:Line:1</LineRef><DestinationDisplay>A&#1114112;B</DestinationDisplay></EstimatedVehicleJourney></Siri>'));
+});

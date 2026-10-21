@@ -4,7 +4,6 @@
  * Nedlasting maks 1x per 24t (Entur rate limit).
  */
 
-import AdmZip from 'adm-zip';
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { dedupeInFlight } from './in-flight.js';
 import { readZipEntry } from './zip-range.js';
@@ -12,7 +11,6 @@ import { readZipEntry } from './zip-range.js';
 const GTFS_URL =
   'https://storage.googleapis.com/marduk-production/outbound/gtfs/rb_norway-aggregated-gtfs-basic.zip';
 const CACHE_TTL_MS = 23 * 60 * 60 * 1000; // 23t – litt under 24t
-const DOWNLOAD_TIMEOUT_MS = 120000; // 2 min for ~95MB
 
 let gtfsQuayCache = null;
 /** Map<quayId, [lat, lon]> – bygges én gang per lasting og deles av alle kallere (skal ikke muteres). */
@@ -114,21 +112,9 @@ const downloadDeduped = dedupeInFlight(async (fetchFn) => {
  * @returns {Promise<Buffer>}
  */
 async function fetchStopsTxt(fetchFn) {
-  try {
-    return await readZipEntry(GTFS_URL, 'stops.txt', fetchFn);
-  } catch (err) {
-    console.warn('[RuterLive] GTFS Range-lesing feilet, laster ned hele zip-en:', err.message);
-  }
-  const res = await fetchFn(
-    GTFS_URL,
-    { method: 'GET', headers: { 'ET-Client-Name': 'ruterlive-web' } },
-    { timeout: DOWNLOAD_TIMEOUT_MS, retries: 2 }
-  );
-  if (!res.ok) throw new Error(`GTFS ${res.status}`);
-  const zip = new AdmZip(Buffer.from(await res.arrayBuffer()));
-  const entry = zip.getEntry('stops.txt');
-  if (!entry) throw new Error('stops.txt mangler i GTFS');
-  return entry.getData();
+  // Ingen fallback til full nedlasting: 95 MB i minnet ga ~450 MB RSS og krasj på Render (512 MB).
+  // Feiler Range-lesingen beholdes forrige cache, og neste kall prøver igjen.
+  return readZipEntry(GTFS_URL, 'stops.txt', fetchFn);
 }
 
 function downloadGtfsStops(fetchFn) {

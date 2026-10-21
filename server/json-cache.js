@@ -30,8 +30,15 @@ export function makeJsonEntry(value) {
   };
 }
 
-function accepts(header, enc) {
-  return new RegExp(`(^|[\\s,])${enc}\\s*(;|,|$)`, 'i').test(header || '');
+/** Sann når Accept-Encoding godtar `enc` (q > 0). */
+export function accepts(header, enc) {
+  for (const part of String(header || '').split(',')) {
+    const [name, ...params] = part.trim().split(';').map((x) => x.trim());
+    if (name.toLowerCase() !== enc) continue;
+    const q = params.find((p) => /^q=/i.test(p));
+    return !q || Number(q.slice(2)) > 0;
+  }
+  return false;
 }
 
 /** Sender entry med riktig Content-Encoding, Vary, ETag og 304 ved If-None-Match. */

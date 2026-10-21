@@ -97,11 +97,16 @@ export async function getEtJourneys() {
   return parsedJourneys;
 }
 
+// Feil i bakgrunnshenting (429, timeout) logges; uhåndtert rejection ville drept prosessen.
+function refreshInBackground() {
+  refresh().catch((e) => console.warn('[RuterLive] ET-henting:', e.message));
+}
+
 export function startEtCachePoll() {
-  refresh();
+  refreshInBackground();
   setInterval(() => {
     const since429 = Date.now() - last429At;
     if (last429At && since429 < BACKOFF_AFTER_429_MS) return; // Vent etter 429
-    refresh();
+    refreshInBackground();
   }, REFRESH_MS);
 }

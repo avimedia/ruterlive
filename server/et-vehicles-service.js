@@ -4,10 +4,9 @@
  * Cache 15s siden posisjoner beregnes ut fra "nå".
  */
 
-import { DOMParser } from '@xmldom/xmldom';
 import { MAX_ROUTE_SPAN_KM, MAX_ROUTE_SPAN_KM_BUS } from '../config.js';
-import { journeyVehicleId, selectJourneysForVehicles } from '../shared/et-journeys.js';
-import { ensureEtCache } from './et-cache.js';
+import { selectJourneysForVehicles } from '../shared/et-journeys.js';
+import { getEtJourneys } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { dedupeInFlight } from './in-flight.js';
@@ -15,28 +14,10 @@ import { dedupeInFlight } from './in-flight.js';
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CLIENT_NAME = 'ruterlive-web';
 
-const METRO_LINE_NUMS = new Set([1, 2, 3, 4, 5, 6]);
-const TRAM_LINE_NUMS = new Set([11, 12, 13, 14, 15, 16, 17, 18, 19]);
-const SIRI_NS = 'http://www.siri.org.uk/siri';
-
 const CACHE_TTL_MS = 15000; // 15s – posisjoner avhenger av "nå"
 
 let cached = null;
 let lastCompute = 0;
-
-function getLineNum(lineRef) {
-  const m = /:Line:(\d+)/.exec(lineRef || '');
-  return m ? parseInt(m[1], 10) : null;
-}
-
-function getModeFromLineNumFallback(lineRef) {
-  const num = getLineNum(lineRef);
-  if (!num) return null;
-  if (METRO_LINE_NUMS.has(num)) return 'metro';
-  if (TRAM_LINE_NUMS.has(num)) return 'tram';
-  if (num >= 20) return 'bus';
-  return null;
-}
 
 function mapJpTransportMode(jpMode) {
   if (!jpMode) return null;
@@ -44,73 +25,6 @@ function mapJpTransportMode(jpMode) {
   if (['metro', 'bus', 'tram', 'water', 'rail'].includes(m)) return m;
   if (['ferry', 'ferje'].includes(m)) return 'water';
   return null;
-}
-
-function parseIsoTime(str) {
-  if (!str) return null;
-  const d = new Date(str);
-  return isNaN(d.getTime()) ? null : d.getTime();
-}
-
-function parseSiriXml(xmlText) {
-  const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
-  const journeys = [];
-
-  const journeyEls = doc.getElementsByTagNameNS(SIRI_NS, 'EstimatedVehicleJourney');
-  for (let i = 0; i < journeyEls.length; i++) {
-    const jel = journeyEls[i];
-    const lineRef = jel.getElementsByTagNameNS(SIRI_NS, 'LineRef')[0]?.textContent;
-    const mode = getModeFromLineNumFallback(lineRef);
-    if (!mode) continue;
-
-    const vehicleRef = jel.getElementsByTagNameNS(SIRI_NS, 'VehicleRef')[0]?.textContent || '';
-    const datedVehicleJourneyRef = jel.getElementsByTagNameNS(SIRI_NS, 'DatedVehicleJourneyRef')[0]?.textContent || '';
-    const destEl = jel.getElementsByTagNameNS(SIRI_NS, 'DestinationDisplay')[0];
-    const destinationName = (destEl?.textContent || '').trim();
-
-    const recordedCalls = [];
-    const rcEls = jel.getElementsByTagNameNS(SIRI_NS, 'RecordedCall');
-    for (let r = 0; r < rcEls.length; r++) {
-      const cel = rcEls[r];
-      const ref = cel.getElementsByTagNameNS(SIRI_NS, 'StopPointRef')[0]?.textContent;
-      const name = cel.getElementsByTagNameNS(SIRI_NS, 'StopPointName')[0]?.textContent || '';
-      const dep = parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, 'ActualDepartureTime')[0]?.textContent)
-        || parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, 'ActualArrivalTime')[0]?.textContent);
-      if (ref && dep) recordedCalls.push({ quayId: ref, name, time: dep });
-    }
-
-    const estimatedCalls = [];
-    const ecEls = jel.getElementsByTagNameNS(SIRI_NS, 'EstimatedCall');
-    for (let e = 0; e < ecEls.length; e++) {
-      const cel = ecEls[e];
-      const ref = cel.getElementsByTagNameNS(SIRI_NS, 'StopPointRef')[0]?.textContent;
-      const name = cel.getElementsByTagNameNS(SIRI_NS, 'StopPointName')[0]?.textContent || '';
-      const arr = parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, 'ExpectedArrivalTime')[0]?.textContent)
-        || parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, 'ExpectedDepartureTime')[0]?.textContent);
-      const dep = parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, 'ExpectedDepartureTime')[0]?.textContent);
-      if (ref && (arr || dep)) {
-        estimatedCalls.push({ quayId: ref, name, arrTime: arr || dep, depTime: dep || arr });
-      }
-    }
-
-    if (recordedCalls.length === 0 && estimatedCalls.length === 0) continue;
-
-    journeys.push({
-      vehicleId: journeyVehicleId({
-        vehicleRef,
-        datedVehicleJourneyRef,
-        lineRef,
-        firstQuayId: (recordedCalls[0] || estimatedCalls[0])?.quayId,
-        firstTime: recordedCalls[0]?.time ?? (estimatedCalls[0]?.depTime || estimatedCalls[0]?.arrTime),
-      }),
-      mode,
-      lineRef,
-      destinationName,
-      recordedCalls,
-      estimatedCalls,
-    });
-  }
-  return journeys;
 }
 
 function getLinePublicCode(lineRef) {
@@ -311,16 +225,16 @@ const computeDeduped = dedupeInFlight(async () => {
       return { vehicles: [], shapes: [] };
     }
 
-    const xml = await ensureEtCache();
-    const journeys = parseSiriXml(xml);
+    // Delte, frosne turer fra et-cache – lag kopi ved ny modus i stedet for å mutere
+    const parsed = await getEtJourneys();
 
     const lineModeCache = new Map();
-    const uniqueLineRefs = [...new Set(journeys.map((j) => j.lineRef).filter(Boolean))];
+    const uniqueLineRefs = [...new Set(parsed.map((j) => j.lineRef).filter(Boolean))];
     await fetchLineModes(uniqueLineRefs, lineModeCache);
-    for (const j of journeys) {
+    const journeys = parsed.map((j) => {
       const jpMode = lineModeCache.get(j.lineRef);
-      if (jpMode) j.mode = jpMode;
-    }
+      return jpMode && jpMode !== j.mode ? { ...j, mode: jpMode } : j;
+    });
 
     const quayCoordCache = new Map();
     for (const j of journeys) {

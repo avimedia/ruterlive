@@ -1,4 +1,5 @@
 import { normalizeGpsVehicles } from '../shared/gps-vehicles.js';
+import { isHidden } from './visibility.js';
 
 const POLL_MS = 20000;
 const POLL_BACKOFF_MS = 45000; // Ved 502/503: lengre intervall for å ikke spamme
@@ -85,6 +86,18 @@ async function fetchVehicles(bounds, onVehicles, onError) {
 function scheduleNextPoll(bounds, onVehicles, onError) {
   const interval = consecutiveErrors > 0 ? POLL_BACKOFF_MS : POLL_MS;
   pollInterval = setTimeout(() => {
+    if (isHidden()) {
+      // Skjult fane: ingen henting; hent én gang og fortsett når den blir synlig
+      const onVisible = () => {
+        if (isHidden()) return;
+        document.removeEventListener('visibilitychange', onVisible);
+        pollInterval = null;
+        fetchVehicles(bounds, onVehicles, onError).then(() => scheduleNextPoll(bounds, onVehicles, onError));
+      };
+      document.addEventListener('visibilitychange', onVisible);
+      pollInterval = { cancel: () => document.removeEventListener('visibilitychange', onVisible) };
+      return;
+    }
     fetchVehicles(bounds, onVehicles, onError).then(() => {
       scheduleNextPoll(bounds, onVehicles, onError);
     });
@@ -102,7 +115,8 @@ export function connectVehicles(boundingBox, onVehicles, onError) {
 
 export function disconnect() {
   if (pollInterval) {
-    clearTimeout(pollInterval);
+    if (pollInterval.cancel) pollInterval.cancel();
+    else clearTimeout(pollInterval);
     pollInterval = null;
   }
 }

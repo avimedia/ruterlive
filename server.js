@@ -27,6 +27,7 @@ import { renderGuidePage } from './server/pages/guide-page.js';
 import { renderGuideIndex, renderAboutPage } from './server/pages/guide-index.js';
 import { buildSitemap, isMapPath } from './server/pages/sitemap.js';
 import { renderNotFound } from './server/pages/not-found.js';
+import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
 
 function sendNotFound(res) {
   res.set('Cache-Control', 'no-store');
@@ -88,6 +89,7 @@ async function refreshFlybussFromJp() {
 }
 
 const app = express();
+app.use(compressTextResponses()); // gzip/br for server-rendret HTML og XML
 
 // Health check for Render – slik at deploy/rullende oppdateringer fungerer
 app.get('/health', (_req, res) => {
@@ -465,9 +467,12 @@ app.use(
   })
 );
 
-app.use(express.static(path.join(__dirname, 'dist')));
+const DIST_DIR = path.join(__dirname, 'dist');
+app.use(precompressedStatic(DIST_DIR));
+app.use(express.static(DIST_DIR, { setHeaders: (res, file) => setStaticHeaders(res, file, DIST_DIR) }));
 app.get('*', (req, res) => {
   if (!isMapPath(req.path)) return sendNotFound(res);
+  res.set('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 

@@ -1,3 +1,4 @@
+import { runWhenVisible } from './visibility.js';
 import { initMap, getMap } from './map.js';
 import { initTheme } from './theme.js';
 import { initStopSearch } from './search.js';
@@ -211,13 +212,14 @@ function applyInitialData(data) {
       .catch(() => {});
   }
   tryStaticNetworkShapes();
-  setTimeout(tryStaticNetworkShapes, 8000);
-  setTimeout(tryStaticNetworkShapes, 25000);
+  const retryStatic = runWhenVisible(tryStaticNetworkShapes);
+  setTimeout(retryStatic, 8000);
+  setTimeout(retryStatic, 25000);
   const hasRail = shapes.some((s) => (s.mode || '').toLowerCase() === 'rail' || (s.mode || '').toLowerCase() === 'flytog');
   if (!hasRail) {
     // Prøv rail-shapes eksplisitt – jernbane kan mangle fra initial-data
     [2000, 8000, 25000].forEach((delay) => {
-      setTimeout(() => {
+      setTimeout(runWhenVisible(() => {
         Promise.all([
           fetch('/api/rail-shapes').then((r) => r.ok && r.json()).catch(() => []),
           fetch('/api/route-shapes').then((r) => r.ok && r.json()).catch(() => []),
@@ -228,7 +230,7 @@ function applyInitialData(data) {
             mergeAndUpdate();
           }
         });
-      }, delay);
+      }), delay);
     });
   }
 }
@@ -360,7 +362,7 @@ function retryDataFetch() {
 
 fetchInitialData().then((ok) => {
   if (ok) {
-    setInterval(() => fetchInitialData(), POLL_MS);
+    setInterval(runWhenVisible(() => fetchInitialData()), POLL_MS);
   } else {
     setRetryHandler(retryDataFetch);
     getLoadingIndicator()?.show('Prøver igjen…');
@@ -385,7 +387,7 @@ fetchInitialData().then((ok) => {
     // /api/et-cached er fjernet i prod: der brukes bare GPS-fallback (js/api.js)
     if (import.meta.env.DEV) {
       pollEt();
-      setInterval(pollEt, POLL_MS);
+      setInterval(runWhenVisible(pollEt), POLL_MS);
     } else {
       etLoaded = true;
       mergeAndUpdate();

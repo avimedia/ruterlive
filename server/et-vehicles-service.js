@@ -130,7 +130,7 @@ function buildVehiclesAndShapes(journeys, quayCoordCache, prevShapes = null) {
         vehicleId: j.vehicleId,
         mode: j.mode,
         location: { latitude: lat, longitude: lon },
-        line: { publicCode: getLinePublicCode(j.lineRef) },
+        line: { publicCode: getLinePublicCode(j.lineRef), lineRef: j.lineRef || null },
         destinationName: j.destinationName,
         bearing: null,
         from: originForFrom || null,

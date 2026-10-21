@@ -52,6 +52,8 @@ The server merges shapes from several sources with `mergeShapes` (key `mode|line
 
 The client (`js/main.js`) has its own `mergeRouteShapes` with the same key logic. With the live feed it only fetches `/api/rail-shapes` when rail is missing at cold start; `/api/static-network-shapes` and `/api/route-shapes` are only used by the legacy/fallback path. `js/routes.js` handles display rules: metro, tram and rail are always shown, while bus and boat lines and their stops appear only for the selected vehicle.
 
+ET shapes for buses are often partial trips, so for a selected bus/boat (and flybuss without a matching shape) `js/routes.js` fetches `/api/vehicle-route?line=&mode=&dest=&ref=` and draws that instead. `server/vehicle-route.js` picks the Journey Planner pattern whose sign text (`destinationDisplay.frontText` from one sample service journey) or last stop matches `dest`; 2 JP calls per line (3 without `ref`), cached 24 h in a 300-line LRU (failures 10 min). `ref` is the JP line id (`line.ref` in `/api/vehicles-live`, from ET/GPS `lineRef`); without it a line code like 22 is ambiguous across operators, and RUT is preferred.
+
 ### Shared code
 
 `config.js` (e.g. `MAX_ROUTE_SPAN_KM`, `isFlytogLineCode`) and `shared/et-journeys.js` (ET vehicle id + one journey per vehicle) are imported by both server and client. Flytoget's line codes are `FLY1`/`FLY2`; `F1`, `F4`, `F6` are Vy/SJ trains.

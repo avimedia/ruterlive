@@ -78,7 +78,7 @@ export function pickMainPattern(journeyPatterns) {
 
 // Hard tidsgrense med egen timer: AbortSignal.timeout alene stoppet ikke et hengende kall i prod,
 // og med in-flight-dedup låste det linjesiden til serveren startet på nytt.
-async function jpQuery(query, fetchFn, timeoutMs = TIMEOUT_MS) {
+export async function jpQuery(query, fetchFn, timeoutMs = TIMEOUT_MS, variables = undefined) {
   const controller = new AbortController();
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -91,7 +91,7 @@ async function jpQuery(query, fetchFn, timeoutMs = TIMEOUT_MS) {
     const res = await fetchFn(JP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ET-Client-Name': 'ruterlive-web' },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify(variables ? { query, variables } : { query }),
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`JP ${res.status}`);

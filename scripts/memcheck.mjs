@@ -28,6 +28,8 @@ const STIER = [
   '/api/static-network-shapes',
   '/api/rail-shapes',
   '/api/route-shapes',
+  '/api/vehicle-route?line=30&mode=bus&dest=Nydalen&ref=RUT%3ALine%3A30',
+  '/api/vehicle-route?line=20&mode=bus&dest=Galgeberg',
 ];
 
 if (!existsSync(path.join(rot, 'dist', 'index.html'))) {

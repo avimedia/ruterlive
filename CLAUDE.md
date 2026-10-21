@@ -16,6 +16,7 @@ npm run dev      # Vite dev server, http://localhost:5173
 npm run build    # Vite build → dist/
 npm run start    # Express server (serves dist/ + API + content pages), http://localhost:3000
 npm test         # node --test (all of test/)
+npm run memcheck # starts the server, samples RSS for 200 s (needs dist/; --max-mb, --seconds)
 node --test test/line-catalog.test.js   # single test file
 ```
 
@@ -29,14 +30,14 @@ The basemap is Kartverket `topograatone` (no key); dark theme is a CSS filter on
 
 The client takes different data paths depending on `import.meta.env.DEV`:
 
-- **Prod (`server.js`)**: the client calls the server's own aggregated and cached endpoints. On load and every 30 s it fetches `/api/initial-data`, which returns vehicles merged with ET-computed positions, plus all route shapes.
-- **Dev (Vite)**: `vite.config.js` only proxies the raw `/api/entur*` paths to api.entur.io. Server-only endpoints (`/api/initial-data`, `/api/route-shapes`, `/api/quay-coords`, `/api/stops-*`, `/api/departures`, `/api/et-cached`) **do not exist** there. When `/api/initial-data` fails, `js/main.js` falls back to client-side polling: `api.js` for GraphQL vehicles and `et-api.js` for SIRI ET parsed in the browser. Stop search, departures and GTFS coordinates therefore only work fully under `npm run build && npm run start`.
+- **Prod (`server.js`)**: every 30 s the client fetches `/api/vehicles-live` → `{ t0, shapesVersion, vehicles }`. `t0` is epoch seconds; an ET vehicle's `path` has points `[lat, lon, arrSec, depSec]` or `[lat, lon, sec]` relative to `t0`, which `js/main.js` decodes once per poll with `decodeVehiclePath` (`shared/vehicle-path.js`) into the ms format `js/markers.js` uses. Route shapes come from `/api/route-shapes-all?v=<shapesVersion>` (cached as immutable), fetched again only when the version changes. The version is the hash of the sorted shape set, and ET-derived shapes are swapped in at most every 30 min (`server/shapes-version.js`), so it changes rarely. The server also fills `from`/`to` for GPS vehicles from the shapes (`shared/route-match.js`), so the browser does not call Journey Planner. `/api/initial-data` (ms paths, everything in one response) is legacy/fallback for old cached clients. Polling (and shape retries) pause while the tab is hidden (`js/visibility.js`).
+- **Dev (Vite)**: `vite.config.js` only proxies the raw `/api/entur*` paths to api.entur.io. Server-only endpoints (`/api/vehicles-live`, `/api/initial-data`, `/api/route-shapes*`, `/api/quay-coords`, `/api/stops-*`, `/api/departures`) **do not exist** there. When `/api/initial-data` fails, `js/main.js` falls back to client-side polling: `api.js` for GraphQL vehicles and `et-api.js` for SIRI ET parsed in the browser. Stop search, departures and GTFS coordinates therefore only work fully under `npm run build && npm run start`.
 
 ### Vehicle positions
 
 Ruter does not publish GPS to Entur, so there are two vehicle sources, merged by `vehicleId`:
 1. **Entur Vehicles GraphQL** (`server/vehicles-cache.js`, 20 s cache): real GPS for the operators that provide it.
-2. **SIRI ET (Estimated Timetable)**: bus, metro, tram and boat positions are *interpolated* between stops from departure times. Server: `server/et-cache.js` fetches the large ET XML at most every 90 s, with a 5-minute backoff after a 429. `server/et-vehicles-service.js` parses it with `@xmldom/xmldom` and caches the result for 15 s. Quay coordinates come from the Entur GTFS zip (`server/gtfs-stops-loader.js`, about 95 MB, downloaded at most once every 23 h).
+2. **SIRI ET (Estimated Timetable)**: bus, metro, tram and boat positions are *interpolated* between stops from departure times. Server: `server/et-cache.js` fetches the large ET XML (~25 MB) at most every 90 s, with a 5-minute backoff after a 429, and parses it as it streams in (`server/et-parse.js`, no DOM); only the parsed journeys are kept, never the XML. `/api/et-cached` is gone (410). `server/et-vehicles-service.js` computes positions and caches the result for 15 s. Line modes come from `server/line-modes.js` (shared module cache, 24 h, failures 10 min, unknown lines fetched in batches of 50). Quay coordinates come from the Entur GTFS zip (`server/gtfs-stops-loader.js`, about 95 MB, downloaded at most once every 23 h).
 
 The ET parsing, interpolation and mode-detection logic exists **twice**: server-side (`server/et-vehicles-service.js`, `server/shape-service.js`) and client-side (`js/et-api.js`, the dev/fallback path). Helpers such as `getModeFromLineNumFallback` and `mapJpTransportMode` are copy-pasted across these files. A behaviour change usually has to be made in every copy.
 
@@ -49,7 +50,7 @@ The server merges shapes from several sources with `mergeShapes` (key `mode|line
 - Rail: `jp-route-fetcher.js` (Entur JP), then `osm-rail-fetcher.js` (OSM), then hard-coded `rail-fallback-shapes.js`, tried in that order.
 - Airport buses: static `flybuss-shapes.js`, refreshed weekly from JP.
 
-The client (`js/main.js`) has its own `mergeRouteShapes` with the same key logic, and retries `/api/static-network-shapes` and `/api/rail-shapes` with delays in case rail is missing at cold start. `js/routes.js` handles display rules: metro, tram and rail are always shown, while bus and boat lines and their stops appear only for the selected vehicle.
+The client (`js/main.js`) has its own `mergeRouteShapes` with the same key logic. With the live feed it only fetches `/api/rail-shapes` when rail is missing at cold start; `/api/static-network-shapes` and `/api/route-shapes` are only used by the legacy/fallback path. `js/routes.js` handles display rules: metro, tram and rail are always shown, while bus and boat lines and their stops appear only for the selected vehicle.
 
 ### Shared code
 
@@ -70,4 +71,4 @@ Every request to Entur must send the header `ET-Client-Name: ruterlive-web`. Rat
 
 ### Static and AdSense
 
-`public/` (ads.txt, sw.js, manifest, personvern.html, content.css) is copied into `dist/`. New server routes must be placed before `express.static`/the catch-all. Consent for ads is handled by Google's own CMP (see `ADSENSE.md`), so no custom consent banner should be added. `public/sw.js` never caches `/api/`.
+`public/` (ads.txt, sw.js, manifest, personvern.html, content.css) is copied into `dist/`. New server routes must be placed before `express.static`/the catch-all. Consent for ads is handled by Google's own CMP (see `ADSENSE.md`), so no custom consent banner should be added. `public/sw.js` never caches `/api/`. `npm run build` also writes `.br`/`.gz` next to the assets (`scripts/precompress.mjs`), served by `server/static-assets.js` with cache headers (`/assets/*` immutable for a year, HTML and `sw.js` `no-cache`). Large JSON responses are precompressed once per cache update (`server/json-cache.js`, ETag + 304); other HTML/XML/JSON responses (including the Entur proxies) are compressed by `compressTextResponses`.

@@ -7,7 +7,7 @@
 import { MAX_ROUTE_SPAN_KM, MAX_ROUTE_SPAN_KM_BUS } from '../config.js';
 import { selectJourneysForVehicles } from '../shared/et-journeys.js';
 import { buildVehiclePath } from '../shared/vehicle-path.js';
-import { getEtJourneys } from './et-cache.js';
+import { getEtJourneys, getEtVersion } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { dedupeInFlight } from './in-flight.js';
@@ -19,6 +19,9 @@ const CACHE_TTL_MS = 15000; // 15s – posisjoner avhenger av "nå"
 
 let cached = null;
 let lastCompute = 0;
+let shapesKey = { etVersion: -1, gtfs: null };
+// Samme tomme resultat hver gang, så server.js kan gjenbruke ferdigkomprimerte svar ved feil
+const EMPTY = Object.freeze({ vehicles: Object.freeze([]), shapes: Object.freeze([]) });
 
 function mapJpTransportMode(jpMode) {
   if (!jpMode) return null;
@@ -94,10 +97,12 @@ function removeGeoOutliers(points, maxNeighborDistKm = MAX_ROUTE_SPAN_KM) {
   return current;
 }
 
-function buildVehiclesAndShapes(journeys, quayCoordCache) {
+const ROUTE_MODES = new Set(['metro', 'tram', 'water', 'bus']);
+
+/** prevShapes: rutekart fra samme ET-versjon gjenbrukes (samme array → ingen ny serialisering). */
+function buildVehiclesAndShapes(journeys, quayCoordCache, prevShapes = null) {
   const now = Date.now();
   const vehicles = [];
-  const routeModes = new Set(['metro', 'tram', 'water', 'bus']);
 
   // Bare én tur per kjøretøy (ikke fullførte eller ikke-startede turer), men shapes bygges fra alle turer
   for (const j of selectJourneysForVehicles(journeys, now)) {
@@ -173,10 +178,14 @@ function buildVehiclesAndShapes(journeys, quayCoordCache) {
 
   }
 
+  return { vehicles, shapes: prevShapes ?? buildShapes(journeys, quayCoordCache) };
+}
+
+function buildShapes(journeys, quayCoordCache) {
   const shapes = [];
   const shapeSeen = new Set();
   for (const j of journeys) {
-    if (!routeModes.has(j.mode)) continue;
+    if (!ROUTE_MODES.has(j.mode)) continue;
     const allCalls = [...j.recordedCalls, ...j.estimatedCalls];
     const points = [];
     const firstQuayId = allCalls[0]?.quayId;
@@ -208,7 +217,7 @@ function buildVehiclesAndShapes(journeys, quayCoordCache) {
     });
   }
 
-  return { vehicles, shapes };
+  return shapes;
 }
 
 export async function getEtVehiclesAndShapes() {
@@ -218,7 +227,7 @@ export async function getEtVehiclesAndShapes() {
   // Avviser aldri: ved tidsavbrudd brukes forrige resultat, som før.
   return computeDeduped().catch((e) => {
     console.warn('[RuterLive] ET vehicles:', e.message);
-    return cached ?? { vehicles: [], shapes: [] };
+    return cached ?? EMPTY;
   });
 }
 
@@ -228,11 +237,12 @@ const computeDeduped = dedupeInFlight(async () => {
     const gtfs = getGtfsQuayCache();
     if (!gtfs || gtfs.size === 0) {
       if (cached) return cached;
-      return { vehicles: [], shapes: [] };
+      return EMPTY;
     }
 
     // Delte, frosne turer fra et-cache – lag kopi ved ny modus i stedet for å mutere
     const parsed = await getEtJourneys();
+    const etVersion = getEtVersion();
 
     const lineModeCache = new Map();
     const uniqueLineRefs = [...new Set(parsed.map((j) => j.lineRef).filter(Boolean))];
@@ -251,13 +261,15 @@ const computeDeduped = dedupeInFlight(async () => {
       }
     }
 
-    const result = buildVehiclesAndShapes(journeys, quayCoordCache);
+    const sameShapes = cached && shapesKey.etVersion === etVersion && shapesKey.gtfs === gtfs;
+    const result = buildVehiclesAndShapes(journeys, quayCoordCache, sameShapes ? cached.shapes : null);
+    shapesKey = { etVersion, gtfs };
     cached = result;
     lastCompute = Date.now();
     return result;
   } catch (err) {
     console.warn('[RuterLive] ET vehicles:', err.message);
     if (cached) return cached;
-    return { vehicles: [], shapes: [] };
+    return EMPTY;
   }
 }, { timeoutMs: 60000 }); // ET-beregning: maks 1 min, deretter nytt forsøk

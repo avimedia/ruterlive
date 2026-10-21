@@ -15,11 +15,13 @@ import { fetchRailShapesOnly, fetchFlybussShapesOnly } from './server/jp-route-f
 import { fetchOsmRailTracks } from './server/osm-rail-fetcher.js';
 import { getFlybussShapes } from './server/flybuss-shapes.js';
 import { getFallbackRailShapes } from './server/rail-fallback-shapes.js';
-import { startEtCachePoll, ensureEtCache } from './server/et-cache.js';
+import { startEtCachePoll } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
-import { getLiveData, getMergedVehicles, countVehiclesForLine, mergeShapes } from './server/live-vehicles.js';
-import { makeJsonEntry, sendJson, hashString } from './server/json-cache.js';
+import { getMergedVehicles, countVehiclesForLine, mergeShapes, mergeVehicles } from './server/live-vehicles.js';
+import { getEtVehiclesAndShapes } from './server/et-vehicles-service.js';
+import { makeJsonEntry, sendJson, memoEntry } from './server/json-cache.js';
+import { buildVehiclesPayload } from './server/vehicles-payload.js';
 import { LINES, getLineBySlug, getLineStops, prewarmLineStops } from './server/line-catalog.js';
 import { renderLinePage } from './server/pages/line-page.js';
 import { getGuideBySlug, loadGuideBody, loadAboutBody, GUIDES } from './server/guide-catalog.js';
@@ -117,70 +119,74 @@ app.get('/sitemap.xml', (_req, res) => {
   );
 });
 
+// Statiske rutekart slått sammen; bygges på nytt bare når en av kildecachene er byttet ut.
+const mergeStaticShapes = memoEntry((base, rail, flybuss) => mergeShapes(mergeShapes(base, rail), flybuss));
 function getAllShapes() {
-  return mergeShapes(mergeShapes(getCachedShapes(), railShapesCache), flybussShapesCache);
+  return mergeStaticShapes(getCachedShapes(), railShapesCache, flybussShapesCache);
 }
 
+// Store rutekart-svar: forhåndskomprimert med ETag, bygget ved første forespørsel etter kildebytte.
+const routeShapesEntry = memoEntry((all) => makeJsonEntry(all));
+const railShapesEntry = memoEntry((rail) => makeJsonEntry(rail));
+const staticNetworkEntry = memoEntry((rail, flybuss) => makeJsonEntry([...rail, ...flybuss]));
+
+// Tom jernbane ved kald start skal ikke caches en time i nettleseren
+const staticCacheControl = (hasRail) => (hasRail ? 'public, max-age=3600' : 'public, max-age=30');
+
 // Cached rutekart – klart med en gang brukeren laster siden (inkl. jernbane og flybuss fra egen preload)
-app.get('/api/route-shapes', (_req, res) => {
-  res.set('Cache-Control', 'public, max-age=30');
-  res.json(getAllShapes());
+app.get('/api/route-shapes', (req, res) => {
+  sendJson(req, res, routeShapesEntry(getAllShapes()), { cacheControl: 'public, max-age=30' });
 });
 
 // Kun jernbaneruter – for å sikre at strekninger alltid lastes
-app.get('/api/rail-shapes', (_req, res) => {
-  res.set('Cache-Control', 'public, max-age=3600');
-  res.json(railShapesCache);
+app.get('/api/rail-shapes', (req, res) => {
+  sendJson(req, res, railShapesEntry(railShapesCache), {
+    cacheControl: staticCacheControl(railShapesCache.length > 0),
+  });
 });
 
 // Flybuss + jernbane – alltid tilgjengelig, lastes ved oppstart
-app.get('/api/static-network-shapes', (_req, res) => {
-  res.set('Cache-Control', 'public, max-age=3600');
-  res.json([...railShapesCache, ...flybussShapesCache]);
+app.get('/api/static-network-shapes', (req, res) => {
+  sendJson(req, res, staticNetworkEntry(railShapesCache, flybussShapesCache), {
+    cacheControl: staticCacheControl(railShapesCache.length > 0),
+  });
 });
 
-// Forhåndskomprimerte svar. Bygges på nytt bare når kildecachene er byttet ut; gamle entries slippes.
-let liveState = null; // { sources, rail, flybuss, base, vehicles, routeShapes }
-let vehiclesEntry = null;
-let shapesEntry = null;
-let shapesVersion = null;
-let initialEntry = null;
-let livePromise = null;
+// Forhåndskomprimerte live-svar. Nøkkel er identiteten til kildecachene (kjøretøy, ET-resultat,
+// rutekart); samme kilder (også et konstant tomt ET-resultat ved feil) gir samme ferdige entry.
+const NO_SHAPES = Object.freeze([]);
+let lastShapesEntry = null;
+const liveShapesEntry = memoEntry((all, etShapes) => {
+  lastShapesEntry = makeJsonEntry(mergeShapes(all, etShapes), lastShapesEntry); // samme innhold → samme entry
+  return lastShapesEntry;
+});
+const shapesVersionOf = (entry) => entry.etag.slice(1, 13);
+// Hentes av alle klienter hvert 30. s: høyere komprimering lønner seg (~10 ms per bygging)
+const liveVehiclesEntry = memoEntry((vehiclesData, etResult, shapesEntry) => makeJsonEntry(
+  buildVehiclesPayload(mergeVehicles(vehiclesData, etResult), { shapesVersion: shapesVersionOf(shapesEntry) }),
+  null,
+  { gzipLevel: 9, brQuality: 9 }
+));
+// Gamle klienter: hele formatet med path i ms. Bygges bare når noen ber om det.
+const legacyInitialEntry = memoEntry((vehiclesData, etResult, all) => makeJsonEntry({
+  vehicles: mergeVehicles(vehiclesData, etResult),
+  routeShapes: mergeShapes(all, etResult?.shapes ?? NO_SHAPES),
+}));
+
+async function getLiveSources() {
+  const [vehiclesData, etResult] = await Promise.all([getCachedVehicles(), getEtVehiclesAndShapes()]);
+  return { vehiclesData, etResult };
+}
 
 async function getLiveEntries() {
-  if (livePromise) return livePromise;
-  livePromise = (async () => {
-    try {
-      const live = await getLiveData(getAllShapes);
-      const same = liveState && vehiclesEntry
-        && liveState.sources.vehiclesData === live.sources.vehiclesData
-        && liveState.sources.etResult === live.sources.etResult
-        && liveState.rail === railShapesCache
-        && liveState.flybuss === flybussShapesCache
-        && liveState.base === getCachedShapes();
-      if (!same) {
-        const shapesJson = JSON.stringify(live.routeShapes);
-        const version = hashString(shapesJson);
-        if (version !== shapesVersion) {
-          shapesEntry = makeJsonEntry(shapesJson); // komprimeres bare når rutekartene faktisk er endret
-          shapesVersion = version;
-        }
-        vehiclesEntry = makeJsonEntry({ vehicles: live.vehicles, shapesVersion });
-        initialEntry = null; // bygges ved behov (kun gamle klienter)
-        liveState = {
-          sources: live.sources, rail: railShapesCache, flybuss: flybussShapesCache,
-          base: getCachedShapes(), vehicles: live.vehicles, routeShapes: live.routeShapes,
-        };
-      }
-      return { vehiclesEntry, shapesEntry, shapesVersion };
-    } finally {
-      livePromise = null;
-    }
-  })();
-  return livePromise;
+  const { vehiclesData, etResult } = await getLiveSources();
+  const shapesEntry = liveShapesEntry(getAllShapes(), etResult?.shapes ?? NO_SHAPES);
+  const vehiclesEntry = liveVehiclesEntry(vehiclesData, etResult, shapesEntry);
+  return { vehiclesEntry, shapesEntry, shapesVersion: shapesVersionOf(shapesEntry) };
 }
 
 // Bare kjøretøy – klienten poller denne hvert 30. s. Rutekart hentes separat og bare ved ny versjon.
+// Format: { t0, shapesVersion, vehicles } der ET-path har tider i sekunder relativt til t0.
 app.get('/api/vehicles-live', async (req, res) => {
   try {
     const { vehiclesEntry: e } = await getLiveEntries();
@@ -206,11 +212,8 @@ app.get('/api/route-shapes-all', async (req, res) => {
 // Alt på en gang – beholdt uendret i format for gamle klienter (bufret JS i nettleseren).
 app.get('/api/initial-data', async (req, res) => {
   try {
-    await getLiveEntries();
-    if (!initialEntry) {
-      initialEntry = makeJsonEntry({ vehicles: liveState.vehicles, routeShapes: liveState.routeShapes });
-    }
-    sendJson(req, res, initialEntry, { cacheControl: 'public, max-age=15' });
+    const { vehiclesData, etResult } = await getLiveSources();
+    sendJson(req, res, legacyInitialEntry(vehiclesData, etResult, getAllShapes()), { cacheControl: 'public, max-age=15' });
   } catch (err) {
     res.status(503).json({ vehicles: [], routeShapes: [] });
   }
@@ -403,16 +406,9 @@ app.get('/api/stops-search', async (req, res) => {
   }
 });
 
-// Cached ET – unngår 429 rate limit (1 kall per 60s, ikke per bruker)
-app.get('/api/et-cached', async (_req, res) => {
-  try {
-    const xml = await ensureEtCache();
-    res.set('Content-Type', 'application/xml');
-    res.set('Cache-Control', 'public, max-age=15');
-    res.send(xml);
-  } catch (err) {
-    res.status(503).send('ET midlertidig utilgjengelig: ' + err.message);
-  }
+// Rå ET-XML fjernet – serveren beholder ikke XML-en (minne). Klienten bruker /api/vehicles-live.
+app.use('/api/et-cached', (_req, res) => {
+  res.status(410).json({ error: 'et-cached disabled' });
 });
 
 app.use(

@@ -1,32 +1,54 @@
 /**
  * Forhåndskomprimert JSON: komprimeres én gang per cache-oppdatering, ikke per forespørsel.
- * Én entry per payload holder json + gzip + br + etag.
+ * Én entry per payload holder gzip + br + etag. Store payloads beholder ikke rå JSON i minnet;
+ * klienter uten gzip/br (sjeldne) får den dekomprimert ved forespørsel.
  */
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';
+
+const COMPRESS_MIN_BYTES = 1024;
 
 export function hashString(str, len = 12) {
   return crypto.createHash('sha1').update(str).digest('hex').slice(0, len);
 }
 
-/** Lager entry fra et objekt (eller ferdig JSON-streng). Små payloads komprimeres ikke. */
-export function makeJsonEntry(value) {
+/**
+ * Lager entry fra et objekt (eller ferdig JSON-streng). Små payloads komprimeres ikke.
+ * Med `prev`: gir `prev` tilbake uendret når innholdet er det samme (ingen ny komprimering).
+ * Små, ofte hentede svar kan bruke høyere komprimering (brQuality 9 ≈ 10 ms for 350 kB).
+ */
+export function makeJsonEntry(value, prev = null, { gzipLevel = 6, brQuality = 5 } = {}) {
   const str = typeof value === 'string' ? value : JSON.stringify(value);
-  const json = Buffer.from(str);
   const etag = `"${hashString(str, 16)}"`;
-  const compress = json.length >= 1024;
+  if (prev && prev.etag === etag) return prev;
+  const json = Buffer.from(str);
+  if (json.length < COMPRESS_MIN_BYTES) return { json, gzip: null, br: null, etag };
   return {
-    json,
-    gzip: compress ? zlib.gzipSync(json, { level: 6 }) : null,
-    br: compress
-      ? zlib.brotliCompressSync(json, {
-          params: {
-            [zlib.constants.BROTLI_PARAM_QUALITY]: 5,
-            [zlib.constants.BROTLI_PARAM_SIZE_HINT]: json.length,
-          },
-        })
-      : null,
+    json: null,
+    gzip: zlib.gzipSync(json, { level: gzipLevel }),
+    br: zlib.brotliCompressSync(json, {
+      params: {
+        [zlib.constants.BROTLI_PARAM_QUALITY]: brQuality,
+        [zlib.constants.BROTLI_PARAM_SIZE_HINT]: json.length,
+      },
+    }),
     etag,
+  };
+}
+
+/**
+ * Memoiserer en entry-bygger på identiteten (===) til argumentene: bygger bare på nytt
+ * når en av kildecachene er byttet ut.
+ */
+export function memoEntry(build) {
+  let keys = null;
+  let entry = null;
+  return (...args) => {
+    if (!keys || args.length !== keys.length || args.some((a, i) => a !== keys[i])) {
+      entry = build(...args);
+      keys = args;
+    }
+    return entry;
   };
 }
 
@@ -52,13 +74,15 @@ export function sendJson(req, res, entry, { cacheControl = 'public, max-age=15' 
     return res.status(304).end();
   }
   const ae = req.headers['accept-encoding'];
-  let body = entry.json;
+  let body;
   if (entry.br && accepts(ae, 'br')) {
     res.set('Content-Encoding', 'br');
     body = entry.br;
   } else if (entry.gzip && accepts(ae, 'gzip')) {
     res.set('Content-Encoding', 'gzip');
     body = entry.gzip;
+  } else {
+    body = entry.json ?? zlib.gunzipSync(entry.gzip);
   }
   res.set('Content-Length', String(body.length));
   return res.end(body);

@@ -52,3 +52,35 @@ test('accepts respekterer q=0 og vanlige formater', async () => {
   assert.equal(accepts('GZIP;q=0.5', 'gzip'), true);
   assert.equal(accepts('', 'gzip'), false);
 });
+
+test('store entries holder ikke rå JSON, men sender den dekomprimert ved behov', () => {
+  const e = makeJsonEntry(big);
+  assert.equal(e.json, null);
+  assert.ok(e.gzip && e.br);
+  const small = makeJsonEntry({ a: 1 });
+  assert.equal(small.json.toString(), '{"a":1}');
+  assert.equal(small.gzip, null);
+  const r = fakeRes();
+  sendJson({ headers: {} }, r, small);
+  assert.equal(r.body.toString(), '{"a":1}');
+});
+
+test('makeJsonEntry gjenbruker forrige entry ved samme innhold', () => {
+  const a = makeJsonEntry(big);
+  assert.equal(makeJsonEntry({ a: 'x'.repeat(5000) }, a), a);
+  assert.notEqual(makeJsonEntry({ a: 'y'.repeat(5000) }, a), a);
+  assert.notEqual(makeJsonEntry(big, null), a);
+});
+
+test('memoEntry bygger bare på nytt når en nøkkel byttes ut', async () => {
+  const { memoEntry } = await import('../server/json-cache.js');
+  let builds = 0;
+  const k1 = [1];
+  const k2 = [2];
+  const get = memoEntry((a, b) => { builds++; return makeJsonEntry([...a, ...b]); });
+  const e = get(k1, k2);
+  assert.equal(get(k1, k2), e);
+  assert.equal(builds, 1);
+  get([1], k2);
+  assert.equal(builds, 2);
+});

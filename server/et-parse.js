@@ -144,7 +144,49 @@ function* eachElement(src, name) {
 export function parseEtJourneys(xmlText) {
   const journeys = [];
   if (!xmlText) return journeys;
+  parseInto(xmlText, journeys, makeInterner());
+  // V8 husker siste regex-input (RegExp.input) globalt. Den er en delstreng av XML-en
+  // og ville holdt hele den gamle XML-en i live til neste regex-kall et annet sted.
+  /(?:)/.exec('');
+  return journeys;
+}
+
+const CLOSE_JOURNEY_RE = /<\/(?:[A-Za-z_][\w.-]*:)?EstimatedVehicleJourney>/g;
+const CLOSE_JOURNEY_MAX_LEN = 80; // lengste sluttagg vi venter (med prefiks)
+
+/**
+ * Parser ET bit for bit mens svaret lastes ned, så hele XML-en (~25 MB) aldri ligger i minnet.
+ * push(tekst) kan kalles med vilkårlige biter; end() gir samme turer som parseEtJourneys(hele).
+ */
+export function createEtStreamParser() {
+  const journeys = [];
   const intern = makeInterner();
+  let buf = '';
+  let scanFrom = 0;
+  return {
+    push(chunk) {
+      if (!chunk) return;
+      buf += chunk;
+      // Del etter siste hele tur; resten venter på flere biter
+      CLOSE_JOURNEY_RE.lastIndex = scanFrom;
+      let cut = -1;
+      for (let m; (m = CLOSE_JOURNEY_RE.exec(buf));) cut = m.index + m[0].length;
+      if (cut > 0) {
+        parseInto(buf.slice(0, cut), journeys, intern);
+        buf = buf.slice(cut);
+      }
+      scanFrom = Math.max(0, buf.length - CLOSE_JOURNEY_MAX_LEN);
+    },
+    end() {
+      if (buf) parseInto(buf, journeys, intern);
+      buf = '';
+      /(?:)/.exec('');
+      return journeys;
+    },
+  };
+}
+
+function parseInto(xmlText, journeys, intern) {
   const text = (src, name) => firstText(src, name, intern);
 
   for (const jel of eachElement(xmlText, 'EstimatedVehicleJourney')) {

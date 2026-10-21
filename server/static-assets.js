@@ -88,7 +88,7 @@ export function setStaticHeaders(res, filePath, root) {
 
 const COMPRESS_MIN = 1024;
 
-/** Middleware: komprimerer res.send for text/html og application/xml. */
+/** Middleware: komprimerer res.send for HTML, XML og JSON (res.json, Entur-proxyene). */
 export function compressTextResponses() {
   return (req, res, next) => {
     const send = res.send.bind(res);
@@ -96,7 +96,7 @@ export function compressTextResponses() {
       const type = String(res.get('Content-Type') || '');
       const ok =
         (typeof body === 'string' || Buffer.isBuffer(body)) &&
-        /^(text\/html|application\/xml)/i.test(type) &&
+        /^(text\/html|application\/xml|application\/json)/i.test(type) &&
         !res.get('Content-Encoding') &&
         res.statusCode !== 204 &&
         res.statusCode !== 304;

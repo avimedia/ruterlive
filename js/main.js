@@ -6,6 +6,8 @@ import { connectVehicles } from './api.js';
 import { fetchEstimatedVehicles } from './et-api.js';
 import { createFeedPolicy, shouldFallBackToLegacy } from './feed-policy.js';
 import { fetchLineRouteFromJp } from './jp-line-lookup.js';
+import { decodeVehiclePath } from '../shared/vehicle-path.js';
+import { matchRouteForVehicle } from '../shared/route-match.js';
 import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons, onMarkerTick, getMarkerLatLng } from './markers.js';
 import { initLayers, getVisibleModes, updateVehicleCount, setRetryHandler } from './layers.js';
 import { updateRouteLines, updateSelectedVehicleSplit } from './routes.js';
@@ -24,6 +26,7 @@ let etVehicles = [];
 let routeShapes = [];
 let etLoaded = false;
 let selectedVehicleForRoute = null;
+let liveFeedActive = false; // /api/vehicles-live virker
 
 const jpLineResults = new Map(); // "line|dest" -> { from, to, via }
 
@@ -34,7 +37,6 @@ function getJpLineKey(lineCode, dest) {
 function enrichVehicleWithRouteShape(vehicle, shapes) {
   if (vehicle.from != null && vehicle.to != null) return vehicle;
   const line = vehicle.line?.publicCode || '';
-  const dest = (vehicle.destinationName || '').toLowerCase();
   const mode = (vehicle.mode || '').toLowerCase();
 
   const jpKey = getJpLineKey(line, vehicle.destinationName);
@@ -43,25 +45,13 @@ function enrichVehicleWithRouteShape(vehicle, shapes) {
     return { ...vehicle, from: jpResult.from, to: jpResult.to, via: jpResult.via ?? vehicle.via };
   }
 
-  if (shapes?.length) {
-    const normDest = (d) => (d || '').toLowerCase().replace(/\s+(stasjon|holdeplass|st\.?)$/i, '').trim();
-    const destNorm = normDest(vehicle.destinationName);
-    const match =
-      shapes.find((s) => {
-        const sLine = (s.line || '').toString();
-        const sTo = normDest(s.to);
-        const sFrom = normDest(s.from);
-        const sMode = (s.mode || '').toLowerCase();
-        if (sLine !== line || (sMode && sMode !== mode)) return false;
-        if (!destNorm) return true;
-        return destNorm.includes(sTo) || sTo.includes(destNorm) || destNorm.includes(sFrom) || sFrom.includes(destNorm);
-      }) ||
-      shapes.find((s) => (s.line || '').toString() === line && ((s.mode || '').toLowerCase() === mode || !s.mode));
-    if (match) {
-      return { ...vehicle, from: vehicle.from ?? match.from, to: vehicle.to ?? match.to, via: vehicle.via ?? match.via };
-    }
+  const match = matchRouteForVehicle(vehicle, shapes);
+  if (match) {
+    return { ...vehicle, from: vehicle.from ?? match.from, to: vehicle.to ?? match.to, via: vehicle.via ?? match.via };
   }
 
+  // Ny feed: serveren har allerede slått opp fra/til fra rutekartene; ingen JP-søk fra nettleseren
+  if (liveFeedActive) return vehicle;
   const isRail = mode === 'rail' || mode === 'flytog';
   const isExternalLine = line?.toUpperCase().startsWith('FB');
   const needsJpLookup =
@@ -69,6 +59,7 @@ function enrichVehicleWithRouteShape(vehicle, shapes) {
     !jpLineResults.has(jpKey) &&
     (isExternalLine || (isRail && (!vehicle.from || !vehicle.to)));
   if (needsJpLookup) {
+    jpLineResults.set(jpKey, null); // pågår/feilet: ikke nytt søk ved hver oppdatering
     const lat = vehicle.location?.latitude;
     const lon = vehicle.location?.longitude;
     fetchLineRouteFromJp(line, vehicle.destinationName, { lat, lon }).then((result) => {
@@ -192,47 +183,62 @@ function mergeRouteShapes(newShapes, existingShapes) {
   return [...byKey.values()];
 }
 
-function applyInitialData(data) {
+const hasRailShapes = (shapes) =>
+  shapes.some((s) => (s.mode || '').toLowerCase() === 'rail' || (s.mode || '').toLowerCase() === 'flytog');
+
+function addShapes(more) {
+  if (Array.isArray(more) && more.length > 0) {
+    routeShapes = mergeRouteShapes(more, routeShapes);
+    mergeAndUpdate();
+  }
+}
+
+let staticShapesRequested = false;
+/**
+ * Jernbane/flybuss kan mangle ved kald serverstart. Én gang per sidevisning:
+ * ny feed henter bare /api/rail-shapes når jernbane mangler (route-shapes-all har resten),
+ * gammel feed henter statiske rutekart og prøver jernbane på nytt.
+ */
+function requestStaticShapes(shapes, live) {
+  if (staticShapesRequested) return;
+  staticShapesRequested = true;
+  const fetchJson = (url) => fetch(url).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+  const railMissing = !hasRailShapes(shapes);
+  if (live) {
+    if (!railMissing) return;
+    [2000, 8000, 25000].forEach((delay) => {
+      setTimeout(runWhenVisible(() => {
+        if (!hasRailShapes(routeShapes)) fetchJson('/api/rail-shapes').then(addShapes);
+      }), delay);
+    });
+    return;
+  }
+  const tryStaticNetworkShapes = () => fetchJson('/api/static-network-shapes').then(addShapes);
+  tryStaticNetworkShapes();
+  const retryStatic = runWhenVisible(tryStaticNetworkShapes);
+  setTimeout(retryStatic, 8000);
+  setTimeout(retryStatic, 25000);
+  if (!railMissing) return;
+  [2000, 8000, 25000].forEach((delay) => {
+    setTimeout(runWhenVisible(() => {
+      if (hasRailShapes(routeShapes)) return;
+      Promise.all([fetchJson('/api/rail-shapes'), fetchJson('/api/route-shapes')]).then(([rail, route]) => {
+        addShapes(Array.isArray(rail) && rail.length > 0 ? rail : route);
+      });
+    }), delay);
+  });
+}
+
+function applyInitialData(data, { live = false } = {}) {
   const vehicles = Array.isArray(data?.vehicles) ? data.vehicles : [];
   const shapes = Array.isArray(data?.routeShapes) ? data.routeShapes : [];
+  liveFeedActive = live;
   graphqlVehicles = vehicles;
   etVehicles = [];
   routeShapes = mergeRouteShapes(shapes, routeShapes);
   etLoaded = true;
   mergeAndUpdate();
-  function tryStaticNetworkShapes() {
-    fetch('/api/static-network-shapes')
-      .then((r) => r.ok && r.json())
-      .then((shapes) => {
-        if (Array.isArray(shapes) && shapes.length > 0) {
-          routeShapes = mergeRouteShapes(shapes, routeShapes);
-          mergeAndUpdate();
-        }
-      })
-      .catch(() => {});
-  }
-  tryStaticNetworkShapes();
-  const retryStatic = runWhenVisible(tryStaticNetworkShapes);
-  setTimeout(retryStatic, 8000);
-  setTimeout(retryStatic, 25000);
-  const hasRail = shapes.some((s) => (s.mode || '').toLowerCase() === 'rail' || (s.mode || '').toLowerCase() === 'flytog');
-  if (!hasRail) {
-    // Prøv rail-shapes eksplisitt – jernbane kan mangle fra initial-data
-    [2000, 8000, 25000].forEach((delay) => {
-      setTimeout(runWhenVisible(() => {
-        Promise.all([
-          fetch('/api/rail-shapes').then((r) => r.ok && r.json()).catch(() => []),
-          fetch('/api/route-shapes').then((r) => r.ok && r.json()).catch(() => []),
-        ]).then(([railResp, routeResp]) => {
-          const more = Array.isArray(railResp) && railResp.length > 0 ? railResp : (Array.isArray(routeResp) ? routeResp : []);
-          if (more.length > 0) {
-            routeShapes = mergeRouteShapes(more, routeShapes);
-            mergeAndUpdate();
-          }
-        });
-      }), delay);
-    });
-  }
+  requestStaticShapes(shapes, live);
 }
 
 let loadedShapesVersion = null;
@@ -245,18 +251,29 @@ async function fetchShapesFor(version) {
   return Array.isArray(shapes) ? shapes : [];
 }
 
+/** Kompakte path-er (sekunder relativt til t0) → ms-path-er som markers.js bruker. */
+function decodeLivePaths(data) {
+  const vehicles = Array.isArray(data?.vehicles) ? data.vehicles : [];
+  const t0 = data?.t0;
+  if (!Number.isFinite(t0)) return vehicles;
+  for (const v of vehicles) {
+    if (Array.isArray(v.path)) v.path = decodeVehiclePath(v.path, t0);
+  }
+  return vehicles;
+}
+
 /** Ny feed: bare kjøretøy hvert 30. s, rutekart hentes først og deretter bare ved ny versjon. */
 async function fetchVehiclesLive() {
   const res = await fetch('/api/vehicles-live');
   if (!res.ok) throw Object.assign(new Error(`vehicles-live ${res.status}`), { status: res.status });
   const data = await res.json();
-  const vehicles = Array.isArray(data?.vehicles) ? data.vehicles : [];
+  const vehicles = decodeLivePaths(data);
   const version = data?.shapesVersion;
   if (!version) throw new Error('vehicles-live uten shapesVersion');
   if (loadedShapesVersion === null) {
     const shapes = await fetchShapesFor(version);
     loadedShapesVersion = version;
-    applyInitialData({ vehicles, routeShapes: shapes });
+    applyInitialData({ vehicles, routeShapes: shapes }, { live: true });
     return;
   }
   if (version !== loadedShapesVersion) {
@@ -266,6 +283,7 @@ async function fetchVehiclesLive() {
       loadedShapesVersion = version;
     } catch (_) { /* prøver igjen ved neste poll */ }
   }
+  liveFeedActive = true;
   graphqlVehicles = vehicles;
   mergeAndUpdate();
 }

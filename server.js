@@ -18,10 +18,11 @@ import { getFallbackRailShapes } from './server/rail-fallback-shapes.js';
 import { startEtCachePoll } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
-import { getMergedVehicles, countVehiclesForLine, mergeShapes, mergeVehicles } from './server/live-vehicles.js';
+import { getMergedVehicles, countVehiclesForLine, mergeShapes, mergeVehicles, withRouteInfo } from './server/live-vehicles.js';
 import { getEtVehiclesAndShapes } from './server/et-vehicles-service.js';
 import { makeJsonEntry, sendJson, memoEntry } from './server/json-cache.js';
 import { buildVehiclesPayload } from './server/vehicles-payload.js';
+import { sortShapes, createThrottledSnapshot } from './server/shapes-version.js';
 import { LINES, getLineBySlug, getLineStops, prewarmLineStops } from './server/line-catalog.js';
 import { renderLinePage } from './server/pages/line-page.js';
 import { getGuideBySlug, loadGuideBody, loadAboutBody, GUIDES } from './server/guide-catalog.js';
@@ -158,14 +159,22 @@ app.get('/api/static-network-shapes', (req, res) => {
 // rutekart); samme kilder (også et konstant tomt ET-resultat ved feil) gir samme ferdige entry.
 const NO_SHAPES = Object.freeze([]);
 let lastShapesEntry = null;
-const liveShapesEntry = memoEntry((all, etShapes) => {
-  lastShapesEntry = makeJsonEntry(mergeShapes(all, etShapes), lastShapesEntry); // samme innhold → samme entry
+// Sortert, så samme sett gir samme ETag
+const liveShapes = memoEntry((all, etShapes) => sortShapes(mergeShapes(all, etShapes)));
+const liveShapesEntry = memoEntry((shapes) => {
+  lastShapesEntry = makeJsonEntry(shapes, lastShapesEntry); // samme innhold → samme entry
   return lastShapesEntry;
 });
+// ET-rutekart byttes høyst hver 30. min, ellers ny shapesVersion (og ~450 kB per klient) hvert 90. s
+const ET_SHAPES_MIN_INTERVAL_MS = 30 * 60 * 1000;
+const etShapesSnapshot = createThrottledSnapshot(ET_SHAPES_MIN_INTERVAL_MS);
 const shapesVersionOf = (entry) => entry.etag.slice(1, 13);
 // Hentes av alle klienter hvert 30. s: høyere komprimering lønner seg (~10 ms per bygging)
-const liveVehiclesEntry = memoEntry((vehiclesData, etResult, shapesEntry) => makeJsonEntry(
-  buildVehiclesPayload(mergeVehicles(vehiclesData, etResult), { shapesVersion: shapesVersionOf(shapesEntry) }),
+// GPS-kjøretøy uten fra/til får dem fra rutekartene her, så nettleseren slipper egne JP-søk
+const liveVehiclesEntry = memoEntry((vehiclesData, etResult, shapes, shapesEntry) => makeJsonEntry(
+  buildVehiclesPayload(withRouteInfo(mergeVehicles(vehiclesData, etResult), shapes), {
+    shapesVersion: shapesVersionOf(shapesEntry),
+  }),
   null,
   { gzipLevel: 9, brQuality: 9 }
 ));
@@ -182,8 +191,9 @@ async function getLiveSources() {
 
 async function getLiveEntries() {
   const { vehiclesData, etResult } = await getLiveSources();
-  const shapesEntry = liveShapesEntry(getAllShapes(), etResult?.shapes ?? NO_SHAPES);
-  const vehiclesEntry = liveVehiclesEntry(vehiclesData, etResult, shapesEntry);
+  const shapes = liveShapes(getAllShapes(), etShapesSnapshot(etResult?.shapes ?? NO_SHAPES));
+  const shapesEntry = liveShapesEntry(shapes);
+  const vehiclesEntry = liveVehiclesEntry(vehiclesData, etResult, shapes, shapesEntry);
   return { vehiclesEntry, shapesEntry, shapesVersion: shapesVersionOf(shapesEntry) };
 }
 
@@ -413,10 +423,15 @@ app.use('/api/et-cached', (_req, res) => {
   res.status(410).json({ error: 'et-cached disabled' });
 });
 
+// Med userResDecorator bufrer proxyen svaret og sender det med res.send, så compressTextResponses
+// kan komprimere JSON (Entur sender ofte ukomprimert). Uten den strømmes svaret rått.
+const bufferForCompression = (_proxyRes, data) => data;
+
 app.use(
   '/api/entur',
   proxy('https://api.entur.io', {
     proxyReqPathResolver: (req) => '/realtime/v2/vehicles' + (req.url && req.url.startsWith('/') ? req.url : '/' + (req.url || '')),
+    userResDecorator: bufferForCompression,
     proxyReqOptDecorator: (opt) => {
       opt.headers['ET-Client-Name'] = 'ruterlive-web';
       return opt;
@@ -440,6 +455,7 @@ app.use(
   '/api/entur-geocoder',
   proxy('https://api.entur.io', {
     proxyReqPathResolver: (req) => '/geocoder/v1' + (req.url && req.url.startsWith('/') ? req.url : '/' + (req.url || '')),
+    userResDecorator: bufferForCompression,
     proxyReqOptDecorator: (opt) => {
       opt.headers['ET-Client-Name'] = 'ruterlive-web';
       return opt;
@@ -456,6 +472,7 @@ app.use(
   '/api/entur-jp',
   proxy('https://api.entur.io', {
     proxyReqPathResolver: (req) => '/journey-planner/v3' + (req.url && req.url.startsWith('/') ? req.url : '/' + (req.url || '')),
+    userResDecorator: bufferForCompression,
     proxyReqOptDecorator: (opt) => {
       opt.headers['ET-Client-Name'] = 'ruterlive-web';
       return opt;

@@ -5,6 +5,7 @@
 
 import { getCachedVehicles } from './vehicles-cache.js';
 import { getEtVehiclesAndShapes } from './et-vehicles-service.js';
+import { matchRouteForVehicle } from '../shared/route-match.js';
 
 function shapeKey(s) {
   return `${(s.mode || '').toLowerCase()}|${(s.line || '').toString()}|${s.from || ''}|${s.to || ''}`;
@@ -49,6 +50,16 @@ export function mergeVehicles(vehiclesData, etResult) {
     if (!seen.has(v.vehicleId)) merged.push(v);
   }
   return merged;
+}
+
+/** Kjøretøy uten fra/til (typisk GPS: tog, flybuss) får dem fra et rutekart for linjen og destinasjonen. */
+export function withRouteInfo(vehicles, shapes) {
+  if (!shapes?.length) return vehicles;
+  return vehicles.map((v) => {
+    if (v.from && v.to) return v;
+    const m = matchRouteForVehicle(v, shapes);
+    return m ? { ...v, from: v.from || m.from, to: v.to || m.to, via: v.via ?? m.via } : v;
+  });
 }
 
 /**

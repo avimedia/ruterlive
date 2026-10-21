@@ -152,6 +152,11 @@ test('prefiks, entiteter, CDATA, tomme elementer og ugyldige kall gir samme resu
   assert.equal(got[1].mode, 'tram');
 });
 
+test('holder ikke på XML-en etter parse (RegExp.input peker ikke inn i XML)', () => {
+  parseEtJourneys(FIXTURE);
+  assert.equal(RegExp.input, '');
+});
+
 test('tom eller ugyldig input gir tom liste', () => {
   assert.deepEqual(parseEtJourneys(''), []);
   assert.deepEqual(parseEtJourneys('<Siri><EstimatedVehicleJourney><LineRef>RUT:Line:31'), []);

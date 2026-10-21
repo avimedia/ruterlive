@@ -191,5 +191,8 @@ export function parseEtJourneys(xmlText) {
       estimatedCalls,
     });
   }
+  // V8 husker siste regex-input (RegExp.input) globalt. Den er en delstreng av XML-en
+  // og ville holdt hele den gamle XML-en i live til neste regex-kall et annet sted.
+  /(?:)/.exec('');
   return journeys;
 }

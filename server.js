@@ -473,13 +473,16 @@ app.get('*', (req, res) => {
 
 async function startup() {
   loadFlybussShapes(); // Synkron – statiske koordinater
-  const railOk = await loadRailShapes();
-  if (!railOk) {
-    setTimeout(() => loadRailShapes().then((ok) => ok && console.log('[RuterLive] Jernbane retry: ok')), 30000);
-    setTimeout(() => loadRailShapes().then((ok) => ok && console.log('[RuterLive] Jernbane retry: ok')), 120000);
-  }
+  // Åpne porten først: Render vekker tjenesten og forventer svar raskt (ellers «hibernate-wake-error»).
+  // Jernbanekart og annen tung oppstart kjøres etterpå; klienten prøver /api/rail-shapes på nytt.
   app.listen(PORT, async () => {
     console.log(`RuterLive kjører på http://localhost:${PORT}`);
+    loadRailShapes().then((railOk) => {
+      if (!railOk) {
+        setTimeout(() => loadRailShapes().then((ok) => ok && console.log('[RuterLive] Jernbane retry: ok')), 30000);
+        setTimeout(() => loadRailShapes().then((ok) => ok && console.log('[RuterLive] Jernbane retry: ok')), 120000);
+      }
+    });
     getCachedVehicles().catch((e) => console.warn('[RuterLive] Vehicles cache prewarm:', e.message));
     startEtCachePoll();
     refreshRouteShapes()

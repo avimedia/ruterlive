@@ -24,7 +24,12 @@ test('dedupeInFlight nullstilles etter feil', async () => {
 
 test('loadGtfsStops: samtidige kall gir én nedlasting', async () => {
   let calls = 0;
-  const fetchFn = async () => { calls++; await new Promise((r) => setTimeout(r, 20)); return { ok: false, status: 500 }; };
+  // Teller bare full nedlasting (uten Range); Range-forsøket kommer i tillegg.
+  const fetchFn = async (url, options = {}) => {
+    if (!options.headers?.Range) calls++;
+    await new Promise((r) => setTimeout(r, 20));
+    return { ok: false, status: 500 };
+  };
   const [a, b] = await Promise.all([loadGtfsStops(fetchFn), loadGtfsStops(fetchFn)]);
   assert.equal(calls, 1);
   assert.equal(a, null);

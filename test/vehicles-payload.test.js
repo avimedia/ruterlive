@@ -51,7 +51,7 @@ test('buildVehiclesPayload: t0, shapesVersion og kompakte kjøretøy', () => {
     vehicleId: '3620803578',
     mode: 'BUS',
     location: { latitude: 60.16476, longitude: 10.25777 },
-    line: { publicCode: '222' },
+    line: { publicCode: '222', ref: 'BRA:Line:4_6222' },
     destinationName: 'Oppenåsen',
     bearing: 354,
   });

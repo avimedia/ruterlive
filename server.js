@@ -24,6 +24,7 @@ import { makeJsonEntry, sendJson, memoEntry } from './server/json-cache.js';
 import { buildVehiclesPayload } from './server/vehicles-payload.js';
 import { sortShapes, createThrottledSnapshot } from './server/shapes-version.js';
 import { LINES, getLineBySlug, getLineStops, prewarmLineStops } from './server/line-catalog.js';
+import { createVehicleRouteService, parseVehicleRouteParams } from './server/vehicle-route.js';
 import { renderLinePage } from './server/pages/line-page.js';
 import { getGuideBySlug, loadGuideBody, loadAboutBody, GUIDES } from './server/guide-catalog.js';
 import { renderGuidePage } from './server/pages/guide-page.js';
@@ -293,6 +294,24 @@ app.get('/api/vehicles-cached', async (_req, res) => {
     res.json(data);
   } catch (err) {
     res.status(503).json({ errors: [{ message: err.message }] });
+  }
+});
+
+// Hel rute for valgt buss/båt/flybuss fra Entur JP (ET har ofte bare deler av turen).
+// Delt cache for alle brukere: 24 t per linje, feil 10 min.
+const vehicleRoutes = createVehicleRouteService();
+app.get('/api/vehicle-route', async (req, res) => {
+  const parsed = parseVehicleRouteParams(req.query);
+  if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+  try {
+    const entry = await vehicleRoutes.getRouteEntry(parsed.params);
+    if (!entry) {
+      res.set('Cache-Control', 'public, max-age=300');
+      return res.status(404).json({ error: 'fant ingen rute' });
+    }
+    sendJson(req, res, entry, { cacheControl: 'public, max-age=3600' });
+  } catch (err) {
+    res.status(503).json({ error: 'rute utilgjengelig' });
   }
 });
 

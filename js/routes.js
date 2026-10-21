@@ -105,11 +105,83 @@ function shapeMatchesVehicle(shape, vehicle) {
   return true;
 }
 
+/**
+ * Hel rute for valgt buss/båt/flybuss fra serveren (/api/vehicle-route, Entur JP).
+ * ET-rutene er ofte bare deler av turen, så JP-ruten foretrekkes for valgt kjøretøy.
+ * Én henting per linje + retning; svaret (eller mangel på rute) huskes i minnet.
+ */
+const vehicleRoutes = new Map(); // nøkkel -> { shape, pending, at }
+const VEHICLE_ROUTE_MAX = 100;
+const VEHICLE_ROUTE_RETRY_MS = 5 * 60 * 1000;
+let vehicleRouteVersion = 0;
+let lastRouteArgs = null;
+
+function cleanDest(s) {
+  return (s || '').replace(/[^\p{L}\p{N} .,'()/&+-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+}
+
+function vehicleRouteParams(vehicle) {
+  const line = String(vehicle?.line?.publicCode || '');
+  if (!/^[A-Za-z0-9]{1,10}$/.test(line)) return null;
+  const params = { line, mode: vehicleMode(vehicle), dest: cleanDest(vehicle?.destinationName) };
+  const ref = vehicle?.line?.ref || vehicle?.line?.lineRef;
+  if (ref && /^[A-Z]{3}:Line:[A-Za-z0-9_.-]{1,64}$/.test(ref)) params.ref = ref;
+  return params;
+}
+
+function vehicleRouteKey(params) {
+  return `${params.ref || ''}|${params.mode}|${params.line}|${params.dest.toLowerCase()}`;
+}
+
+function routeResponseToShape(data) {
+  if (!data || !Array.isArray(data.points) || data.points.length < 2) return null;
+  return {
+    mode: data.mode,
+    line: data.line,
+    from: data.from,
+    to: data.to,
+    points: data.points,
+    // Holdeplasser med quay-ID (avgangstavle ved klikk); punktene er bare trasé
+    quayStops: (data.stops || []).map(([lat, lon, name, quayId]) => [lat, lon, quayId, name]),
+    pointsAreTrace: true,
+  };
+}
+
+/** Gir hentet JP-rute for kjøretøyet, eller null (og starter henting ved behov). */
+function vehicleRouteFor(vehicle) {
+  const params = vehicleRouteParams(vehicle);
+  if (!params) return null;
+  const key = vehicleRouteKey(params);
+  const hit = vehicleRoutes.get(key);
+  if (hit && (hit.pending || hit.shape || Date.now() - hit.at < VEHICLE_ROUTE_RETRY_MS)) return hit.shape;
+  vehicleRoutes.set(key, { shape: null, pending: true, at: Date.now() });
+  fetch(`/api/vehicle-route?${new URLSearchParams(params)}`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then(routeResponseToShape)
+    .catch(() => null)
+    .then((shape) => {
+      vehicleRoutes.delete(key);
+      vehicleRoutes.set(key, { shape, pending: false, at: Date.now() });
+      while (vehicleRoutes.size > VEHICLE_ROUTE_MAX) vehicleRoutes.delete(vehicleRoutes.keys().next().value);
+      if (!shape || !lastRouteArgs) return;
+      const sel = lastRouteArgs[2];
+      const selParams = sel ? vehicleRouteParams(sel) : null;
+      if (selParams && vehicleRouteKey(selParams) === key) {
+        vehicleRouteVersion++;
+        updateRouteLines(...lastRouteArgs);
+      }
+    });
+  return null;
+}
+
 export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   const map = getMap();
   if (!map || !map.routeLayerGroup) return;
+  lastRouteArgs = [shapes, visibleModes, selectedVehicle];
 
-  const selectedKey = selectedVehicle ? `${selectedVehicle.vehicleId}-${selectedVehicle.line?.publicCode}` : '';
+  const selectedKey = selectedVehicle
+    ? `${selectedVehicle.vehicleId}-${selectedVehicle.line?.publicCode}-${selectedVehicle.destinationName || ''}-${vehicleRouteVersion}`
+    : '';
   const shapesKey = shapes?.length ? `${shapes.length}-${shapes.slice(0, 5).map((s) => s.line + s.from).join('|')}` : '0';
   const modesKey = [...(visibleModes || [])].sort().join(',');
   const mapZoom = map.getZoom();
@@ -179,6 +251,20 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
     selectedMatches.push(vehicleClickFallbacks[0]);
   }
 
+  // Buss/båt: hel rute fra JP erstatter ET-bitene. Flybuss har allerede hele ruter
+  // (statisk/JP), så den hentes bare når ingen rute matcher.
+  const selMode = selectedVehicle ? vehicleMode(selectedVehicle) : null;
+  if (selMode && VEHICLE_CLICK_MODES.has(selMode) && (selMode !== 'flybuss' || selectedMatches.length === 0)) {
+    const jpRoute = vehicleRouteFor(selectedVehicle);
+    if (jpRoute) {
+      const isClickMode = (s) => VEHICLE_CLICK_MODES.has(shapeModeForFilter(s));
+      for (let i = shapesToShow.length - 1; i >= 0; i--) if (isClickMode(shapesToShow[i])) shapesToShow.splice(i, 1);
+      for (let i = selectedMatches.length - 1; i >= 0; i--) if (isClickMode(selectedMatches[i])) selectedMatches.splice(i, 1);
+      shapesToShow.push(jpRoute);
+      selectedMatches.push(jpRoute);
+    }
+  }
+
   const drawn = new Set();
   for (const shape of shapesToShow) {
     if (selectedMatches.includes(shape)) continue;
@@ -240,7 +326,7 @@ function addStopMarkers(map, shapes, visibleModes, onlyRouteStops = false) {
   for (const shape of shapes) {
     const mode = shape.mode?.toLowerCase();
     const color = getShapeColor(mode, shape.line + (shape.from || ''));
-    for (const pt of shape.points ?? []) {
+    for (const pt of shape.pointsAreTrace ? [] : shape.points ?? []) {
       const lat = pt[0];
       const lon = pt[1];
       const quayId = pt[2];

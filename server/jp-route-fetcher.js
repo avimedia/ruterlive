@@ -5,37 +5,11 @@
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { isFlytogLineCode } from '../config.js';
+import { decodePolyline } from './polyline.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CLIENT_NAME = 'ruterlive-web';
 const JP_QUAY_BATCH = 25;
-
-/** Dekoder Google polyline (pointsOnLink.points) til [[lat, lon], ...] */
-function decodePolyline(encoded) {
-  if (!encoded || typeof encoded !== 'string') return [];
-  const values = [];
-  let current = 0;
-  let bits = 0;
-  for (let i = 0; i < encoded.length; i++) {
-    const byte = encoded.charCodeAt(i) - 63;
-    current |= (byte & 0x1f) << bits;
-    bits += 5;
-    if (byte < 0x20) {
-      values.push(byte & 1 ? ~(current >>> 1) : current >>> 1);
-      current = 0;
-      bits = 0;
-    }
-  }
-  const points = [];
-  let lat = 0;
-  let lon = 0;
-  for (let i = 0; i < values.length; i += 2) {
-    lat += values[i] / 1e5;
-    lon += values[i + 1] / 1e5;
-    points.push([lat, lon]);
-  }
-  return points;
-}
 
 async function fetchQuayCoords(quayIds, quayCoordCache) {
   const gtfs = getGtfsQuayCache();

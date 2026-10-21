@@ -16,7 +16,11 @@ function compactVehicle(v, t0) {
   if (Number.isFinite(lat) && Number.isFinite(lon)) {
     out.location = { latitude: round5(lat), longitude: round5(lon) };
   }
-  if (v.line?.publicCode != null) out.line = { publicCode: v.line.publicCode };
+  if (v.line?.publicCode != null) {
+    out.line = { publicCode: v.line.publicCode };
+    // JP-linje-ID (f.eks. RUT:Line:30) så klienten kan hente hel rute via /api/vehicle-route
+    if (typeof v.line.lineRef === 'string' && v.line.lineRef) out.line.ref = v.line.lineRef;
+  }
   for (const k of TEXT_FIELDS) if (v[k]) out[k] = v[k];
   if (Number.isFinite(v.bearing)) out.bearing = Math.round(v.bearing);
   if (Array.isArray(v.path) && v.path.length >= 2) out.path = encodeVehiclePath(v.path, t0);

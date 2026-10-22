@@ -31,7 +31,9 @@ export function renderGuideIndex(guides, lines) {
     <h2>Linjer</h2>
     <div class="mode-groups">
 ${groupHtml}
-    </div>`;
+    </div>
+    <h2>Holdeplasser</h2>
+    <p>Neste avganger i sanntid fra alle T-banestasjoner, sentrale trikkestopp og knutepunkter for tog og buss. <a href="/holdeplasser">Se alle holdeplasser</a>.</p>`;
 
   return renderPage({
     title: 'Guider og linjer | livetrafikk.no',

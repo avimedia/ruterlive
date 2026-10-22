@@ -1,6 +1,7 @@
 // Server-rendret side for én linje (/linje/:slug).
 
 import { LINES } from '../line-catalog.js';
+import { findStopByName } from '../stop-catalog.js';
 import { breadcrumbLd, escapeHtml, lineBadge, renderPage } from './layout.js';
 
 const MAP_ZOOM = { metro: 12, tram: 12, rail: 10, flytog: 10, flybuss: 10 };
@@ -44,6 +45,12 @@ function lineDescription(line, stopsResult, hasStops) {
   return `${line.title}${route}. ${what}. ${label}, data fra Entur.`;
 }
 
+/** Stoppnavn, lenket til holdeplassiden når stoppet finnes i katalogen. */
+function stopItem(name) {
+  const stop = findStopByName(name);
+  return stop ? `<a href="/holdeplass/${escapeHtml(stop.slug)}">${escapeHtml(name)}</a>` : escapeHtml(name);
+}
+
 function formatDate(iso) {
   const d = iso ? new Date(iso) : new Date();
   const date = Number.isNaN(d.getTime()) ? new Date() : d;
@@ -70,7 +77,7 @@ export function renderLinePage(line, stopsResult, vehicleCount) {
     ? `<h2>Stopp</h2>
     <p class="stop-summary">Fra <strong>${escapeHtml(stopsResult.from)}</strong> til <strong>${escapeHtml(stopsResult.to)}</strong>, ${escapeHtml(stopsResult.stops.length)} stopp</p>
     <ol class="stop-list">
-${stopsResult.stops.map((s) => `      <li>${escapeHtml(s)}</li>`).join('\n')}
+${stopsResult.stops.map((s) => `      <li>${stopItem(s)}</li>`).join('\n')}
     </ol>`
     : '<p class="note">Stoppliste lastes, prøv igjen om litt.</p>';
 

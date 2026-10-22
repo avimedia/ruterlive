@@ -14,7 +14,7 @@ function urlEntry(path, lastmod) {
 }
 
 /** Bygger sitemap.xml. lastmod settes bare for guider og engelske sider (updated). */
-export function buildSitemap({ lines, guides, enPages = [] }) {
+export function buildSitemap({ lines, guides, enPages = [], stops = [] }) {
   const entries = [
     urlEntry('/'),
     urlEntry('/guider'),
@@ -23,6 +23,8 @@ export function buildSitemap({ lines, guides, enPages = [] }) {
     ...lines.map((l) => urlEntry(`/linje/${l.slug}`)),
     ...guides.map((g) => urlEntry(`/guider/${g.slug}`, g.updated)),
     ...enPages.map((p) => urlEntry(p.path, p.updated)),
+    ...(stops.length ? [urlEntry('/holdeplasser')] : []),
+    ...stops.map((s) => urlEntry(`/holdeplass/${s.slug}`)),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.join('\n')}\n</urlset>\n`;
 }

@@ -33,6 +33,9 @@ import { buildSitemap, isMapPath } from './server/pages/sitemap.js';
 import { renderNotFound } from './server/pages/not-found.js';
 import { registerEnRoutes } from './server/en-routes.js';
 import { EN_PAGES } from './server/en-catalog.js';
+import { STOPS, getStopBySlug } from './server/stop-catalog.js';
+import { createStopService } from './server/stop-service.js';
+import { renderStopPage, renderStopIndex } from './server/pages/stop-page.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
 
 function sendNotFound(res) {
@@ -121,7 +124,7 @@ Sitemap: https://livetrafikk.no/sitemap.xml
 app.get('/sitemap.xml', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=3600');
   res.type('application/xml').send(
-    buildSitemap({ lines: LINES, guides: GUIDES, enPages: EN_PAGES })
+    buildSitemap({ lines: LINES, guides: GUIDES, enPages: EN_PAGES, stops: STOPS })
   );
 });
 
@@ -254,6 +257,27 @@ app.get('/linje/:slug', async (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
   }
+});
+
+// Holdeplassider: statisk info (24 t) og avganger (60 s) fra Entur JP, delt cache for alle brukere.
+const stopService = createStopService();
+app.get('/holdeplass/:slug', async (req, res) => {
+  const stop = getStopBySlug(req.params.slug);
+  if (!stop) return sendNotFound(res);
+  try {
+    const [info, departures] = await Promise.all([stopService.getInfo(stop), stopService.getDepartures(stop)]);
+    res.set('Cache-Control', departures ? 'public, max-age=30' : 'no-store');
+    res.type('html').send(renderStopPage(stop, info, departures));
+  } catch (err) {
+    console.warn('[RuterLive] Holdeplasside:', err.message);
+    res.set('Cache-Control', 'no-store');
+    res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
+  }
+});
+
+app.get('/holdeplasser', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.type('html').send(renderStopIndex(STOPS));
 });
 
 // Guideoversikt, guider og Om-side (statisk innhold fra content/)

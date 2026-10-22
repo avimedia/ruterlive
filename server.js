@@ -31,6 +31,8 @@ import { renderGuidePage } from './server/pages/guide-page.js';
 import { renderGuideIndex, renderAboutPage } from './server/pages/guide-index.js';
 import { buildSitemap, isMapPath } from './server/pages/sitemap.js';
 import { renderNotFound } from './server/pages/not-found.js';
+import { registerEnRoutes } from './server/en-routes.js';
+import { EN_PAGES } from './server/en-catalog.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
 
 function sendNotFound(res) {
@@ -119,7 +121,7 @@ Sitemap: https://livetrafikk.no/sitemap.xml
 app.get('/sitemap.xml', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=3600');
   res.type('application/xml').send(
-    buildSitemap({ lines: LINES, guides: GUIDES })
+    buildSitemap({ lines: LINES, guides: GUIDES, enPages: EN_PAGES })
   );
 });
 
@@ -285,6 +287,9 @@ app.get('/om', async (_req, res) => {
     res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
   }
 });
+
+// Engelske sider (/en, /en/:slug)
+registerEnRoutes(app, { sendNotFound });
 
 // Cached kjøretøy (GraphQL) – reduserer 502, 1 kall per 20s
 app.get('/api/vehicles-cached', async (_req, res) => {

@@ -1,0 +1,48 @@
+<p>livetrafikk.no is a free map of public transport in Oslo and the surrounding area. It shows where buses, metro trains, trams, boats, regional trains, Flytoget airport trains and airport buses are right now, and the dots move while you watch. All the data comes from Entur, the national service for public transport information in Norway. <a href="/">Open the map</a>.</p>
+
+<p>The map itself is in Norwegian. This page explains what you are looking at and translates the few words you need.</p>
+
+<h2>What the dots are</h2>
+<p>Each dot is one vehicle, coloured by type. Zoom in far enough and the dot shows the line number, so you can tell a tram 17 from a tram 18 without clicking. Every 30 seconds the map fetches new data, and the dots glide from the old position to the new one instead of jumping.</p>
+<p>The positions come from two sources, and they are not equally precise.</p>
+<p>Trains and Flytoget send their own positions to Entur. What you see is where the train last reported itself. The airport buses appear only when the operator sends positions; when it doesn't, there are no airport buses on the map even though they are running.</p>
+<p>Buses, metro, trams and boats in the Ruter network are different. Ruter does not publish GPS positions to Entur, so livetrafikk.no estimates where each vehicle is from its departure times. If a bus left one stop two minutes ago and is due at the next stop in two minutes, it is drawn halfway between the two, on a straight line. That gives a fair picture of how far a trip has come, but a dot can cut corners, run ahead of a delayed bus, or sit at a stop until new times arrive. The full explanation is in the Norwegian guide <a href="/guider/sanntidsposisjoner" hreflang="nb">Slik fungerer sanntidsposisjonene</a>.</p>
+<p>For catching a bus, the departure board for the stop is a better answer than the dot. More on that below.</p>
+
+<h2>The layer panel</h2>
+<p>The panel on the left is called <i lang="nb">Lagvelger</i>, the layer picker. It has one checkbox per type of transport. Untick everything except <i lang="nb">Trikk</i> and you see only the trams. At the bottom it counts how many vehicles of each type are on the map. On a phone the panel starts minimised the first time; tap it to open it.</p>
+<p>Two switches sit below the layers. <i lang="nb">Rutelinjer</i> draws the routes. Metro, tram, train and Flytoget routes are drawn for every line, with train lines dashed. Bus, airport bus and boat routes are drawn only for the vehicle you have selected, as the map would otherwise be covered in lines. <i lang="nb">Jernbanekart</i> adds the track layout from OpenRailwayMap, which shows where the lines run, including the metro tunnels.</p>
+
+<h2>Click a vehicle</h2>
+<p>Click or tap a dot and a box opens with the line number, where the trip started, where it is going and the next stop. The route is highlighted on the map, and the stops along it appear as you zoom in. Click anywhere else on the map to clear the selection.</p>
+<p>You can also click a route line to highlight it. That helps in the city centre, where several lines share the same streets and tunnels.</p>
+
+<h2>Find a stop and its departures</h2>
+<p>The magnifying glass button opens the stop search (<i lang="nb">Søk holdeplass</i>). Type at least two letters of the stop name and pick a result. The map flies there and opens the departure board.</p>
+<p>The board lists up to ten departures over the next six hours, with no more than three per type of transport, so a busy bus stop does not push the metro off the list. Each row has the line, destination, time and minutes to departure. <i lang="nb">Sanntid</i> means the time is based on real-time data. <i lang="nb">Forsinket</i> means the expected time is more than a minute behind the timetable. A row with no label shows the scheduled time.</p>
+<p>You can also open the board by clicking a stop on the map. Stops appear when you zoom in, and along the route of a selected vehicle.</p>
+
+<h2>Norwegian words on the map</h2>
+<ul>
+<li><i lang="nb">Buss</i>: bus</li>
+<li><i lang="nb">Flybuss</i>: airport bus (FB1, FB3, FB5)</li>
+<li><i lang="nb">T-bane</i>: metro, lines 1 to 5</li>
+<li><i lang="nb">Trikk</i>: tram</li>
+<li><i lang="nb">Båt</i>: boat</li>
+<li><i lang="nb">Regiontog</i>: Vy local and regional trains</li>
+<li><i lang="nb">Flytoget</i>: the airport express train (FLY1, FLY2)</li>
+<li><i lang="nb">Holdeplass</i>: stop</li>
+<li><i lang="nb">Avgang</i>: departure</li>
+<li><i lang="nb">Tema</i>: theme, with <i lang="nb">Lyst</i> (light), <i lang="nb">Mørkt</i> (dark) and <i lang="nb">Som enheten</i> (follow the device)</li>
+</ul>
+
+<h2>Sharing and the home screen</h2>
+<p>The clipboard button copies a link to the exact view you are looking at, with the centre and zoom level. Whoever opens it sees the same part of the map. Layer choices are not included.</p>
+<p>On a phone you can add livetrafikk.no to the home screen from the share menu in Safari or the menu in Chrome. It then opens like an app, without the browser's address bar.</p>
+
+<h2>What the map does not do</h2>
+<p>livetrafikk.no is an independent service. It is not run by Ruter, Vy, Flytoget or Entur, and it does not sell tickets or plan journeys. Buy tickets in the Ruter app for buses, metro, trams and boats in the Oslo area, and from Vy or Flytoget for their trains. For official information about cancellations and disruptions, go to the operator.</p>
+<p>A cancelled departure can still show up as a dot, because the estimate looks at times, not at cancellation flags. If you have a train or a flight to catch, check the departure board or the operator's own app.</p>
+
+<h2>More in English</h2>
+<p><a href="/en/airport-train-or-bus">Airport train or bus</a> compares Flytoget, the airport buses and the regional trains to Oslo Airport. <a href="/en/getting-around-oslo">Getting around Oslo</a> covers the metro, trams, buses, boats and trains, and how the lines are numbered.</p>

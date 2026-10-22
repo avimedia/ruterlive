@@ -28,11 +28,27 @@ export function lineBadge(line, { link = false, size = '' } = {}) {
     : `<span class="${cls}" data-mode="${escapeHtml(line.mode)}" aria-hidden="true">${code}</span>`;
 }
 
+// Faste tekster i rammen per språk ('nb' er standard, 'en' for de engelske sidene).
+const CHROME_TEXT = {
+  nb: { nav: 'Hovedmeny', map: 'Kart', guides: 'Guider og linjer', about: 'Om', privacy: 'Personvern', contact: 'Kontakt', source: 'Sanntidsdata fra Entur' },
+  en: { nav: 'Main menu', map: 'Map', guides: 'Guides', about: 'About', privacy: 'Privacy', contact: 'Contact', source: 'Real-time data from Entur' },
+};
+
+/** <link rel="alternate" hreflang> per språkversjon. `href` er en sti på livetrafikk.no. */
+function alternateLinks(alternates) {
+  return alternates
+    .map((a) => `  <link rel="alternate" hreflang="${escapeHtml(a.hreflang)}" href="${escapeHtml(BASE_URL + a.href)}">\n`)
+    .join('');
+}
+
 /**
  * Bygger et komplett HTML-dokument.
  * `body` er ferdig HTML (kallerens ansvar å escape dynamiske strenger).
+ * `lang`: 'nb' (standard) eller 'en'. `alternates`: [{ hreflang, href }] for språkversjoner.
  */
-export function renderPage({ title, description, path, body, ads = true, noindex = false, mode = '', bodyClass = '' }) {
+export function renderPage({ title, description, path, body, ads = true, noindex = false, mode = '', bodyClass = '', lang = 'nb', alternates = [] }) {
+  const htmlLang = lang === 'en' ? 'en' : 'nb';
+  const t = CHROME_TEXT[htmlLang];
   const url = `${BASE_URL}${path}`;
   const navLink = (href, label) => {
     const current = !noindex && (
@@ -44,13 +60,13 @@ export function renderPage({ title, description, path, body, ads = true, noindex
   };
   const bodyAttrs = `${mode ? ` data-mode="${escapeHtml(mode)}"` : ''}${bodyClass ? ` class="${escapeHtml(bodyClass)}"` : ''}`;
   return `<!DOCTYPE html>
-<html lang="nb">
+<html lang="${htmlLang}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
   <meta name="description" content="${escapeHtml(description)}">
-${noindex ? '' : `  <link rel="canonical" href="${escapeHtml(url)}">\n`}${noindex ? '  <meta name="robots" content="noindex">\n' : ''}  <meta property="og:title" content="${escapeHtml(title)}">
+${noindex ? '' : `  <link rel="canonical" href="${escapeHtml(url)}">\n${alternateLinks(alternates)}`}${noindex ? '  <meta name="robots" content="noindex">\n' : ''}  <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:type" content="website">
 ${noindex ? '' : `  <meta property="og:url" content="${escapeHtml(url)}">\n`}  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -69,10 +85,10 @@ ${ads ? `  ${ADSENSE_SCRIPT}\n` : ''}</head>
   <header class="site-header">
     <div class="site-header-inner">
       <a class="site-name" href="/">${LOGO_SVG}<span>livetrafikk<span class="site-tld">.no</span></span></a>
-      <nav aria-label="Hovedmeny">
-        <a href="/">Kart</a>
-        ${navLink('/guider', 'Guider og linjer')}
-        ${navLink('/om', 'Om')}
+      <nav aria-label="${t.nav}">
+        <a href="/">${t.map}</a>
+        ${navLink('/guider', t.guides)}
+        ${navLink('/om', t.about)}
       </nav>
     </div>
   </header>
@@ -81,9 +97,9 @@ ${body}
   </main>
   <footer class="site-footer">
     <div class="site-footer-inner">
-      <a href="/personvern.html">Personvern</a>
-      <a href="https://apptastic.no/pages/contact/" rel="noopener">Kontakt</a>
-      <span>Sanntidsdata fra Entur</span>
+      <a href="/personvern.html">${t.privacy}</a>
+      <a href="https://apptastic.no/pages/contact/" rel="noopener">${t.contact}</a>
+      <span>${t.source}</span>
     </div>
   </footer>
 </body>

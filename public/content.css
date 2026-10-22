@@ -91,6 +91,18 @@
   --line-ink: #ff6b35;
 }
 
+[data-mode="bus"] {
+  --line-color: #e63946;
+  --line-on: #111;
+  --line-ink: #f0606b;
+}
+
+[data-mode="water"] {
+  --line-color: #457b9d;
+  --line-on: #fff;
+  --line-ink: #6fa3c4;
+}
+
 /* Lyst tema: mørkere blekk der modusfargen blir for svak mot lys bakgrunn. */
 [data-theme="light"],
 [data-theme="light"] [data-mode="metro"] {
@@ -111,6 +123,14 @@
 
 [data-theme="light"] [data-mode="flybuss"] {
   --line-ink: #c2410c;
+}
+
+[data-theme="light"] [data-mode="bus"] {
+  --line-ink: #c1121f;
+}
+
+[data-theme="light"] [data-mode="water"] {
+  --line-ink: #2f5f7f;
 }
 
 * {
@@ -777,6 +797,209 @@ td {
 
 th {
   color: var(--text-primary);
+}
+
+/* ---------- Holdeplasser ---------- */
+
+.stop-hero h1 {
+  margin: 0.5rem 0 0.5rem;
+}
+
+.mode-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin: 0 0 0.75rem;
+}
+
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.625rem 0.125rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mode-badge::before {
+  content: "";
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--line-color);
+}
+
+.line-badge--sm {
+  min-width: 2.25rem;
+  min-height: 1.75rem;
+  padding: 0 0.4rem;
+  border-radius: 0.4rem;
+  font-size: 0.875rem;
+  box-shadow: none;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  margin: 0 0 0.5rem;
+}
+
+.departures {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.departures th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.departures td {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  vertical-align: middle;
+}
+
+.dep-time {
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dep-aimed {
+  font-weight: 400;
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+}
+
+.dep-dest {
+  width: 100%;
+  color: var(--text-primary);
+}
+
+.dep-platform {
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.dep-status {
+  display: inline-block;
+  padding: 0.0625rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-muted);
+  background: var(--bg-input);
+}
+
+.dep-status--live {
+  color: var(--live);
+  background: transparent;
+  border: 1px solid currentColor;
+}
+
+.dep-status--late {
+  color: #111;
+  background: #f4a261;
+}
+
+.dep-status--cancelled {
+  color: #fff;
+  background: #c1121f;
+}
+
+.dep-cancelled .dep-time time,
+.dep-cancelled .dep-dest {
+  text-decoration: line-through;
+  color: var(--text-dim);
+}
+
+.stop-lines {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.stop-lines dt {
+  padding-top: 0.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.stop-lines dd {
+  margin: 0;
+}
+
+.stop-lines .badge-list {
+  gap: 0.375rem;
+  margin: 0;
+}
+
+.nearby-stops {
+  list-style: none;
+  padding: 0;
+}
+
+.nearby-stops li {
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.stop-meta {
+  margin-left: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-dim);
+}
+
+.stop-group h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 2rem;
+}
+
+.stop-group h2::before {
+  content: "";
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 50%;
+  background: var(--line-color);
+}
+
+.stop-index {
+  columns: 2 10rem;
+  column-gap: 1.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.stop-index li {
+  break-inside: avoid;
+  padding: 0.1875rem 0;
+}
+
+/* Smal skjerm: forsinkelsen står i statuskolonnen, så rutetiden skjules for å få plass. */
+@media (max-width: 39.999rem) {
+  .departures th,
+  .departures td {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  .dep-aimed {
+    display: none;
+  }
+}
+
+@media (min-width: 48rem) {
+  .stop-index {
+    columns: 4 10rem;
+  }
 }
 
 /* ---------- Bredere skjerm ---------- */

@@ -4,10 +4,13 @@
 // pluss en kort liste knutepunkter for tog og buss (oppslag i Entur Geocoder).
 // Rundt 25 kall mot Entur totalt, med pause mellom hvert.
 import { writeFileSync } from 'node:fs';
-import { slugify, stripStopSuffix } from '../server/stop-catalog.js';
+import { STOPS, slugify, stripStopSuffix } from '../server/stop-catalog.js';
 import { jpQuery } from '../server/line-catalog.js';
 
 const HEADERS = { 'ET-Client-Name': 'ruterlive-web' };
+
+// Behold «featured» fra eksisterende katalog (håndplukkede knutepunkter med egen tekst).
+const FEATURED_IDS = new Set(STOPS.filter((s) => s.featured).map((s) => s.id));
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const jp = async (query, variables) => {
   await pause(400);
@@ -108,7 +111,7 @@ const catalog = info
     let slug = base;
     for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
     used.add(slug);
-    return { slug, ...s };
+    return FEATURED_IDS.has(s.id) ? { slug, ...s, featured: true } : { slug, ...s };
   });
 
 writeFileSync(new URL('../server/stop-catalog.json', import.meta.url), `[\n${catalog.map((s) => `  ${JSON.stringify(s)}`).join(',\n')}\n]\n`);

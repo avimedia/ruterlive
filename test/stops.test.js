@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { STOPS, slugify, getStopBySlug, findStopByName, nearestStops } from '../server/stop-catalog.js';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { STOPS, FEATURED_STOPS, slugify, getStopBySlug, findStopByName, nearestStops, getStopText } from '../server/stop-catalog.js';
 import { createStopService, LruCache, parseStopInfo } from '../server/stop-service.js';
 import { renderStopPage, renderStopIndex, buildIntro, schemaType, catalogLineFor } from '../server/pages/stop-page.js';
 import { renderLinePage } from '../server/pages/line-page.js';
@@ -34,21 +35,53 @@ test('katalogen er gyldig og unik', () => {
     slugs.add(s.slug);
     ids.add(s.id);
   }
-  for (const slug of ['oslo-s', 'nationaltheatret', 'majorstuen', 'jernbanetorget', 'skoyen', 'lillestrom', 'oslo-lufthavn', 'vestli', 'kolsas']) {
-    assert.ok(getStopBySlug(slug), slug);
-  }
+  // Ikke-utvalgte stopp ligger fortsatt i katalogen
+  for (const slug of ['vestli', 'kolsas', 'linderud']) assert.ok(STOPS.some((s) => s.slug === slug), slug);
 });
 
-test('findStopByName og nearestStops', () => {
+test('bare utvalgte knutepunkter får side', () => {
+  assert.ok(FEATURED_STOPS.length >= 12 && FEATURED_STOPS.length <= 18, `${FEATURED_STOPS.length} utvalgte`);
+  assert.ok(FEATURED_STOPS.length < STOPS.length);
+  for (const slug of ['oslo-s', 'nationaltheatret', 'majorstuen', 'jernbanetorget', 'skoyen', 'lillestrom', 'oslo-lufthavn']) {
+    assert.ok(getStopBySlug(slug), slug);
+  }
+  for (const slug of ['vestli', 'kolsas', 'linderud', 'finnes-ikke']) assert.equal(getStopBySlug(slug), undefined, slug);
+});
+
+test('findStopByName og nearestStops gjelder bare utvalgte stopp', () => {
   assert.equal(findStopByName('Majorstuen')?.slug, 'majorstuen');
   assert.equal(findStopByName('Skøyen')?.slug, 'skoyen');
+  assert.equal(findStopByName('Lysaker stasjon')?.slug, 'lysaker');
   assert.equal(findStopByName('Finnes ikke'), undefined);
-  assert.equal(findStopByName('Linderud T')?.slug, 'linderud');
-  assert.equal(findStopByName('Linderud')?.slug, 'linderud');
+  assert.equal(findStopByName('Linderud T'), undefined);
+  assert.equal(findStopByName('Vestli'), undefined);
   const near = nearestStops(getStopBySlug('majorstuen'), 3);
   assert.equal(near.length, 3);
-  assert.ok(near.every((n) => n.stop.slug !== 'majorstuen'));
+  assert.ok(near.every((n) => n.stop.slug !== 'majorstuen' && n.stop.featured));
   assert.ok(near[0].distance <= near[1].distance && near[1].distance <= near[2].distance);
+  assert.deepEqual(nearestStops(getStopBySlug('lillestrom'), 3, { maxDistance: 3000 }), []);
+});
+
+const BANNED = [/det er viktig å merke seg/i, /i en travel hverdag/i, /alt i alt/i, /kort fortalt/i];
+
+test('hver utvalgt holdeplass har håndskrevet tekst på 120–250 ord', async () => {
+  for (const s of FEATURED_STOPS) {
+    const file = new URL(`../content/holdeplass/${s.slug}.html`, import.meta.url);
+    assert.ok(existsSync(file), `mangler content/holdeplass/${s.slug}.html`);
+    const html = readFileSync(file, 'utf8');
+    const words = html.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length;
+    assert.ok(words >= 120 && words <= 250, `${s.slug}: ${words} ord`);
+    for (const re of BANNED) assert.doesNotMatch(html, re, s.slug);
+    assert.doesNotMatch(html, /<script|<h1/i, s.slug);
+    assert.equal(await getStopText(s.slug), html);
+  }
+  // Ingen tekster for stopp uten side
+  const featured = new Set(FEATURED_STOPS.map((s) => s.slug));
+  for (const f of readdirSync(new URL('../content/holdeplass/', import.meta.url))) {
+    assert.ok(featured.has(f.replace(/\.html$/, '')), `${f} hører ikke til et utvalgt stopp`);
+  }
+  assert.equal(await getStopText('vestli'), undefined);
+  assert.equal(await getStopText('../om'), undefined);
 });
 
 const stop = { slug: 'majorstuen', id: 'NSR:StopPlace:58381', name: 'Majorstuen', lat: 59.92963, lon: 10.71494, modes: ['metro', 'tram', 'bus'] };
@@ -102,6 +135,21 @@ test('renderStopPage med avganger', () => {
   assert.ok(html.includes('<link rel="canonical" href="https://livetrafikk.no/holdeplass/majorstuen">'));
   assert.equal((html.match(/href="\/holdeplass\//g) || []).length, 3, 'tre nærmeste');
   assert.ok(html.includes('adsbygoogle'));
+  assert.ok(!html.includes('stop-text'), 'ingen tekst uten text');
+});
+
+test('renderStopPage viser håndskrevet tekst før avgangene', () => {
+  const html = renderStopPage(stop, info, departures, { now: NOW, text: '<p>Håndskrevet <a href="/linje/t-bane-1">tekst</a>.</p>\n' });
+  const textAt = html.indexOf('<div class="prose stop-text">');
+  assert.ok(textAt > 0);
+  assert.ok(html.includes('<p>Håndskrevet <a href="/linje/t-bane-1">tekst</a>.</p>'), 'escapes ikke');
+  assert.ok(textAt > html.indexOf('class="lead"') && textAt < html.indexOf('<h2>Neste avganger</h2>'));
+});
+
+test('renderStopPage uten utvalgte stopp i nærheten utelater seksjonen', () => {
+  const html = renderStopPage(getStopBySlug('lillestrom'), null, null, { now: NOW });
+  assert.ok(!html.includes('I nærheten'));
+  assert.equal((html.match(/href="\/holdeplass\//g) || []).length, 0);
 });
 
 test('renderStopPage uten avganger og uten info', () => {
@@ -135,25 +183,28 @@ test('parseStopInfo slår sammen linjer og leser Ruter-sone', () => {
   assert.equal(parsed.quayCount, 2);
 });
 
-test('renderStopIndex lister alle stopp i grupper', () => {
-  const html = renderStopIndex(STOPS);
-  for (const s of STOPS) assert.ok(html.includes(`href="/holdeplass/${s.slug}"`), s.slug);
+test('renderStopIndex lister bare utvalgte stopp i grupper', () => {
+  const html = renderStopIndex();
+  for (const s of FEATURED_STOPS) assert.ok(html.includes(`href="/holdeplass/${s.slug}"`), s.slug);
+  assert.ok(!html.includes('href="/holdeplass/vestli"'));
   assert.ok(html.includes('<h2>T-bane</h2>'));
   assert.ok(html.includes('<h2>Tog</h2>'));
 });
 
-test('linjesiden lenker stopp som finnes i katalogen', () => {
+test('linjesiden lenker bare utvalgte stopp', () => {
   const html = renderLinePage(getLineBySlug('t-bane-5'), { stops: ['Vestli', 'Ukjent stopp', 'Majorstuen', 'Sognsvann'], from: 'Vestli', to: 'Sognsvann' }, 3);
-  assert.ok(html.includes('<li><a href="/holdeplass/vestli">Vestli</a></li>'));
+  assert.ok(html.includes('<li>Vestli</li>'));
   assert.ok(html.includes('<li><a href="/holdeplass/majorstuen">Majorstuen</a></li>'));
   assert.ok(html.includes('<li>Ukjent stopp</li>'));
+  assert.ok(html.includes('<li>Sognsvann</li>'));
 });
 
-test('sitemap og /guider har holdeplassene', () => {
-  const xml = buildSitemap({ lines: LINES, guides: GUIDES, stops: STOPS });
+test('sitemap og /guider har bare utvalgte holdeplasser', () => {
+  const xml = buildSitemap({ lines: LINES, guides: GUIDES, stops: FEATURED_STOPS });
   assert.ok(xml.includes('<loc>https://livetrafikk.no/holdeplasser</loc>'));
-  for (const s of STOPS) assert.ok(xml.includes(`<loc>https://livetrafikk.no/holdeplass/${s.slug}</loc>`));
-  assert.equal((xml.match(/<url>/g) || []).length, 4 + LINES.length + GUIDES.length + 1 + STOPS.length);
+  for (const s of FEATURED_STOPS) assert.ok(xml.includes(`<loc>https://livetrafikk.no/holdeplass/${s.slug}</loc>`));
+  assert.ok(!xml.includes('/holdeplass/vestli<'));
+  assert.equal((xml.match(/<url>/g) || []).length, 4 + LINES.length + GUIDES.length + 1 + FEATURED_STOPS.length);
   assert.ok(renderGuideIndex(GUIDES, LINES).includes('href="/holdeplasser"'));
 });
 

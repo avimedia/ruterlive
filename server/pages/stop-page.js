@@ -1,7 +1,7 @@
 // Server-rendrede holdeplassider: /holdeplass/:slug og oversikten /holdeplasser.
 
 import { LINES } from '../line-catalog.js';
-import { STOPS, nearestStops } from '../stop-catalog.js';
+import { FEATURED_STOPS, nearestStops } from '../stop-catalog.js';
 import { escapeHtml, renderPage } from './layout.js';
 
 const BASE_URL = 'https://livetrafikk.no';
@@ -15,6 +15,7 @@ const MODE_LINE = {
 };
 const MODE_ORDER = ['metro', 'tram', 'rail', 'bus', 'water'];
 const MAX_LISTED_BUS = 8;
+const NEARBY_MAX_M = 3000;
 
 const timeFmt = new Intl.DateTimeFormat('nb-NO', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Oslo' });
 
@@ -178,8 +179,9 @@ function formatDistance(m) {
  * @param {object} stop katalogoppføring
  * @param {{lines, zones, quayCount}|null} info
  * @param {{fetchedAt, departures: object[]}|null} departures null = Entur utilgjengelig
+ * @param {{now?: number, text?: string}} opts `text` er håndskrevet HTML fra repoet og escapes ikke
  */
-export function renderStopPage(stop, info, departures, { now = Date.now() } = {}) {
+export function renderStopPage(stop, info, departures, { now = Date.now(), text = '' } = {}) {
   const mapHref = `/?lat=${stop.lat}&lng=${stop.lon}&z=16`;
   const lineGroups = info?.lines?.length ? linesByMode(info.lines) : [];
   const linesHtml = lineGroups.length
@@ -189,7 +191,7 @@ ${lineGroups.map(([mode, lines]) => `      <dt>${escapeHtml(MODE_LABEL[mode])}</
       <dd><ul class="badge-list">${lines.map((l) => `<li>${jpLineBadge(l)}</li>`).join('')}</ul></dd>`).join('\n')}
     </dl>`
     : '';
-  const nearby = nearestStops(stop, 3)
+  const nearby = nearestStops(stop, 3, { maxDistance: NEARBY_MAX_M })
     .map(({ stop: s, distance }) => `<li><a href="/holdeplass/${escapeHtml(s.slug)}">${escapeHtml(s.name)}</a> <span class="stop-meta">${escapeHtml(formatDistance(distance))} · ${escapeHtml(s.modes.map((m) => MODE_LABEL[m]).join(', '))}</span></li>`)
     .join('\n      ');
 
@@ -202,14 +204,13 @@ ${lineGroups.map(([mode, lines]) => `      <dt>${escapeHtml(MODE_LABEL[mode])}</
         <a class="button button--primary" href="${escapeHtml(mapHref)}">Se på kartet</a>
       </div>
     </div>
-    <h2>Neste avganger</h2>
+${text ? `    <div class="prose stop-text">\n${text.trim()}\n    </div>\n` : ''}    <h2>Neste avganger</h2>
     ${departuresHtml(departures, now)}
     ${linesHtml}
-    <h2>I nærheten</h2>
+${nearby ? `    <h2>I nærheten</h2>
     <ul class="nearby-stops">
       ${nearby}
-    </ul>
-    ${jsonLd(stop)}`;
+    </ul>\n` : ''}    ${jsonLd(stop)}`;
 
   const modeText = joinNb(stop.modes.map((m) => MODE_LABEL[m].toLowerCase())).replace(/^t-bane/, 'T-bane');
   return renderPage({
@@ -227,7 +228,7 @@ const INDEX_GROUPS = [
   ['bus', 'Buss- og båtknutepunkter', (s) => !s.modes.some((m) => m === 'metro' || m === 'tram' || m === 'rail')],
 ];
 
-export function renderStopIndex(stops = STOPS) {
+export function renderStopIndex(stops = FEATURED_STOPS) {
   const groups = INDEX_GROUPS.map(([mode, heading, match]) => {
     const items = stops.filter(match)
       .sort((a, b) => a.name.localeCompare(b.name, 'nb'))
@@ -240,12 +241,12 @@ export function renderStopIndex(stops = STOPS) {
   }).filter(Boolean).join('\n');
 
   const body = `    <h1>Holdeplasser</h1>
-    <p class="lead">${escapeHtml(String(stops.length))} stasjoner og holdeplasser i Oslo og omegn: alle T-banestasjoner, de mest brukte trikkestoppene og knutepunkter for tog, buss og båt. Hver side viser neste avganger i sanntid og linjene som stopper der.</p>
+    <p class="lead">Sentrale knutepunkter for T-bane, trikk, tog, buss og båt i Oslo og omegn. Hver side forteller hva som møtes på stedet, og viser neste avganger i sanntid og linjene som stopper der.</p>
 ${groups}`;
 
   return renderPage({
     title: 'Holdeplasser i Oslo – avganger i sanntid | livetrafikk.no',
-    description: 'T-banestasjoner, trikkestopp og knutepunkter for tog og buss i Oslo og omegn, med neste avganger fra Entur.',
+    description: 'Knutepunkter for T-bane, trikk, tog, buss og båt i Oslo og omegn, med neste avganger fra Entur.',
     path: '/holdeplasser',
     body,
   });

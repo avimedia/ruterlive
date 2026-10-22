@@ -33,7 +33,7 @@ import { buildSitemap, isMapPath } from './server/pages/sitemap.js';
 import { renderNotFound } from './server/pages/not-found.js';
 import { registerEnRoutes } from './server/en-routes.js';
 import { EN_PAGES } from './server/en-catalog.js';
-import { STOPS, getStopBySlug } from './server/stop-catalog.js';
+import { FEATURED_STOPS, getStopBySlug, getStopText } from './server/stop-catalog.js';
 import { createStopService } from './server/stop-service.js';
 import { renderStopPage, renderStopIndex } from './server/pages/stop-page.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
@@ -124,7 +124,7 @@ Sitemap: https://livetrafikk.no/sitemap.xml
 app.get('/sitemap.xml', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=3600');
   res.type('application/xml').send(
-    buildSitemap({ lines: LINES, guides: GUIDES, enPages: EN_PAGES, stops: STOPS })
+    buildSitemap({ lines: LINES, guides: GUIDES, enPages: EN_PAGES, stops: FEATURED_STOPS })
   );
 });
 
@@ -265,9 +265,9 @@ app.get('/holdeplass/:slug', async (req, res) => {
   const stop = getStopBySlug(req.params.slug);
   if (!stop) return sendNotFound(res);
   try {
-    const [info, departures] = await Promise.all([stopService.getInfo(stop), stopService.getDepartures(stop)]);
+    const [info, departures, text] = await Promise.all([stopService.getInfo(stop), stopService.getDepartures(stop), getStopText(stop.slug)]);
     res.set('Cache-Control', departures ? 'public, max-age=30' : 'no-store');
-    res.type('html').send(renderStopPage(stop, info, departures));
+    res.type('html').send(renderStopPage(stop, info, departures, { text }));
   } catch (err) {
     console.warn('[RuterLive] Holdeplasside:', err.message);
     res.set('Cache-Control', 'no-store');
@@ -277,7 +277,7 @@ app.get('/holdeplass/:slug', async (req, res) => {
 
 app.get('/holdeplasser', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=3600');
-  res.type('html').send(renderStopIndex(STOPS));
+  res.type('html').send(renderStopIndex(FEATURED_STOPS));
 });
 
 // Guideoversikt, guider og Om-side (statisk innhold fra content/)

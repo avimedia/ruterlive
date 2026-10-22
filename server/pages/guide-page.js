@@ -1,6 +1,7 @@
 // Server-rendret guideside (/guider/:slug).
 
 import { GUIDES } from '../guide-catalog.js';
+import { alternatesFor, getEnAlternateFor } from '../en-catalog.js';
 import { breadcrumbLd, escapeHtml, renderPage } from './layout.js';
 
 /** `body` er klarert HTML fra repoet og escapes ikke. */
@@ -12,8 +13,12 @@ export function renderGuidePage(guide, body) {
     .map((g) => `<li><a class="card" href="/guider/${escapeHtml(g.slug)}"><span class="card-title">${escapeHtml(g.title)}</span><span class="card-text">${escapeHtml(g.description)}</span></a></li>`)
     .join('');
 
+  const path = `/guider/${guide.slug}`;
+  const en = getEnAlternateFor(path);
+  const enLink = en ? ` · <a href="${escapeHtml(en.path)}" hreflang="en" lang="en">English</a>` : '';
+
   const html = `    <article class="prose">
-    <p class="eyebrow"><a href="/guider">Guider</a></p>
+    <p class="eyebrow"><a href="/guider">Guider</a>${enLink}</p>
     <h1>${escapeHtml(guide.title)}</h1>
     <p class="byline">livetrafikk.no · ${date}</p>
 ${body}
@@ -26,7 +31,7 @@ ${body}
   return renderPage({
     title: `${guide.title} | livetrafikk.no`,
     description: guide.description,
-    path: `/guider/${guide.slug}`,
+    path,
     body: html,
     jsonLd: [
       breadcrumbLd([
@@ -48,5 +53,6 @@ ${body}
         publisher: { '@type': 'Organization', name: 'livetrafikk.no', url: 'https://livetrafikk.no/', logo: { '@type': 'ImageObject', url: 'https://livetrafikk.no/icon-512.png' } },
       },
     ],
+    alternates: en ? alternatesFor(path, en.path) : [],
   });
 }

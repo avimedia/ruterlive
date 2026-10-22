@@ -13,8 +13,8 @@ function urlEntry(path, lastmod) {
   return `  <url>\n    <loc>${escapeHtml(BASE_URL + path)}</loc>${mod}\n  </url>`;
 }
 
-/** Bygger sitemap.xml. lastmod settes bare for guider (updated). */
-export function buildSitemap({ lines, guides }) {
+/** Bygger sitemap.xml. lastmod settes bare for guider og engelske sider (updated). */
+export function buildSitemap({ lines, guides, enPages = [] }) {
   const entries = [
     urlEntry('/'),
     urlEntry('/guider'),
@@ -22,6 +22,7 @@ export function buildSitemap({ lines, guides }) {
     urlEntry('/personvern.html'),
     ...lines.map((l) => urlEntry(`/linje/${l.slug}`)),
     ...guides.map((g) => urlEntry(`/guider/${g.slug}`, g.updated)),
+    ...enPages.map((p) => urlEntry(p.path, p.updated)),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.join('\n')}\n</urlset>\n`;
 }

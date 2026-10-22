@@ -23,6 +23,7 @@ export function renderGuideIndex(guides, lines) {
 
   const body = `    <h1>Guider og linjer</h1>
     <p class="lead">Bakgrunn om kollektivtrafikken i Oslo, og en side per linje med stoppliste og hvor mange kjøretøy som er ute nå.</p>
+    <p class="lang-switch"><a href="/en" hreflang="en" lang="en">English</a>: <span lang="en">guides for visitors to Oslo</span></p>
     <h2>Guider</h2>
     <ul class="card-list">
       ${guideItems}

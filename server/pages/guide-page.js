@@ -1,7 +1,7 @@
 // Server-rendret guideside (/guider/:slug).
 
 import { GUIDES } from '../guide-catalog.js';
-import { escapeHtml, renderPage } from './layout.js';
+import { breadcrumbLd, escapeHtml, renderPage } from './layout.js';
 
 /** `body` er klarert HTML fra repoet og escapes ikke. */
 export function renderGuidePage(guide, body) {
@@ -28,5 +28,25 @@ ${body}
     description: guide.description,
     path: `/guider/${guide.slug}`,
     body: html,
+    jsonLd: [
+      breadcrumbLd([
+        { name: 'Hjem', path: '/' },
+        { name: 'Guider', path: '/guider' },
+        { name: guide.title, path: `/guider/${guide.slug}` },
+      ]),
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        headline: guide.title,
+        description: guide.description,
+        inLanguage: 'nb',
+        datePublished: guide.published,
+        dateModified: guide.updated || guide.published,
+        mainEntityOfPage: `https://livetrafikk.no/guider/${guide.slug}`,
+        image: 'https://livetrafikk.no/og-image.png',
+        author: { '@type': 'Organization', name: 'livetrafikk.no', url: 'https://livetrafikk.no/' },
+        publisher: { '@type': 'Organization', name: 'livetrafikk.no', url: 'https://livetrafikk.no/', logo: { '@type': 'ImageObject', url: 'https://livetrafikk.no/icon-512.png' } },
+      },
+    ],
   });
 }

@@ -1,7 +1,7 @@
 {
   "name": "livetrafikk.no",
   "short_name": "Livetrafikk",
-  "description": "Realtidskart over kollektivtransport i Stor-Oslo",
+  "description": "Sanntidskart over kollektivtransport i Stor-Oslo",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#14213d",

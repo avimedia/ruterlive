@@ -22,7 +22,7 @@ export function cacheControlFor(urlPath) {
   if (urlPath.startsWith('/assets/')) return 'public, max-age=31536000, immutable';
   if (urlPath === '/sw.js') return 'no-cache';
   if (urlPath.endsWith('.html') || urlPath === '/') return 'no-cache';
-  if (/^\/(favicon\.svg|favicon-32\.png|apple-touch-icon\.png|icon-(192|512|maskable-512)\.png|manifest\.json|content\.css)$/.test(urlPath)) return 'public, max-age=86400';
+  if (/^\/(favicon\.svg|favicon-32\.png|og-image\.png|apple-touch-icon\.png|icon-(192|512|maskable-512)\.png|manifest\.json|content\.css)$/.test(urlPath)) return 'public, max-age=86400';
   return null;
 }
 

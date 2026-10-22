@@ -3,6 +3,7 @@
 const BASE_URL = 'https://livetrafikk.no';
 // Samme logo som favicon.svg og kartsiden (index.html).
 const LOGO_SVG = '<svg class="site-logo" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="14" fill="#14213d"/><path d="M13 51 C13 36 29 40 32 32 S51 28 51 13" fill="none" stroke="#2a9d8f" stroke-width="8" stroke-linecap="round"/><circle cx="32" cy="32" r="9.5" fill="#e63946" stroke="#fff" stroke-width="4"/></svg>';
+const OG_IMAGE = `${BASE_URL}/og-image.png`;
 const ADSENSE_SCRIPT = '<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1298230222793785" crossorigin="anonymous"></script>';
 
 /** Escaper tekst til trygg bruk i HTML (innhold og attributter). */
@@ -14,6 +15,26 @@ export function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/** JSON-LD som <script>-blokk. Escaper `<` slik at `</script` aldri kan bryte ut av blokken. */
+export function jsonLd(obj) {
+  const json = JSON.stringify(obj).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+  return `<script type="application/ld+json">${json}</script>`;
+}
+
+/** BreadcrumbList; `items` er [{ name, path }], path relativ til domenet. */
+export function breadcrumbLd(items) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((it, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: it.name,
+      item: `${BASE_URL}${it.path}`,
+    })),
+  };
 }
 
 /**
@@ -32,7 +53,7 @@ export function lineBadge(line, { link = false, size = '' } = {}) {
  * Bygger et komplett HTML-dokument.
  * `body` er ferdig HTML (kallerens ansvar å escape dynamiske strenger).
  */
-export function renderPage({ title, description, path, body, ads = true, noindex = false, mode = '', bodyClass = '' }) {
+export function renderPage({ title, description, path, body, ads = true, noindex = false, mode = '', bodyClass = '', jsonLd: ld = [] }) {
   const url = `${BASE_URL}${path}`;
   const navLink = (href, label) => {
     const current = !noindex && (
@@ -53,6 +74,15 @@ export function renderPage({ title, description, path, body, ads = true, noindex
 ${noindex ? '' : `  <link rel="canonical" href="${escapeHtml(url)}">\n`}${noindex ? '  <meta name="robots" content="noindex">\n' : ''}  <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:type" content="website">
+  <meta property="og:locale" content="nb_NO">
+  <meta property="og:site_name" content="livetrafikk.no">
+  <meta property="og:image" content="${OG_IMAGE}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${escapeHtml(title)}">
+  <meta name="twitter:description" content="${escapeHtml(description)}">
+  <meta name="twitter:image" content="${OG_IMAGE}">
 ${noindex ? '' : `  <meta property="og:url" content="${escapeHtml(url)}">\n`}  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -64,7 +94,7 @@ ${noindex ? '' : `  <meta property="og:url" content="${escapeHtml(url)}">\n`}  <
     })();
   </script>
   <link rel="stylesheet" href="/content.css">
-${ads ? `  ${ADSENSE_SCRIPT}\n` : ''}</head>
+${(noindex ? [] : ld).map((o) => `  ${jsonLd(o)}\n`).join('')}${ads ? `  ${ADSENSE_SCRIPT}\n` : ''}</head>
 <body${bodyAttrs}>
   <header class="site-header">
     <div class="site-header-inner">

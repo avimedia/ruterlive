@@ -638,6 +638,23 @@ body {
   box-shadow: 0 0.5rem 1.5rem var(--shadow-strong);
 }
 
+.map-menu-intro {
+  margin: 0 0 0.25rem;
+  padding: 0.5rem 0.75rem 0.625rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.map-chrome .map-menu .map-menu-intro a {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  color: var(--brand-teal);
+  text-decoration: underline;
+}
+
 .map-menu[hidden] {
   display: none;
 }

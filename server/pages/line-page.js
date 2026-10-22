@@ -1,10 +1,48 @@
 // Server-rendret side for én linje (/linje/:slug).
 
 import { LINES } from '../line-catalog.js';
-import { escapeHtml, lineBadge, renderPage } from './layout.js';
+import { breadcrumbLd, escapeHtml, lineBadge, renderPage } from './layout.js';
 
 const MAP_ZOOM = { metro: 12, tram: 12, rail: 10, flytog: 10, flybuss: 10 };
 const MODE_LABEL = { metro: 'T-bane', tram: 'Trikk', rail: 'Tog', flytog: 'Flytoget', flybuss: 'Flybuss' };
+
+const MODE_GUIDE = {
+  metro: { slug: 't-banen-i-oslo', label: 'T-banen i Oslo' },
+  tram: { slug: 'trikken-i-oslo', label: 'Trikken i Oslo' },
+  rail: { slug: 'lokaltog-og-regiontog', label: 'Lokaltog og regiontog rundt Oslo' },
+  flytog: { slug: 'flytoget-eller-flybussen', label: 'Flytoget eller flybussen' },
+  flybuss: { slug: 'flytoget-eller-flybussen', label: 'Flytoget eller flybussen' },
+};
+const MAX_TITLE = 68;
+const SUFFIX = ' | livetrafikk.no';
+
+/** Endepunkter (fra stoppdata) som «A–B», eller null. */
+function endpoints(stopsResult) {
+  const { from, to } = stopsResult ?? {};
+  return from && to && from !== to ? `${from}–${to}` : null;
+}
+
+/** Tittel ≤ ~65 tegn: linje + endepunkter + «stopp, kart og sanntid», med trinnvis forkorting. */
+export function lineTitle(line, stopsResult) {
+  const ends = endpoints(stopsResult);
+  const candidates = [];
+  if (ends) {
+    candidates.push(`${line.title} ${ends}: stopp, kart og sanntid`, `${line.title} ${ends}: stopp og sanntid`, `${line.title} ${ends}`);
+  }
+  candidates.push(`${line.title}: stopp, kart og sanntid`, `${line.title}: stopp og sanntid`);
+  const fit = candidates.find((c) => (c + SUFFIX).length <= MAX_TITLE);
+  return (fit ?? candidates[candidates.length - 1]) + SUFFIX;
+}
+
+function lineDescription(line, stopsResult, hasStops) {
+  const label = MODE_LABEL[line.mode] ?? 'Linje';
+  const ends = endpoints(stopsResult);
+  const route = ends ? ` mellom ${ends.replace('–', ' og ')}` : '';
+  const what = hasStops && stopsResult.stops.length >= 3
+    ? `Stoppliste (${stopsResult.stops.length} stopp), kart og antall kjøretøy i sanntid`
+    : 'Kart og antall kjøretøy i sanntid';
+  return `${line.title}${route}. ${what}. ${label}, data fra Entur.`;
+}
 
 function formatDate(iso) {
   const d = iso ? new Date(iso) : new Date();
@@ -41,6 +79,7 @@ ${stopsResult.stops.map((s) => `      <li>${escapeHtml(s)}</li>`).join('\n')}
     .join('');
   const othersHtml = others ? `<h2>Andre linjer</h2>\n    <ul class="badge-list">${others}</ul>` : '';
 
+  const guide = MODE_GUIDE[line.mode];
   const body = `    <div class="line-hero">
       <p class="eyebrow"><a href="/guider">Linjer</a> / ${escapeHtml(MODE_LABEL[line.mode] ?? '')}</p>
       <h1 class="line-title">${lineBadge(line, { size: 'lg' })} <span>${escapeHtml(line.title)}</span></h1>
@@ -51,15 +90,22 @@ ${stopsResult.stops.map((s) => `      <li>${escapeHtml(s)}</li>`).join('\n')}
       </div>
     </div>
     ${stopsHtml}
-    ${othersHtml}`;
+    ${othersHtml}
+    <h2>Les mer</h2>
+    <ul class="link-list">
+${guide ? `      <li><a href="/guider/${guide.slug}">${escapeHtml(guide.label)}</a></li>\n` : ''}      <li><a href="/guider/sanntidsposisjoner">Slik fungerer sanntidsposisjonene</a></li>
+    </ul>`;
 
   return renderPage({
-    title: `${line.title} – stopp og kjøretøy i sanntid | livetrafikk.no`,
-    description: hasStops && stopsResult.stops.length < 3
-      ? `${line.title}: antall kjøretøy akkurat nå, med data fra Entur.`
-      : `${line.title}: stoppliste og antall kjøretøy akkurat nå, med data fra Entur.`,
+    title: lineTitle(line, stopsResult),
+    description: lineDescription(line, stopsResult, hasStops),
     path: `/linje/${line.slug}`,
     mode: line.mode,
     body,
+    jsonLd: [breadcrumbLd([
+      { name: 'Hjem', path: '/' },
+      { name: 'Guider og linjer', path: '/guider' },
+      { name: line.title, path: `/linje/${line.slug}` },
+    ])],
   });
 }

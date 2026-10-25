@@ -290,3 +290,11 @@ test('avganger: hengende kall avbrytes av tidsgrensen', async () => {
   const svc = createStopService({ fetchFn, now: () => 0, timeoutMs: 20 });
   assert.equal(await svc.getDepartures(stop), null);
 });
+
+test('buildIntro lister ikke linjer når siden har håndskrevet tekst', () => {
+  const stop = { name: 'Carl Berners plass', modes: ['metro', 'tram', 'bus'] };
+  const info = { lines: [{ publicCode: '1', transportMode: 'metro' }, { publicCode: '5', transportMode: 'metro' }], zones: ['1'], quayCount: 6 };
+  const intro = buildIntro(stop, info, { listLines: false });
+  assert.doesNotMatch(intro, /Her stopper/);
+  assert.match(intro, /sone 1/);
+});

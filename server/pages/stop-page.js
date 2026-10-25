@@ -82,12 +82,16 @@ function linesByMode(lines) {
 }
 
 /** Kort, faktabasert introtekst ut fra katalog og JP-data. */
-export function buildIntro(stop, info) {
+/**
+ * Generert innledning. `listLines: false` når siden har håndskrevet tekst: JP-dataene lister
+ * også linjer som bare går her ved avvik, og det skal ikke motsi teksten.
+ */
+export function buildIntro(stop, info, { listLines = true } = {}) {
   const modes = stop.modes.map((m) => MODE_LABEL[m].toLowerCase());
   const modeText = joinNb(modes).replace(/^t-bane/, 'T-bane');
   const isStation = stop.modes.includes('metro') || stop.modes.includes('rail');
   const parts = [`${stop.name} er en ${isStation ? 'stasjon' : 'holdeplass'} for ${modeText}.`];
-  if (info?.lines?.length) {
+  if (listLines && info?.lines?.length) {
     const phrases = linesByMode(info.lines).map(([mode, lines]) => {
       const [one, many] = MODE_LINE[mode];
       if (mode === 'bus' && lines.length > MAX_LISTED_BUS) return `${lines.length} ${many.replace(/ne$/, 'r')}`;
@@ -199,7 +203,7 @@ ${lineGroups.map(([mode, lines]) => `      <dt>${escapeHtml(MODE_LABEL[mode])}</
       <p class="eyebrow"><a href="/holdeplasser">Holdeplasser</a></p>
       <h1>${escapeHtml(stop.name)}</h1>
       <p class="mode-badges">${modeBadges(stop.modes)}</p>
-      <p class="lead">${escapeHtml(buildIntro(stop, info))}</p>
+      <p class="lead">${escapeHtml(buildIntro(stop, info, { listLines: !text }))}</p>
       <div class="line-actions">
         <a class="button button--primary" href="${escapeHtml(mapHref)}">Se på kartet</a>
       </div>

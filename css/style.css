@@ -8,6 +8,7 @@
 :root,
 [data-theme="dark"] {
   --route-casing: #111;
+  --rl-halo: #000; /* kontrastkant utenfor rød forsinkelsesring */
   --bg-page: #1a1a1a;
   --bg-panel: rgba(37, 37, 37, 0.95);
   --bg-panel-solid: #252525;
@@ -32,6 +33,7 @@
 /* Tema: lys */
 [data-theme="light"] {
   --route-casing: #fff;
+  --rl-halo: #fff;
   --bg-page: #f5f5f5;
   --bg-panel: rgba(255, 255, 255, 0.95);
   --bg-panel-solid: #fff;
@@ -1055,7 +1057,8 @@ path.leaflet-interactive:focus {
 
 /* Forsinket ≥ 2 min: tynn oransje ring, ≥ 5 min: rød (statisk) */
 .vehicle-marker.rl-late { box-shadow: 0 0 0 2px #f4a261, 0 1px 3px var(--shadow); }
-.vehicle-marker.rl-late-major { box-shadow: 0 0 0 2px #d62828, 0 1px 3px var(--shadow); }
+/* Rød ring + kontrastkant (hvit i lyst, svart i mørkt tema) så den skiller seg fra røde bussmarkører */
+.vehicle-marker.rl-late-major { box-shadow: 0 0 0 2.5px #d62828, 0 0 0 4.5px var(--rl-halo); }
 
 /* Står på holdeplass (ifølge rutetidene): diskret, statisk ring utenfor markøren */
 .vehicle-marker.rl-dwell {

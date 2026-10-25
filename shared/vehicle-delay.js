@@ -24,8 +24,19 @@ export const DELAY_SHOWN_S = 120;
 /** Fra denne grensen er ringen rød i stedet for oransje. */
 export const DELAY_MAJOR_S = 300;
 
-/** «+N min» for visning, eller '' når forsinkelsen er under grensen. */
+/** Over denne grensen (sekunder) regnes forsinkelsen som feil i dataene og vises ikke. */
+export const DELAY_MAX_S = 180 * 60;
+
+/** Forsinkelsen som skal vises (sekunder), eller 0: under grensen, negativ eller urimelig stor. */
+export function shownDelay(seconds) {
+  if (!Number.isFinite(seconds) || seconds < DELAY_SHOWN_S || seconds > DELAY_MAX_S) return 0;
+  return seconds;
+}
+
+/** «+N min» (2–59 min), «over 1 t» fra en time, eller '' når forsinkelsen ikke skal vises. */
 export function delayLabel(seconds) {
-  if (!Number.isFinite(seconds) || seconds < DELAY_SHOWN_S) return '';
-  return `+${Math.round(seconds / 60)} min`;
+  const s = shownDelay(seconds);
+  if (!s) return '';
+  const min = Math.round(s / 60);
+  return min >= 60 ? 'over 1 t' : `+${min} min`;
 }

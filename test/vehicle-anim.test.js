@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { callDelaySeconds, roundDelay, delayLabel } from '../shared/vehicle-delay.js';
+import { callDelaySeconds, roundDelay, delayLabel, shownDelay } from '../shared/vehicle-delay.js';
 import { isDwelling, positionAt, encodeVehiclePath } from '../shared/vehicle-path.js';
 import { bearingDeg, distanceM, angleDiff, headingFromMove } from '../js/vehicle-heading.js';
 import { buildVehiclesPayload } from '../server/vehicles-payload.js';
@@ -37,6 +37,20 @@ test('delayLabel: «+N min» fra to minutter', () => {
   assert.equal(delayLabel(120), '+2 min');
   assert.equal(delayLabel(150), '+3 min');
   assert.equal(delayLabel(600), '+10 min');
+});
+
+test('delayLabel: «over 1 t» fra en time, negative og urimelige verdier ignoreres', () => {
+  assert.equal(delayLabel(59 * 60), '+59 min');
+  assert.equal(delayLabel(60 * 60), 'over 1 t');
+  assert.equal(delayLabel(150 * 60), 'over 1 t');
+  assert.equal(delayLabel(180 * 60), 'over 1 t');
+  assert.equal(delayLabel(180 * 60 + 30), '');
+  assert.equal(delayLabel(24 * 3600), '');
+  assert.equal(delayLabel(-600), '');
+  assert.equal(delayLabel(Infinity), '');
+  assert.equal(shownDelay(-600), 0);
+  assert.equal(shownDelay(300), 300);
+  assert.equal(shownDelay(5 * 3600), 0);
 });
 
 test('et-parse: forsinkelse per estimert kall fra Aimed/Expected', () => {

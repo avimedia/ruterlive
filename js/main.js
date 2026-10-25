@@ -53,8 +53,9 @@ function enrichVehicleWithRouteShape(vehicle, shapes) {
     return { ...vehicle, from: vehicle.from ?? match.from, to: vehicle.to ?? match.to, via: vehicle.via ?? match.via };
   }
 
-  // Ny feed: serveren har allerede slått opp fra/til fra rutekartene; ingen JP-søk fra nettleseren
-  if (liveFeedActive) return vehicle;
+  // Ingen JP-søk fra nettleseren i produksjon: serveren slår opp fra/til fra rutekartene.
+  // Uten fra/til viser markøren «→ destinasjon». Bare dev (Vite, uten serverens endepunkter) søker selv.
+  if (!import.meta.env.DEV || liveFeedActive) return vehicle;
   const isRail = mode === 'rail' || mode === 'flytog';
   const isExternalLine = line?.toUpperCase().startsWith('FB');
   const needsJpLookup =
@@ -286,9 +287,24 @@ async function fetchVehiclesLive() {
   const version = data?.shapesVersion;
   if (!version) throw new Error('vehicles-live uten shapesVersion');
   if (loadedShapesVersion === null) {
-    const shapes = await fetchShapesFor(version);
-    loadedShapesVersion = version;
-    applyInitialData({ vehicles, routeShapes: shapes }, { live: true });
+    let shapes = null;
+    try {
+      shapes = await fetchShapesFor(version);
+    } catch (err) {
+      if (import.meta.env.DEV) console.warn('[RuterLive] route-shapes-all:', err.message);
+    }
+    if (shapes) {
+      loadedShapesVersion = version;
+      applyInitialData({ vehicles, routeShapes: shapes }, { live: true });
+      return;
+    }
+    // Rutekartene feilet: vis kjøretøyene uten ruter og prøv rutekartene igjen ved neste poll
+    // (ikke gammel feed, den gjør mer arbeid uten å gi noe bedre)
+    liveFeedActive = true;
+    graphqlVehicles = vehicles;
+    etVehicles = [];
+    etLoaded = true;
+    mergeAndUpdate();
     return;
   }
   if (version !== loadedShapesVersion) {

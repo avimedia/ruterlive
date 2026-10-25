@@ -11,7 +11,18 @@ const family = (m) => {
   return FAMILY[k] || k;
 };
 
-const normDest = (d) => (d || '').toLowerCase().replace(/\s+(stasjon|holdeplass|st\.?)$/i, '').trim();
+/**
+ * Navn for sammenligning av destinasjon og ruteendepunkt: små bokstaver, ett mellomrom,
+ * uten « stasjon», « holdeplass», « st.» og t-banens « T» på slutten («Drammen stasjon» → «drammen»).
+ */
+export const normDest = (d) => {
+  let s = String(d ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  for (let prev = ''; prev !== s; ) {
+    prev = s;
+    s = s.replace(/[\s,]+(stasjon|holdeplass|st\.?|t)$/u, '').trim();
+  }
+  return s;
+};
 const overlaps = (a, b) => !!a && !!b && (a.includes(b) || b.includes(a));
 
 /**

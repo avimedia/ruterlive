@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { matchRouteForVehicle } from '../shared/route-match.js';
+import { matchRouteForVehicle, normDest } from '../shared/route-match.js';
 
 const shapes = [
   { mode: 'flytog', line: 'FLY1', from: 'Oslo S', to: 'Oslo lufthavn', via: 'Lillestrøm' },
@@ -27,4 +27,23 @@ test('ingen rute mot destinasjonen gir null (ikke feil retning)', () => {
 test('annen modusfamilie matcher ikke', () => {
   const v = { line: { publicCode: 'L1' }, mode: 'BUS', destinationName: 'Lillestrøm' };
   assert.equal(matchRouteForVehicle(v, shapes), null);
+});
+
+test('normDest fjerner stasjon/st./T, store bokstaver og mellomrom', () => {
+  assert.equal(normDest('Drammen stasjon'), 'drammen');
+  assert.equal(normDest('  Lillestrøm   St. '), 'lillestrøm');
+  assert.equal(normDest('Ski st'), 'ski');
+  assert.equal(normDest('Storo T'), 'storo');
+  assert.equal(normDest('Ellingsrudåsen'), 'ellingsrudåsen');
+  assert.equal(normDest('Tøyen'), 'tøyen');
+  assert.equal(normDest(null), '');
+});
+
+test('destinasjon med «stasjon»/«T» matcher ruteendepunkt uten (og omvendt)', () => {
+  const s = [
+    { mode: 'rail', line: 'R10', from: 'Skien', to: 'Lillehammer' },
+    { mode: 'metro', line: '5', from: 'Sognsvann T', to: 'Vestli T' },
+  ];
+  assert.equal(matchRouteForVehicle({ line: { publicCode: 'R10' }, mode: 'RAIL', destinationName: 'Lillehammer stasjon' }, s)?.from, 'Skien');
+  assert.equal(matchRouteForVehicle({ line: { publicCode: '5' }, mode: 'metro', destinationName: 'VESTLI' }, s)?.from, 'Sognsvann T');
 });

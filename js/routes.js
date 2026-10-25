@@ -2,6 +2,7 @@ import L from 'leaflet';
 import { getMap } from './map.js';
 import { isFlytogLineCode } from '../config.js';
 import { splitRouteAt } from './route-split.js';
+import { groupStops } from './stop-groups.js';
 
 const MODE_COLORS = {
   bus: '#e63946',
@@ -293,7 +294,9 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
-function createStopMarker(lat, lon, quayId, name, color, stopsLayer) {
+/** quayIds: én quay-ID eller flere (sammenslått stasjon); avgangstavla viser alle. */
+function createStopMarker(lat, lon, quayIds, name, color, stopsLayer) {
+  const ids = (Array.isArray(quayIds) ? quayIds : [quayIds]).filter(Boolean);
   const label = (name || 'Holdeplass').trim();
   const marker = L.marker([lat, lon], {
     icon: L.divIcon({
@@ -307,78 +310,74 @@ function createStopMarker(lat, lon, quayId, name, color, stopsLayer) {
     }),
     zIndexOffset: 1000,
   });
-  marker._quayId = quayId;
+  marker._quayId = ids[0];
   const popup = L.popup({ className: 'departure-board-popup', maxWidth: 460 });
   marker.bindPopup(popup, { autoClose: true, closeOnClick: true });
   marker.on('click', (e) => L.DomEvent.stopPropagation(e));
   marker.on('popupopen', () => {
-    showDepartureBoard(marker.getPopup(), quayId);
+    showDepartureBoard(marker.getPopup(), ids);
   });
   marker.bindTooltip(`${label} · Klikk for avganger`, { permanent: false, direction: 'top', offset: [0, -8] });
   marker.addTo(stopsLayer);
+  return marker;
+}
+
+function createLabelOnlyStopMarker(lat, lon, name, color, stopsLayer) {
+  const marker = L.marker([lat, lon], {
+    icon: L.divIcon({
+      className: 'stop-marker stop-marker-label-only',
+      html: `
+        <span class="stop-marker-dot" style="background:${color}"></span>
+        <span class="stop-marker-label">${escapeHtml(name)}</span>
+      `,
+      iconSize: [140, 24],
+      iconAnchor: [5, 12],
+    }),
+    zIndexOffset: 500,
+  });
+  marker.bindTooltip(escapeHtml(name), { permanent: false, direction: 'top', offset: [0, -8] });
+  marker.addTo(stopsLayer);
+  return marker;
+}
+
+/** Én markør per gruppe (samme navn, tett): plattformer/quays på samme stasjon slås sammen. */
+function drawStopGroups(stops, stopsLayer) {
+  const markers = [];
+  for (const g of groupStops(stops)) {
+    const color = g.first.color;
+    if (g.quayIds.length) markers.push(createStopMarker(g.lat, g.lon, g.quayIds, g.name, color, stopsLayer));
+    else markers.push(createLabelOnlyStopMarker(g.lat, g.lon, g.name, color, stopsLayer));
+  }
+  return markers;
 }
 
 function addStopMarkers(map, shapes, visibleModes, onlyRouteStops = false) {
-  const seen = new Set();
-  const pointKey = (lat, lon) => `${lat.toFixed(5)},${lon.toFixed(5)}`;
-  const stopSources = [];
-  const defaultColor = MODE_COLORS.bus;
+  const named = [];
+  const unnamed = new Set();
   for (const shape of shapes) {
     const mode = shape.mode?.toLowerCase();
     const color = getShapeColor(mode, shape.line + (shape.from || ''));
-    for (const pt of shape.pointsAreTrace ? [] : shape.points ?? []) {
-      const lat = pt[0];
-      const lon = pt[1];
-      const quayId = pt[2];
-      const name = pt[3];
-      stopSources.push({ lat, lon, quayId, name, color });
-    }
-    for (const pt of shape.quayStops ?? []) {
-      const lat = pt[0];
-      const lon = pt[1];
-      const quayId = pt[2];
-      const name = pt[3];
-      stopSources.push({ lat, lon, quayId, name, color });
+    const pts = [...(shape.pointsAreTrace ? [] : shape.points ?? []), ...(shape.quayStops ?? [])];
+    for (const [lat, lon, quayId, name] of pts) {
+      if (quayId || name) named.push({ lat, lon, quayId, name: name || '', color });
+      else {
+        const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+        if (unnamed.has(key)) continue;
+        unnamed.add(key);
+        L.circleMarker([lat, lon], {
+          radius: 4,
+          fillColor: color,
+          color: 'rgba(255,255,255,0.8)',
+          weight: 1,
+          fillOpacity: 0.7,
+          interactive: false,
+        }).addTo(map.routeLayerGroup);
+      }
     }
   }
 
   const stopsLayer = map.stopsLayerGroup || map.routeLayerGroup;
-
-  for (const { lat, lon, quayId, name, color } of stopSources) {
-    const key = pointKey(lat, lon);
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    if (quayId) {
-      createStopMarker(lat, lon, quayId, name, color, stopsLayer);
-      seen.add(quayId);
-    } else if (name) {
-      const marker = L.marker([lat, lon], {
-        icon: L.divIcon({
-          className: 'stop-marker stop-marker-label-only',
-          html: `
-            <span class="stop-marker-dot" style="background:${color}"></span>
-            <span class="stop-marker-label">${escapeHtml(name)}</span>
-          `,
-          iconSize: [140, 24],
-          iconAnchor: [5, 12],
-        }),
-        zIndexOffset: 500,
-      });
-      marker.bindTooltip(escapeHtml(name), { permanent: false, direction: 'top', offset: [0, -8] });
-      marker.addTo(stopsLayer);
-    } else {
-      const circle = L.circleMarker([lat, lon], {
-        radius: 4,
-        fillColor: color,
-        color: 'rgba(255,255,255,0.8)',
-        weight: 1,
-        fillOpacity: 0.7,
-        interactive: false,
-      });
-      circle.addTo(map.routeLayerGroup);
-    }
-  }
+  let drawn = drawStopGroups(named, stopsLayer);
 
   // Ved valgt kjøretøy: kun rutens stopp – ikke hent alle holdeplasser i kartvisning
   if (onlyRouteStops) return;
@@ -394,19 +393,18 @@ function addStopMarkers(map, shapes, visibleModes, onlyRouteStops = false) {
   )
     .then((r) => r.ok ? r.json() : [])
     .then((bboxStops) => {
-      if (thisFetchId !== bboxFetchId) return;
-      const defaultColor = MODE_COLORS.bus;
-      for (const s of bboxStops || []) {
-        if (seen.has(s.id)) continue;
-        const key = pointKey(s.lat, s.lon);
-        if (seen.has(key)) continue;
-        seen.add(s.id);
-        seen.add(key);
-        createStopMarker(s.lat, s.lon, s.id, s.name, defaultColor, stopsLayer);
-      }
+      if (thisFetchId !== bboxFetchId || !bboxStops?.length) return;
+      const color = MODE_COLORS.bus;
+      const all = named.concat(bboxStops.map((s) => ({ lat: s.lat, lon: s.lon, quayId: s.id, name: s.name, color })));
+      // Tegn på nytt med alle stopp, så bbox-quays havner i samme gruppe som linjenes stopp
+      for (const m of drawn) stopsLayer.removeLayer(m);
+      drawn = drawStopGroups(all, stopsLayer);
     })
     .catch(() => {});
 }
+
+/** Samme grense som /api/departures i server.js. */
+const DEPARTURE_MAX_QUAYS = 30;
 
 const MODE_COLORS_DEP = {
   bus: '#e63946',
@@ -420,11 +418,12 @@ const MODE_COLORS_DEP = {
   flytog: '#e056fd',
 };
 
-async function showDepartureBoard(popup, quayId) {
+async function showDepartureBoard(popup, quayIds) {
   popup.setContent('<div class="departure-loading">Henter avganger…</div>');
 
   try {
-    const res = await fetch(`/api/departures?quayId=${encodeURIComponent(quayId)}`);
+    const ids = (Array.isArray(quayIds) ? quayIds : [quayIds]).slice(0, DEPARTURE_MAX_QUAYS);
+    const res = await fetch(`/api/departures?quayId=${ids.map(encodeURIComponent).join(',')}`);
     const data = await res.json();
     const name = data?.name || 'Holdeplass';
     const allCalls = (data?.estimatedCalls ?? [])

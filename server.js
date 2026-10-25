@@ -349,20 +349,23 @@ app.get('/api/vehicle-route', async (req, res) => {
 });
 
 // Avgangstavle for holdeplass – Entur Journey Planner quay.estimatedCalls
+// Avganger for én quay, eller flere (sammenslått stasjon på kartet): ?quayId=NSR:Quay:1,NSR:Quay:2
+const DEPARTURE_MAX_QUAYS = 30;
 app.get('/api/departures', async (req, res) => {
-  const quayId = (req.query.quayId || '').trim();
-  if (!/^NSR:Quay:\d+$/.test(quayId)) {
+  const ids = [...new Set(String(req.query.quayId || '').split(',').map((s) => s.trim()).filter(Boolean))];
+  if (ids.length === 0 || ids.length > DEPARTURE_MAX_QUAYS || !ids.every((id) => /^NSR:Quay:\d+$/.test(id))) {
     return res.status(400).json({ error: 'Mangler eller ugyldig quayId' });
   }
   try {
     const timeRange = 21600; // 6t frem – raskere respons
-    const numberOfDepartures = 12;
+    // Flere quays: færre per quay, så svaret ikke vokser med antall plattformer
+    const numberOfDepartures = ids.length === 1 ? 12 : Math.max(3, Math.ceil(30 / ids.length));
     const resJp = await fetch('https://api.entur.io/journey-planner/v3/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ET-Client-Name': 'ruterlive-web' },
       body: JSON.stringify({
-        query: `query($id: String!) {
-          quay(id: $id) {
+        query: `query($ids: [String]!) {
+          quays(ids: $ids) {
             id
             name
             estimatedCalls(timeRange: ${timeRange}, numberOfDepartures: ${numberOfDepartures}) {
@@ -378,13 +381,17 @@ app.get('/api/departures', async (req, res) => {
             }
           }
         }`,
-        variables: { id: quayId },
+        variables: { ids },
       }),
     });
     const data = await resJp.json();
-    const quay = data?.data?.quay;
+    const quays = (data?.data?.quays ?? []).filter(Boolean);
     res.set('Cache-Control', 'public, max-age=30');
-    res.json(quay || { id: quayId, name: null, estimatedCalls: [] });
+    res.json({
+      id: ids[0],
+      name: quays.find((q) => q.name)?.name ?? null,
+      estimatedCalls: quays.flatMap((q) => q.estimatedCalls ?? []),
+    });
   } catch (err) {
     res.status(503).json({ error: err.message, estimatedCalls: [] });
   }

@@ -57,8 +57,11 @@ function formatDate(iso) {
   return date.toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Oslo' });
 }
 
-/** @returns {string} komplett HTML-dokument */
-export function renderLinePage(line, stopsResult, vehicleCount) {
+/**
+ * @param {string} [text] håndskrevet HTML-fragment fra getLineText (vises mellom hero og stopplisten)
+ * @returns {string} komplett HTML-dokument
+ */
+export function renderLinePage(line, stopsResult, vehicleCount, text) {
   const hasStops = Boolean(stopsResult?.stops?.length);
   const zoom = MAP_ZOOM[line.mode] ?? 10;
   const mapHref = `/?lat=59.925&lng=10.75&z=${zoom}`;
@@ -96,7 +99,7 @@ ${stopsResult.stops.map((s) => `      <li>${stopItem(s)}</li>`).join('\n')}
         ${vehicles}
       </div>
     </div>
-    ${stopsHtml}
+${text ? `    <div class="prose line-text">\n${text.trim()}\n    </div>\n` : ''}    ${stopsHtml}
     ${othersHtml}
     <h2>Les mer</h2>
     <ul class="link-list">

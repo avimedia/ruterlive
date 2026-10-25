@@ -1,9 +1,10 @@
 /**
  * Linjekatalog for innholdssidene (/linje/:slug) og stopplister fra Entur Journey Planner.
- * Introtekster ligger i content/line-intros.json (slug -> tekst).
+ * Introtekster ligger i content/line-intros.json (slug -> tekst), lengre tekster i content/linje/<slug>.html.
  */
 
 import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -50,6 +51,26 @@ export const LINES = RAW_LINES.map((l) => ({
 
 export function getLineBySlug(slug) {
   return LINES.find((l) => l.slug === slug);
+}
+
+const lineTextCache = new Map(); // slug -> tekst ('' = mangler fil)
+
+/**
+ * Håndskrevet tekst fra content/linje/<slug>.html (cachet). Bare slugs i LINES godtas;
+ * ukjente slugs og manglende filer gir undefined.
+ */
+export async function getLineText(slug) {
+  if (typeof slug !== 'string' || !/^[a-z0-9-]+$/.test(slug) || !getLineBySlug(slug)) return undefined;
+  if (!lineTextCache.has(slug)) {
+    try {
+      lineTextCache.set(slug, await readFile(new URL(`../content/linje/${slug}.html`, import.meta.url), 'utf8'));
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
+      console.warn(`[RuterLive] Mangler content/linje/${slug}.html`);
+      lineTextCache.set(slug, '');
+    }
+  }
+  return lineTextCache.get(slug) || undefined;
 }
 
 /**

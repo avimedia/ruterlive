@@ -1,7 +1,7 @@
 import L from 'leaflet';
 import { getMap } from './map.js';
 import { isFlytogLineCode } from '../config.js';
-import { splitRouteAt } from './route-split.js';
+import { splitRouteAt, chooseClosestShape } from './route-split.js';
 import { groupStops } from './stop-groups.js';
 
 const MODE_COLORS = {
@@ -148,13 +148,15 @@ function routeResponseToShape(data) {
   };
 }
 
-/** Gir hentet JP-rute for kjøretøyet, eller null (og starter henting ved behov). */
+/** Gir { shape, pending } for kjøretøyets JP-rute (og starter henting ved behov). */
 function vehicleRouteFor(vehicle) {
   const params = vehicleRouteParams(vehicle);
-  if (!params) return null;
+  if (!params) return { shape: null, pending: false };
   const key = vehicleRouteKey(params);
   const hit = vehicleRoutes.get(key);
-  if (hit && (hit.pending || hit.shape || Date.now() - hit.at < VEHICLE_ROUTE_RETRY_MS)) return hit.shape;
+  if (hit && (hit.pending || hit.shape || Date.now() - hit.at < VEHICLE_ROUTE_RETRY_MS)) {
+    return { shape: hit.shape, pending: hit.pending };
+  }
   vehicleRoutes.set(key, { shape: null, pending: true, at: Date.now() });
   fetch(`/api/vehicle-route?${new URLSearchParams(params)}`)
     .then((r) => (r.ok ? r.json() : null))
@@ -164,15 +166,16 @@ function vehicleRouteFor(vehicle) {
       vehicleRoutes.delete(key);
       vehicleRoutes.set(key, { shape, pending: false, at: Date.now() });
       while (vehicleRoutes.size > VEHICLE_ROUTE_MAX) vehicleRoutes.delete(vehicleRoutes.keys().next().value);
-      if (!shape || !lastRouteArgs) return;
+      if (!lastRouteArgs) return;
       const sel = lastRouteArgs[2];
       const selParams = sel ? vehicleRouteParams(sel) : null;
+      // Tegn på nytt også uten rute: da vises de lokale treffene i stedet
       if (selParams && vehicleRouteKey(selParams) === key) {
         vehicleRouteVersion++;
         updateRouteLines(...lastRouteArgs);
       }
     });
-  return null;
+  return { shape: null, pending: true };
 }
 
 export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
@@ -252,35 +255,48 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
     selectedMatches.push(vehicleClickFallbacks[0]);
   }
 
-  // Buss/båt: hel rute fra JP erstatter ET-bitene. Flybuss har allerede hele ruter
-  // (statisk/JP), så den hentes bare når ingen rute matcher.
+  // Buss/båt/flybuss: hel rute fra JP erstatter de lokale treffene (ET-biter, statiske varianter)
   const selMode = selectedVehicle ? vehicleMode(selectedVehicle) : null;
-  if (selMode && VEHICLE_CLICK_MODES.has(selMode) && (selMode !== 'flybuss' || selectedMatches.length === 0)) {
-    const jpRoute = vehicleRouteFor(selectedVehicle);
-    if (jpRoute) {
-      const isClickMode = (s) => VEHICLE_CLICK_MODES.has(shapeModeForFilter(s));
+  const isClickMode = (sh) => VEHICLE_CLICK_MODES.has(shapeModeForFilter(sh));
+  let highlighted = [];
+  if (selMode && VEHICLE_CLICK_MODES.has(selMode)) {
+    const jp = vehicleRouteFor(selectedVehicle);
+    if (jp.shape) {
       for (let i = shapesToShow.length - 1; i >= 0; i--) if (isClickMode(shapesToShow[i])) shapesToShow.splice(i, 1);
-      for (let i = selectedMatches.length - 1; i >= 0; i--) if (isClickMode(selectedMatches[i])) selectedMatches.splice(i, 1);
-      shapesToShow.push(jpRoute);
-      selectedMatches.push(jpRoute);
+      shapesToShow.push(jp.shape);
+      highlighted = [jp.shape];
+    } else if (jp.pending && selectedMatches.length > 1) {
+      // Mens JP-ruten hentes: bare ett lokalt treff, ingen floke av varianter
+      const chosen = selectedMatches[chooseClosestShape(selectedMatches, vehicleLatLng(selectedVehicle))];
+      for (let i = shapesToShow.length - 1; i >= 0; i--) {
+        if (isClickMode(shapesToShow[i]) && shapesToShow[i] !== chosen) shapesToShow.splice(i, 1);
+      }
+      highlighted = [chosen];
     }
+  }
+  // Flere treff (t-bane/trikk med varianter, eller uten JP-rute): bare den nærmeste uthevet, resten dempet
+  if (highlighted.length === 0 && selectedMatches.length > 0) {
+    highlighted = [selectedMatches[chooseClosestShape(selectedMatches, vehicleLatLng(selectedVehicle))]];
   }
 
   const drawn = new Set();
+  // Dempede linjer først, uthevet rute over; en dempet linje med samme nøkkel som den uthevede hoppes over
+  const routeKey = (sh) => `${sh.mode}|${sh.line}|${sh.from}|${sh.to}`;
+  const highlightedKeys = new Set(highlighted.map(routeKey));
   for (const shape of shapesToShow) {
-    if (selectedMatches.includes(shape)) continue;
+    if (highlighted.includes(shape) || highlightedKeys.has(routeKey(shape))) continue;
     addRoutePolyline(map, shape, drawn, false, null, !!selectedVehicle);
   }
-  for (const shape of selectedMatches) {
+  for (const shape of highlighted) {
     addRoutePolyline(map, shape, drawn, true, selectedVehicle, false);
   }
 
   // Holdeplasser: ved valgt kjøretøy kun rutens stopp (zoom 12+), ellers zoom 15+ med bbox
-  const showStopsForSelection = selectedMatches.length > 0 && mapZoom >= 12;
+  const showStopsForSelection = highlighted.length > 0 && mapZoom >= 12;
   const showStopsForAll = mapZoom >= ZOOM_STOPS_VISIBLE;
   if (showStopsForSelection || showStopsForAll) {
     const shapesForStops = showStopsForSelection
-      ? selectedMatches
+      ? highlighted
       : (shapes ?? []).filter((s) => effectiveModes.has(shapeModeForFilter(s)));
     const onlyRouteStops = showStopsForSelection;
     addStopMarkers(map, shapesForStops, effectiveModes, onlyRouteStops);

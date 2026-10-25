@@ -125,7 +125,7 @@ test('renderStopPage med avganger', () => {
   assert.ok(!html.includes('Gått'), 'passerte avganger vises ikke');
   assert.equal((html.match(/<tr>|<tr class/g) || []).length, 1 + 3);
   assert.ok(html.includes('href="/linje/t-bane-5"'));
-  assert.ok(!html.includes('href="/linje/buss'), 'buss har ingen linjeside');
+  assert.ok(html.includes('href="/linje/buss-20"'), 'Ruter-buss 20 har linjeside');
   assert.ok(html.includes('+3 min'));
   assert.ok(html.includes('Rutetid'));
   assert.ok(html.includes('Innstilt'));

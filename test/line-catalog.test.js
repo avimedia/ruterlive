@@ -67,7 +67,7 @@ test('countVehiclesForLine teller aliaser, uavhengig av store/små bokstaver', (
 test('linjekatalogen er komplett og konsistent', () => {
   assert.equal(getLineBySlug('t-bane-5').code, '5');
   assert.equal(getLineBySlug('finnes-ikke'), undefined);
-  assert.equal(LINES.length, 28);
+  assert.equal(LINES.length, 46);
   assert.equal(new Set(LINES.map((l) => l.slug)).size, LINES.length);
   for (const line of LINES) {
     assert.ok(line.title, line.slug);

@@ -96,16 +96,20 @@ const VEHICLE_MODES = {
   rail: ['rail'],
   flytog: ['rail', 'flytog'],
   flybuss: ['bus', 'coach'],
+  bus: ['bus'],
 };
 
 /** Teller kjøretøy som kjører linjen, inkl. x-varianter (aliaser). Filtrerer også på transportmåte, siden
- * linjekoder som 5 og 12 også brukes av busser utenfor Oslo. */
+ * linjekoder som 5 og 12 også brukes av busser utenfor Oslo. Har kjøretøyet linje-ID (`RUT:Line:31`),
+ * må den tilhøre linjens operatør, så Ruters 22 ikke telles med Brakars 22. */
 export function countVehiclesForLine(vehicles, line) {
   const codes = new Set([line.code, ...(line.aliases ?? [])].map((c) => c.toUpperCase()));
   const modes = VEHICLE_MODES[line.mode];
   let n = 0;
   for (const v of vehicles ?? []) {
     if (modes && !modes.includes(String(v?.mode ?? '').toLowerCase())) continue;
+    const ref = v?.line?.lineRef ?? v?.line?.ref;
+    if (typeof ref === 'string' && ref && !ref.startsWith(`${line.authority}:`)) continue;
     const code = v?.line?.publicCode;
     if (code && codes.has(String(code).toUpperCase())) n++;
   }

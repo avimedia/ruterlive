@@ -2,6 +2,7 @@
  * UX-forbedringer: delingslenke, lastestatus, brukertips, tastaturnavigasjon, PWA.
  */
 
+import L from 'leaflet';
 import { getMap } from './map.js';
 
 const TIP_KEY = 'ruterlive-tip-seen';
@@ -9,6 +10,8 @@ const TIP_KEY = 'ruterlive-tip-seen';
 export function initShareLink() {
   const btn = document.getElementById('share-link-btn');
   if (!btn) return;
+  // Knappen ligger inne i kartelementet: klikk skal ikke nå kartet (det fjerner valgt kjøretøy)
+  L.DomEvent.disableClickPropagation(btn);
 
   btn.addEventListener('click', async () => {
     const map = getMap();

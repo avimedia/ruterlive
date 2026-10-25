@@ -1,3 +1,4 @@
+import L from 'leaflet';
 import { setRoutesVisible } from './routes.js';
 import { setOpenRailwayMapVisible, isOpenRailwayMapVisible } from './map.js';
 import { formatVehicleCounts } from './vehicle-count-text.js';
@@ -38,8 +39,9 @@ export function initLayers(callback) {
   const toggleBtn = document.getElementById('panel-toggle');
   const controls = panel.querySelector('.layer-controls');
 
-  // Hindre at klikk i panelet trigger kartet (zoom, clearSelection osv.)
-  panel.addEventListener('click', (e) => e.stopPropagation());
+  // Klikk, dobbeltklikk, dra og scroll i panelet skal ikke nå kartet (zoom, fravalg av kjøretøy osv.)
+  L.DomEvent.disableClickPropagation(panel);
+  L.DomEvent.disableScrollPropagation(panel);
 
   // Gjenopprett minimert tilstand; på mobil start minimert hvis ingen lagret preferanse
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -114,6 +116,7 @@ export function initLayers(callback) {
 
   // Lukk-overlay
   const overlay = document.getElementById('info-overlay');
+  if (overlay) L.DomEvent.disableClickPropagation(overlay); // ligger også inne i kartelementet
   overlay?.querySelector('.overlay-close')?.addEventListener('click', () => hideInfoOverlay());
   overlay?.addEventListener('click', (e) => {
     if (e.target === overlay) hideInfoOverlay();

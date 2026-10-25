@@ -811,8 +811,9 @@ th {
 
 /* ---------- Holdeplasser ---------- */
 
-/* Håndskrevet tekst på holdeplassider, mellom hero og avganger. */
-.stop-text {
+/* Håndskrevet tekst på holdeplass- og linjesider, mellom hero og avganger/stoppliste. */
+.stop-text,
+.line-text {
   margin-top: 1.75rem;
 }
 

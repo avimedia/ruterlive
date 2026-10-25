@@ -24,7 +24,7 @@ import { makeJsonEntry, sendJson, memoEntry } from './server/json-cache.js';
 import { buildVehiclesPayload } from './server/vehicles-payload.js';
 import { sortShapes, createThrottledSnapshot } from './server/shapes-version.js';
 import { createLineGeometryService, applyLineGeometry } from './server/line-geometry.js';
-import { LINES, getLineBySlug, getLineStops, prewarmLineStops } from './server/line-catalog.js';
+import { LINES, getLineBySlug, getLineStops, getLineText, prewarmLineStops } from './server/line-catalog.js';
 import { createVehicleRouteService, parseVehicleRouteParams } from './server/vehicle-route.js';
 import { renderLinePage } from './server/pages/line-page.js';
 import { getGuideBySlug, loadGuideBody, loadAboutBody, GUIDES } from './server/guide-catalog.js';
@@ -246,16 +246,17 @@ app.get('/linje/:slug', async (req, res) => {
   const line = getLineBySlug(req.params.slug);
   if (!line) return sendNotFound(res);
   try {
-    const [stops, vehicles] = await Promise.all([
+    const [stops, vehicles, text] = await Promise.all([
       getLineStops(line),
       // Kald start: ikke vent på kjøretøy (GTFS/ET) lenger enn 1,5 s; da rendres siden uten telling.
       Promise.race([
         getMergedVehicles().catch(() => null),
         new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
       ]),
+      getLineText(line.slug),
     ]);
     res.set('Cache-Control', stops && vehicles ? 'public, max-age=300' : 'no-store');
-    res.type('html').send(renderLinePage(line, stops, vehicles ? countVehiclesForLine(vehicles, line) : null));
+    res.type('html').send(renderLinePage(line, stops, vehicles ? countVehiclesForLine(vehicles, line) : null, text));
   } catch (err) {
     console.warn('[RuterLive] Linjeside:', err.message);
     res.set('Cache-Control', 'no-store');

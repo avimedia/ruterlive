@@ -4,7 +4,7 @@ import { isFlytogLineCode } from '../config.js';
 import { positionAt, isDwelling } from '../shared/vehicle-path.js';
 import { gpsGlideMs } from './feed-policy.js';
 import { onLinePosition } from './line-geometry.js';
-import { delayLabel, DELAY_SHOWN_S, DELAY_MAJOR_S } from '../shared/vehicle-delay.js';
+import { delayLabel, shownDelay, DELAY_MAJOR_S } from '../shared/vehicle-delay.js';
 import { headingFromMove, angleDiff, MIN_HEADING_CHANGE_DEG } from './vehicle-heading.js';
 
 const MODE_TO_CLASS = {
@@ -109,8 +109,9 @@ function decorOf(marker) {
 }
 
 function delayClass(delay) {
-  if (!(delay >= DELAY_SHOWN_S)) return '';
-  return delay >= DELAY_MAJOR_S ? 'rl-late-major' : 'rl-late';
+  const s = shownDelay(delay);
+  if (!s) return '';
+  return s >= DELAY_MAJOR_S ? 'rl-late-major' : 'rl-late';
 }
 
 /** Skriver hele tilstanden til ikonet (etter nytt ikon eller når markøren legges på kartet igjen). */
@@ -226,17 +227,22 @@ function setLatLngNoGlide(marker, pos) {
   icon.style.transition = '';
 }
 
+/** Zoom og utsnitt (med margin) for trasé-posisjon. Samme for tikket og animasjonsløkka, ellers hopper valgt kjøretøy. */
+function geoViewOf(map) {
+  const b = map.getBounds().pad(BOUNDS_PAD);
+  return { zoom: map.getZoom(), s: b.getSouth(), n: b.getNorth(), w: b.getWest(), e: b.getEast() };
+}
+
 function tickMarkers() {
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
   const map = getMap();
   if (!map || motion.size === 0) return;
-  const b = map.getBounds().pad(BOUNDS_PAD);
-  const s = b.getSouth(), n = b.getNorth(), w = b.getWest(), e = b.getEast();
+  const geoView = geoViewOf(map);
+  const { s, n, w, e } = geoView;
   const inView = (lat, lon) => lat >= s && lat <= n && lon >= w && lon <= e;
   const wallNow = Date.now();
   const perfNow = performance.now();
-  const geoView = { zoom: map.getZoom(), s, n, w, e };
-  const headingVisible = map.getZoom() >= ZOOM_LINE_VISIBLE;
+  const headingVisible = geoView.zoom >= ZOOM_LINE_VISIBLE;
   for (const [id, st] of motion) {
     const marker = vehicleMarkers.get(id);
     if (!marker || !marker._map) continue; // skjult av filter
@@ -321,12 +327,25 @@ function rafFrame() {
   }
   rafId = requestAnimationFrame(rafFrame);
   if (!marker._map || map._animatingZoom) return;
-  const pos = motionPosition(st, Date.now(), performance.now());
+  const pos = motionPosition(st, Date.now(), performance.now(), rafVehicleId, geoViewOf(map));
   if (!pos) return;
+  for (const fn of frameListeners) fn(pos);
   const px = map.latLngToLayerPoint(pos).round();
   if (rafLastPx && px.x === rafLastPx.x && px.y === rafLastPx.y) return;
   rafLastPx = px;
   marker.setLatLng(pos);
+}
+
+const frameListeners = [];
+
+/** Kalles per bilde med posisjonen til det animerte kjøretøyet (f.eks. «Følg»). */
+export function onAnimatedFrame(fn) {
+  frameListeners.push(fn);
+}
+
+/** Om valgt kjøretøy flyttes per bilde akkurat nå (ellers bare ved tikk). */
+export function isAnimating() {
+  return !!rafId;
 }
 
 function startRaf() {

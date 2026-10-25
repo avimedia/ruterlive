@@ -9,7 +9,8 @@ import { createFeedPolicy, shouldFallBackToLegacy } from './feed-policy.js';
 import { fetchLineRouteFromJp } from './jp-line-lookup.js';
 import { decodeVehiclePath } from '../shared/vehicle-path.js';
 import { matchRouteForVehicle } from '../shared/route-match.js';
-import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons, onMarkerTick, getMarkerLatLng } from './markers.js';
+import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons, onMarkerTick, getMarkerLatLng, setAnimatedVehicle } from './markers.js';
+import { initFollowButton, setFollowVehicle } from './follow.js';
 import { initLayers, getVisibleModes, updateVehicleCount, setRetryHandler } from './layers.js';
 import { updateRouteLines, updateSelectedVehicleSplit } from './routes.js';
 import {
@@ -89,6 +90,13 @@ function followSelectedVehicle() {
 }
 onMarkerTick(followSelectedVehicle);
 
+/** Valgt kjøretøy animeres per bilde og kan følges; null slår av begge. */
+function setSelectedVehicle(v) {
+  selectedVehicleForRoute = v;
+  setAnimatedVehicle(v?.vehicleId ?? null);
+  setFollowVehicle(v?.vehicleId ?? null);
+}
+
 function mergeAndUpdate() {
   const merged = [];
   const etByid = new Map(etVehicles.map((v) => [v.vehicleId, v]));
@@ -109,12 +117,12 @@ function mergeAndUpdate() {
   const visibleModes = getVisibleModes();
   updateMarkers(merged, visibleModes, {
     onVehicleSelect: (v) => {
-      selectedVehicleForRoute = v;
+      setSelectedVehicle(v);
       lastSplitLatLng = null;
       updateRouteLines(routeShapes, getVisibleModes(), withShownLocation(v));
     },
     onVehicleDeselect: () => {
-      selectedVehicleForRoute = null;
+      setSelectedVehicle(null);
       updateRouteLines(routeShapes, getVisibleModes(), null);
     },
     getSelectedVehicleId: () => selectedVehicleForRoute?.vehicleId,
@@ -127,6 +135,8 @@ function mergeAndUpdate() {
       selectedVehicleForRoute = fresh;
       lastSplitLatLng = null;
       followSelectedVehicle();
+    } else {
+      setSelectedVehicle(null); // kjøretøyet er borte
     }
   }
 }
@@ -141,11 +151,12 @@ initTipToast();
 initKeyboardNav();
 initPwa();
 applyUrlParams();
+initFollowButton();
 const map = getMap();
 if (map) {
   map.on('click', () => {
     if (selectedVehicleForRoute) {
-      selectedVehicleForRoute = null;
+      setSelectedVehicle(null);
       updateRouteLines(routeShapes, getVisibleModes(), null);
     }
   });

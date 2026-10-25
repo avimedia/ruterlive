@@ -70,6 +70,30 @@ export function positionAt(path, nowMs, t0) {
   return [last[0], last[1]];
 }
 
+/**
+ * Står kjøretøyet på en holdeplass ifølge rutetidene? Samme regler og tidsformat som positionAt:
+ * true før første avgang, mellom ankomst og avgang og etter siste ankomst; false under kjøring.
+ */
+export function isDwelling(path, nowMs, t0) {
+  if (!Array.isArray(path) || path.length === 0 || !Number.isFinite(nowMs)) return false;
+  if (Number.isFinite(t0)) nowMs = nowMs / 1000 - t0;
+  let prevDep = null;
+  for (let i = 0; i < path.length; i++) {
+    const p = path[i];
+    if (!Array.isArray(p)) return false;
+    let arr = num(p[2]) ?? num(p[3]);
+    let dep = num(p[3]) ?? arr;
+    if (prevDep !== null) {
+      if (arr === null || arr < prevDep) arr = prevDep;
+      if (dep === null || dep < arr) dep = arr;
+    }
+    if (i > 0 && nowMs < arr) return false; // underveis mellom to stopp
+    if (dep === null || nowMs <= dep) return true;
+    prevDep = dep;
+  }
+  return true;
+}
+
 const round5 = (x) => Math.round(x * 1e5) / 1e5;
 
 /**

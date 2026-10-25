@@ -498,9 +498,10 @@ function addHighlightedRoute(map, shape, latlngs, color, vehicle, tooltipText) {
   const base = { lineCap: 'round', lineJoin: 'round', interactive: false, className: 'route-line-selected' };
   const casingColor = getRouteCasingColor();
   const casingDriven = L.polyline(split.driven, { ...base, color: casingColor, weight: 9, opacity: 1 });
-  const casingAhead = L.polyline(split.ahead, { ...base, color: casingColor, weight: 9, opacity: 1, dashArray: AHEAD_DASH });
+  const casingAhead = L.polyline(split.ahead, { ...base, className: 'route-line-selected route-ahead-casing', color: casingColor, weight: 9, opacity: 1, dashArray: AHEAD_DASH });
   const driven = L.polyline(split.driven, { ...base, interactive: true, color, weight: 6, opacity: 1 });
-  const ahead = L.polyline(split.ahead, { ...base, interactive: true, color, weight: 6, opacity: 1, dashArray: AHEAD_DASH });
+  // Prikkene «marsjerer» i kjøreretningen (CSS, se .route-ahead-march); kanten under animeres ikke
+  const ahead = L.polyline(split.ahead, { ...base, className: 'route-line-selected route-ahead-march', interactive: true, color, weight: 6, opacity: 1, dashArray: AHEAD_DASH });
   for (const pl of [driven, ahead]) pl.bindTooltip(tooltipText, { permanent: false, direction: 'top', opacity: 0.95 });
   for (const pl of [casingDriven, casingAhead, driven, ahead]) pl.addTo(map.routeLayerGroup);
   highlightedRoutes.push({ latlngs, casingDriven, casingAhead, driven, ahead });

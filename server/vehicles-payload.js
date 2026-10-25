@@ -4,6 +4,7 @@
  */
 
 import { encodeVehiclePath } from '../shared/vehicle-path.js';
+import { roundDelay } from '../shared/vehicle-delay.js';
 
 const round5 = (x) => Math.round(x * 1e5) / 1e5;
 const TEXT_FIELDS = ['destinationName', 'from', 'to', 'nextStop', 'via'];
@@ -24,6 +25,9 @@ function compactVehicle(v, t0) {
   for (const k of TEXT_FIELDS) if (v[k]) out[k] = v[k];
   if (Number.isFinite(v.bearing)) out.bearing = Math.round(v.bearing);
   if (Array.isArray(v.path) && v.path.length >= 2) out.path = encodeVehiclePath(v.path, t0);
+  // Forsinkelse i sekunder, avrundet til 30 s; utelatt under ett minutt
+  const delay = roundDelay(v.delay);
+  if (delay !== null) out.delay = delay;
   return out;
 }
 

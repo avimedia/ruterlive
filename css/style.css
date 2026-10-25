@@ -384,6 +384,27 @@ body {
   border-color: var(--text-dim);
 }
 
+/* «Følg» valgt kjøretøy: over delingsknappen, bare synlig når et kjøretøy er valgt */
+.btn-follow {
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 6.5rem + 52px);
+  width: auto;
+  min-width: 44px;
+  padding: 0 0.9rem;
+  border-radius: 22px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.btn-follow[hidden] { display: none; }
+.btn-follow.active {
+  background: #2a9d8f;
+  border-color: #2a9d8f;
+  color: #fff;
+}
+.btn-follow:focus-visible {
+  outline: 2px solid #2a9d8f;
+  outline-offset: 2px;
+}
+
 .loading-indicator {
   position: absolute;
   top: max(0.5rem, env(safe-area-inset-top));
@@ -1021,13 +1042,59 @@ path.leaflet-interactive:focus {
   .vehicle-glide .leaflet-marker-icon.vehicle-marker { transition: none; }
 }
 
-.vehicle-marker.bus { background: #e63946; }
-.vehicle-marker.flybuss { background: #ff6b35; }
-.vehicle-marker.metro { background: #2a9d8f; }
-.vehicle-marker.tram { background: #e9c46a; }
-.vehicle-marker.water { background: #457b9d; }
-.vehicle-marker.rail { background: #9b59b6; }
-.vehicle-marker.flytog { background: #e056fd; }
+/* Valgt kjøretøy flyttes per bilde med requestAnimationFrame (js/markers.js): ingen CSS-overgang */
+.vehicle-glide .leaflet-marker-icon.vehicle-marker.rl-raf { transition: none; }
+
+.vehicle-marker.bus { background: #e63946; --rl-mode: #e63946; }
+.vehicle-marker.flybuss { background: #ff6b35; --rl-mode: #ff6b35; }
+.vehicle-marker.metro { background: #2a9d8f; --rl-mode: #2a9d8f; }
+.vehicle-marker.tram { background: #e9c46a; --rl-mode: #e9c46a; }
+.vehicle-marker.water { background: #457b9d; --rl-mode: #457b9d; }
+.vehicle-marker.rail { background: #9b59b6; --rl-mode: #9b59b6; }
+.vehicle-marker.flytog { background: #e056fd; --rl-mode: #e056fd; }
+
+/* Forsinket ≥ 2 min: tynn oransje ring, ≥ 5 min: rød (statisk) */
+.vehicle-marker.rl-late { box-shadow: 0 0 0 2px #f4a261, 0 1px 3px var(--shadow); }
+.vehicle-marker.rl-late-major { box-shadow: 0 0 0 2px #d62828, 0 1px 3px var(--shadow); }
+
+/* Står på holdeplass (ifølge rutetidene): diskret, statisk ring utenfor markøren */
+.vehicle-marker.rl-dwell {
+  outline: 1.5px solid var(--text-dim);
+  outline-offset: 3px;
+}
+
+/* Kjøreretning fra zoom 14: pil roteres med CSS-variabelen --rl-heading (grader, 0 = nord) */
+.vehicle-marker-with-label.rl-dir::before,
+.vehicle-marker-with-label.rl-dir::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  border-style: solid;
+  border-color: transparent;
+}
+.vehicle-marker-with-label.rl-dir::before {
+  margin: -5.5px 0 0 -7px;
+  border-width: 0 7px 11px;
+  border-bottom-color: rgba(255, 255, 255, 0.95);
+  transform: rotate(var(--rl-heading, 0deg)) translateY(-19px);
+}
+.vehicle-marker-with-label.rl-dir::after {
+  margin: -3.5px 0 0 -4.5px;
+  border-width: 0 4.5px 7px;
+  border-bottom-color: var(--rl-mode, #555);
+  transform: rotate(var(--rl-heading, 0deg)) translateY(-19.5px);
+}
+
+.vehicle-delay {
+  color: #e76f00;
+  font-weight: 600;
+}
+[data-theme="dark"] .vehicle-delay,
+:root:not([data-theme="light"]) .vehicle-delay { color: #f4a261; }
 
 .vehicle-marker-with-label {
   display: flex;
@@ -1249,4 +1316,15 @@ path.leaflet-interactive:focus {
   white-space: normal;
   max-width: calc(100vw - 4rem);
   text-align: right;
+}
+
+/* Valgt rute: prikkene foran kjøretøyet beveger seg sakte i kjøreretningen (én syklus per 1,5 s,
+   i trinn på 1 px så SVG-en tegnes om ca. 8 ganger i sekundet, ikke 60). Kanten under er en
+   stille, smal stripe i stedet for prikker, så den ikke kommer i utakt med prikkene. */
+@keyframes rl-march {
+  to { stroke-dashoffset: -12; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .route-ahead-march { animation: rl-march 1.5s steps(12) infinite; }
+  .route-ahead-casing { stroke-dasharray: none; stroke-width: 4px; stroke-opacity: 0.55; }
 }

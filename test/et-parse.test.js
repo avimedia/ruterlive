@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { DOMParser } from '@xmldom/xmldom';
 import { parseEtJourneys } from '../server/et-parse.js';
 import { journeyVehicleId } from '../shared/et-journeys.js';
+import { callDelaySeconds } from '../shared/vehicle-delay.js';
 
 const FIXTURE = readFileSync(new URL('./fixtures/et-sample.xml', import.meta.url), 'utf8');
 const SIRI_NS = 'http://www.siri.org.uk/siri';
@@ -57,7 +58,12 @@ function legacyParse(xmlText, { vehicles }) {
       const name = t(cel, 'StopPointName') || '';
       const arr = parseIsoTime(t(cel, 'ExpectedArrivalTime')) || parseIsoTime(t(cel, 'ExpectedDepartureTime'));
       const dep = parseIsoTime(t(cel, 'ExpectedDepartureTime'));
-      if (ref && (arr || dep)) estimatedCalls.push({ quayId: ref, name, arrTime: arr || dep, depTime: dep || arr });
+      // Nytt felt (ikke i den gamle parseren): forsinkelse fra planlagte tider, beregnet uavhengig via DOM
+      const delay = callDelaySeconds(
+        parseIsoTime(t(cel, 'ExpectedArrivalTime')), parseIsoTime(t(cel, 'AimedArrivalTime')),
+        dep, parseIsoTime(t(cel, 'AimedDepartureTime')),
+      );
+      if (ref && (arr || dep)) estimatedCalls.push({ quayId: ref, name, arrTime: arr || dep, depTime: dep || arr, delay });
     }
     if (recordedCalls.length === 0 && estimatedCalls.length === 0) continue;
 

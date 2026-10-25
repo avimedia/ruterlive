@@ -7,6 +7,7 @@
  */
 
 import { journeyVehicleId } from '../shared/et-journeys.js';
+import { callDelaySeconds } from '../shared/vehicle-delay.js';
 
 const METRO_LINE_NUMS = new Set([1, 2, 3, 4, 5, 6]);
 const TRAM_LINE_NUMS = new Set([11, 12, 13, 14, 15, 16, 17, 18, 19]);
@@ -124,6 +125,12 @@ function firstText(src, name, intern) {
   return intern(textContent(src.slice(el.innerStart, el.innerEnd)));
 }
 
+/** Tidspunkt (ms) fra første element med gitt navn, uten interning (strengen trengs ikke videre). */
+function timeOf(src, name) {
+  const el = findElement(src, name, 0);
+  return el ? parseIsoTime(textContent(src.slice(el.innerStart, el.innerEnd))) : null;
+}
+
 function* eachElement(src, name) {
   let pos = 0;
   for (;;) {
@@ -137,7 +144,8 @@ function* eachElement(src, name) {
 /**
  * Parser SIRI ET-XML til turer:
  * { vehicleId, mode, lineRef, destinationName, datedVehicleJourneyRef,
- *   recordedCalls: [{ quayId, name, time }], estimatedCalls: [{ quayId, name, arrTime, depTime }] }.
+ *   recordedCalls: [{ quayId, name, time }], estimatedCalls: [{ quayId, name, arrTime, depTime, delay }] }.
+ * delay = forventet − planlagt (sekunder, 0 når ukjent).
  * Turer uten modus (linjenummer-fallback) eller uten gyldige kall hoppes over.
  * Kaster aldri; ugyldig input gir tom liste.
  */
@@ -210,9 +218,15 @@ function parseInto(xmlText, journeys, intern) {
     for (const cel of eachElement(jel, 'EstimatedCall')) {
       const ref = text(cel, 'StopPointRef');
       const name = text(cel, 'StopPointName') || '';
-      const dep = parseIsoTime(text(cel, 'ExpectedDepartureTime'));
-      const arr = parseIsoTime(text(cel, 'ExpectedArrivalTime')) || dep;
-      if (ref && (arr || dep)) estimatedCalls.push({ quayId: ref, name, arrTime: arr || dep, depTime: dep || arr });
+      const expDep = parseIsoTime(text(cel, 'ExpectedDepartureTime'));
+      const expArr = parseIsoTime(text(cel, 'ExpectedArrivalTime'));
+      const dep = expDep;
+      const arr = expArr || dep;
+      if (ref && (arr || dep)) {
+        // Bare forsinkelsen (heltall sekunder) lagres, ikke planlagte tider: holder minnet flatt
+        const delay = callDelaySeconds(expArr, timeOf(cel, 'AimedArrivalTime'), expDep, timeOf(cel, 'AimedDepartureTime'));
+        estimatedCalls.push({ quayId: ref, name, arrTime: arr || dep, depTime: dep || arr, delay });
+      }
     }
 
     if (recordedCalls.length === 0 && estimatedCalls.length === 0) continue;

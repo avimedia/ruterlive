@@ -765,12 +765,16 @@ body {
     min-height: 2.75rem;
   }
 
+  /* Kompakt pille: 40 px høye mål, så Guider + ☰ + lagvelger-ikonet får plass på én rad */
   .map-nav {
-    padding: 0.25rem;
+    padding: 0.1875rem;
+    gap: 0;
   }
 
   .map-chrome .map-nav-link {
-    min-height: 2.75rem;
+    min-height: 2.5rem;
+    padding: 0 0.625rem;
+    font-size: 0.8125rem;
   }
 
   .map-chrome .map-nav-link--md {
@@ -778,9 +782,17 @@ body {
   }
 
   .map-chrome .map-nav-more {
-    min-width: 2.75rem;
-    min-height: 2.75rem;
-    font-size: 1.25rem;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    font-size: 1.125rem;
+  }
+
+  /* Utvidet lagvelger under toppraden (logokort 3,25rem + kant), så den ikke dekker pillen */
+  #layers-panel:not(.collapsed) {
+    top: calc(max(0.5rem, env(safe-area-inset-top)) + 3.375rem + 0.5rem);
+    max-height: calc(100dvh - max(0.5rem, env(safe-area-inset-top)) - 3.375rem - 1.5rem);
+    overflow-y: auto;
   }
 
   .map-nav-glyph--more {

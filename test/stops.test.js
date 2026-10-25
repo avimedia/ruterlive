@@ -40,7 +40,7 @@ test('katalogen er gyldig og unik', () => {
 });
 
 test('bare utvalgte knutepunkter får side', () => {
-  assert.ok(FEATURED_STOPS.length >= 12 && FEATURED_STOPS.length <= 18, `${FEATURED_STOPS.length} utvalgte`);
+  assert.ok(FEATURED_STOPS.length >= 28 && FEATURED_STOPS.length <= 36, `${FEATURED_STOPS.length} utvalgte`);
   assert.ok(FEATURED_STOPS.length < STOPS.length);
   for (const slug of ['oslo-s', 'nationaltheatret', 'majorstuen', 'jernbanetorget', 'skoyen', 'lillestrom', 'oslo-lufthavn']) {
     assert.ok(getStopBySlug(slug), slug);

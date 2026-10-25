@@ -8,6 +8,7 @@ const MODE_GROUPS = [
   ['rail', 'Tog'],
   ['flytog', 'Flytoget'],
   ['flybuss', 'Flybuss'],
+  ['bus', 'Buss'],
 ];
 
 export function renderGuideIndex(guides, lines) {
@@ -37,7 +38,7 @@ ${groupHtml}
 
   return renderPage({
     title: 'Guider og linjer | livetrafikk.no',
-    description: 'Guider om kollektivtrafikken i Oslo og oversikt over T-bane-, trikk-, tog-, Flytoget- og flybusslinjer.',
+    description: 'Guider om kollektivtrafikken i Oslo og oversikt over T-bane-, trikk-, tog-, Flytoget-, flybuss- og busslinjer.',
     path: '/guider',
     body,
   });

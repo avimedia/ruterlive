@@ -20,6 +20,8 @@ function loadIntros() {
 
 const intros = loadIntros();
 
+export const BUS_CODES = ['20', '21', '23', '25', '28', '30', '31', '34', '37', '54', '60', '70', '74', '81', '100', '110', '150', '160'];
+
 const RAW_LINES = [
   ...['1', '2', '3', '4', '5'].map((n) => ({ slug: `t-bane-${n}`, code: n, authority: 'RUT', mode: 'metro', title: `T-bane linje ${n}` })),
   ...['12', '13', '15', '17', '18', '19'].map((n) => ({ slug: `trikk-${n}`, code: n, authority: 'RUT', mode: 'tram', title: `Trikk linje ${n}` })),
@@ -40,6 +42,8 @@ const RAW_LINES = [
   { slug: 'flybuss-fb1', code: 'FB1', authority: 'NBU', mode: 'flybuss', title: 'Flybuss FB1' },
   { slug: 'flybuss-fb3', code: 'FB3', authority: 'NBU', mode: 'flybuss', title: 'Flybuss FB3' },
   { slug: 'flybuss-fb5', code: 'FB5', authority: 'NBU', mode: 'flybuss', title: 'Flybuss FB5' },
+  // Ruters travleste bylinjer og stamlinjer (valgt ut fra antall avganger i JP og kjøretøy ute).
+  ...BUS_CODES.map((n) => ({ slug: `buss-${n.toLowerCase()}`, code: n, authority: 'RUT', mode: 'bus', title: `Buss ${n}` })),
 ];
 
 export const LINES = RAW_LINES.map((l) => ({

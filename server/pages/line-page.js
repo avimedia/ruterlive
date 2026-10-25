@@ -4,8 +4,8 @@ import { LINES } from '../line-catalog.js';
 import { findStopByName } from '../stop-catalog.js';
 import { breadcrumbLd, escapeHtml, lineBadge, renderPage } from './layout.js';
 
-const MAP_ZOOM = { metro: 12, tram: 12, rail: 10, flytog: 10, flybuss: 10 };
-const MODE_LABEL = { metro: 'T-bane', tram: 'Trikk', rail: 'Tog', flytog: 'Flytoget', flybuss: 'Flybuss' };
+const MAP_ZOOM = { metro: 12, tram: 12, rail: 10, flytog: 10, flybuss: 10, bus: 11 };
+const MODE_LABEL = { metro: 'T-bane', tram: 'Trikk', rail: 'Tog', flytog: 'Flytoget', flybuss: 'Flybuss', bus: 'Buss' };
 
 const MODE_GUIDE = {
   metro: { slug: 't-banen-i-oslo', label: 'T-banen i Oslo' },
@@ -13,6 +13,7 @@ const MODE_GUIDE = {
   rail: { slug: 'lokaltog-og-regiontog', label: 'Lokaltog og regiontog rundt Oslo' },
   flytog: { slug: 'flytoget-eller-flybussen', label: 'Flytoget eller flybussen' },
   flybuss: { slug: 'flytoget-eller-flybussen', label: 'Flytoget eller flybussen' },
+  bus: { slug: 'slik-bruker-du-kartet', label: 'Slik bruker du kartet' },
 };
 const MAX_TITLE = 68;
 const SUFFIX = ' | livetrafikk.no';

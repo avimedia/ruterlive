@@ -12,6 +12,7 @@ import { matchRouteForVehicle } from '../shared/route-match.js';
 import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons, onMarkerTick, getMarkerLatLng } from './markers.js';
 import { initLayers, getVisibleModes, updateVehicleCount, setRetryHandler } from './layers.js';
 import { updateRouteLines, updateSelectedVehicleSplit } from './routes.js';
+import { setLineGeometryData, withoutTracedLines } from './line-geometry.js';
 import {
   initShareLink,
   initLoadingIndicator,
@@ -107,6 +108,7 @@ function mergeAndUpdate() {
     }
   }
   const visibleModes = getVisibleModes();
+  setLineGeometryData(routeShapes, merged); // ET-kjøretøy følger trasé i markers.js
   updateMarkers(merged, visibleModes, {
     onVehicleSelect: (v) => {
       selectedVehicleForRoute = v;
@@ -281,7 +283,8 @@ async function fetchVehiclesLive() {
   if (version !== loadedShapesVersion) {
     try {
       const shapes = await fetchShapesFor(version);
-      routeShapes = mergeRouteShapes(shapes, routeShapes);
+      // Linjer som har fått trasé: gamle rette streker med andre nøkler fjernes
+      routeShapes = mergeRouteShapes(shapes, withoutTracedLines(routeShapes, shapes));
       loadedShapesVersion = version;
     } catch (_) { /* prøver igjen ved neste poll */ }
   }

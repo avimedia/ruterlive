@@ -3,6 +3,7 @@ import { getMap } from './map.js';
 import { isFlytogLineCode } from '../config.js';
 import { positionAt } from '../shared/vehicle-path.js';
 import { gpsGlideMs } from './feed-policy.js';
+import { onLinePosition } from './line-geometry.js';
 
 const MODE_TO_CLASS = {
   bus: 'bus',
@@ -93,8 +94,10 @@ function setIconIfChanged(marker, mode, lineCode, showLine) {
 }
 
 /** Posisjonen kjøretøyet skal vises på nå, eller null. Rydder ferdige overganger. */
-function motionPosition(st, wallNow, perfNow) {
-  const target = st.path ? positionAt(st.path, wallNow) : st.to;
+function motionPosition(st, wallNow, perfNow, id, geoView) {
+  const straight = st.path ? positionAt(st.path, wallNow) : st.to;
+  // ET: langs faktisk trasé når den finnes (zoom >= 13, i utsnittet), ellers rett linje
+  const target = (st.path && geoView && onLinePosition(id, st.path, wallNow, straight, geoView)) || straight;
   if (!target) return null;
   if (!st.from) return target;
   const k = (perfNow - st.start) / st.dur;
@@ -157,11 +160,12 @@ function tickMarkers() {
   const inView = (lat, lon) => lat >= s && lat <= n && lon >= w && lon <= e;
   const wallNow = Date.now();
   const perfNow = performance.now();
+  const geoView = { zoom: map.getZoom(), s, n, w, e };
   for (const [id, st] of motion) {
     const marker = vehicleMarkers.get(id);
     if (!marker || !marker._map) continue; // skjult av filter
     const cur = marker._latlng;
-    const pos = motionPosition(st, wallNow, perfNow);
+    const pos = motionPosition(st, wallNow, perfNow, id, geoView);
     if (!pos) continue;
     if (!inView(cur.lat, cur.lng) && !inView(pos[0], pos[1])) {
       marker._rlSkipped = true; // posisjonen er utdatert til den kommer i bilde

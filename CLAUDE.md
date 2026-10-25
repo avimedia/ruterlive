@@ -49,6 +49,9 @@ The server merges shapes from several sources with `mergeShapes` (key `mode|line
 - `server/shape-service.js`: shapes built from ET + Journey Planner, refreshed hourly.
 - Rail: `jp-route-fetcher.js` (Entur JP), then `osm-rail-fetcher.js` (OSM), then hard-coded `rail-fallback-shapes.js`, tried in that order.
 - Airport buses: static `flybuss-shapes.js`, refreshed weekly from JP.
+- Real track/street geometry: `server/line-geometry.js` fetches JP `pointsOnLink` for every line in `line-catalog.js` (main pattern per direction + common short variants, Douglas–Peucker ~5 m, rail ~9 m, clipped to `REGION_BBOX`), cached 24 h. In `/api/route-shapes-all` (`liveShapes` in `server.js`) `applyLineGeometry` replaces all other shapes for those mode+line pairs with these (`pointsAreTrace: true`, stops in `quayStops`). Flytoget has no real trace in JP and keeps its old shapes. Keep `/api/route-shapes-all` ≤ ~500 KB br (`test/line-geometry.test.js` has a byte budget).
+
+The client moves ET vehicles along that geometry: `js/line-geometry.js` projects the vehicle's current stop pair onto the trace shape for its mode + line (+ destination) and places it at the time fraction along the line (`onLinePosition`, called from `motionPosition` in `js/markers.js`). This only happens at zoom ≥ 13 and inside the padded view; otherwise, or when the stops are > 150 m from the line, the straight-line position is used.
 
 The client (`js/main.js`) has its own `mergeRouteShapes` with the same key logic. With the live feed it only fetches `/api/rail-shapes` when rail is missing at cold start; `/api/static-network-shapes` and `/api/route-shapes` are only used by the legacy/fallback path. `js/routes.js` handles display rules: metro, tram and rail are always shown, while bus and boat lines and their stops appear only for the selected vehicle.
 

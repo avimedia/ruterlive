@@ -18,7 +18,7 @@ import { getFallbackRailShapes } from './server/rail-fallback-shapes.js';
 import { startEtCachePoll } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
-import { getMergedVehicles, countVehiclesForLine, mergeShapes, mergeVehicles, withRouteInfo } from './server/live-vehicles.js';
+import { getMergedVehicles, countVehiclesForLine, mergeShapes, mergeVehicles, withRouteInfo, withoutDelay } from './server/live-vehicles.js';
 import { getEtVehiclesAndShapes } from './server/et-vehicles-service.js';
 import { makeJsonEntry, sendJson, memoEntry } from './server/json-cache.js';
 import { buildVehiclesPayload } from './server/vehicles-payload.js';
@@ -186,7 +186,7 @@ const liveVehiclesEntry = memoEntry((vehiclesData, etResult, shapes, shapesEntry
 ));
 // Gamle klienter: hele formatet med path i ms. Bygges bare når noen ber om det.
 const legacyInitialEntry = memoEntry((vehiclesData, etResult, all) => makeJsonEntry({
-  vehicles: mergeVehicles(vehiclesData, etResult),
+  vehicles: withoutDelay(mergeVehicles(vehiclesData, etResult)),
   routeShapes: mergeShapes(all, etResult?.shapes ?? NO_SHAPES),
 }));
 

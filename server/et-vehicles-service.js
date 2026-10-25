@@ -138,6 +138,8 @@ function buildVehiclesAndShapes(journeys, quayCoordCache, prevShapes = null) {
         nextStop,
         via: allCalls.length > 2 ? allCalls[midIdx]?.name : null,
         ...(path ? { path } : {}),
+        // Forsinkelse (s) ved neste stopp; bare når kjøretøyet er forsinket
+        ...(toCall?.delay > 0 ? { delay: toCall.delay } : {}),
       });
     }
 

@@ -5,6 +5,7 @@
 
 import { MAX_ROUTE_SPAN_KM } from '../config.js';
 import { journeyVehicleId, selectJourneysForVehicles } from '../shared/et-journeys.js';
+import { callDelaySeconds } from '../shared/vehicle-delay.js';
 
 const ET_URL = import.meta.env.DEV ? '/api/entur-et/et?datasetId=RUT&maxSize=3000' : '/api/et-cached';
 const JP_GRAPHQL_URL = '/api/entur-jp/graphql';
@@ -158,7 +159,9 @@ function parseSiriXml(xmlText) {
         || parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, 'ExpectedDepartureTime')[0]?.textContent);
       const dep = parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, 'ExpectedDepartureTime')[0]?.textContent);
       if (ref && (arr || dep)) {
-        estimatedCalls.push({ quayId: ref, name, arrTime: arr || dep, depTime: dep || arr });
+        const t = (n) => parseIsoTime(cel.getElementsByTagNameNS(SIRI_NS, n)[0]?.textContent);
+        const delay = callDelaySeconds(t('ExpectedArrivalTime'), t('AimedArrivalTime'), dep, t('AimedDepartureTime'));
+        estimatedCalls.push({ quayId: ref, name, arrTime: arr || dep, depTime: dep || arr, delay });
       }
     }
 
@@ -355,6 +358,7 @@ export async function fetchEstimatedVehicles(onProgress) {
           to: toCall?.name || last?.name || j.destinationName || null,
           nextStop,
           via: viaStop || null,
+          ...(toCall?.delay > 0 ? { delay: toCall.delay } : {}),
         });
       }
     }

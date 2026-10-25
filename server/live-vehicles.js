@@ -41,7 +41,7 @@ export function mergeVehicles(vehiclesData, etResult) {
     const et = etByid.get(v.vehicleId);
     merged.push(
       et
-        ? { ...v, from: v.from ?? et.from, to: v.to ?? et.to, via: v.via ?? et.via }
+        ? { ...v, from: v.from ?? et.from, to: v.to ?? et.to, via: v.via ?? et.via, ...(et.delay ? { delay: et.delay } : {}) }
         : v
     );
   }
@@ -66,6 +66,15 @@ export function withRouteInfo(vehicles, shapes) {
  * @param {() => object[]} [getAllShapes] statiske rutekart (eies av server.js)
  * @returns {Promise<{ vehicles: object[], routeShapes: object[] }>}
  */
+/** Gammelt format (/api/initial-data) uten nyere felt som `delay`, så svaret er uendret for gamle klienter. */
+export function withoutDelay(vehicles) {
+  return vehicles.map((v) => {
+    if (v?.delay === undefined) return v;
+    const { delay, ...rest } = v;
+    return rest;
+  });
+}
+
 export async function getLiveData(getAllShapes = () => []) {
   const [vehiclesData, etResult] = await Promise.all([
     getCachedVehicles(),

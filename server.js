@@ -23,6 +23,7 @@ import { getEtVehiclesAndShapes } from './server/et-vehicles-service.js';
 import { makeJsonEntry, sendJson, memoEntry } from './server/json-cache.js';
 import { buildVehiclesPayload } from './server/vehicles-payload.js';
 import { sortShapes, createThrottledSnapshot } from './server/shapes-version.js';
+import { createLineGeometryService, applyLineGeometry } from './server/line-geometry.js';
 import { LINES, getLineBySlug, getLineStops, prewarmLineStops } from './server/line-catalog.js';
 import { createVehicleRouteService, parseVehicleRouteParams } from './server/vehicle-route.js';
 import { renderLinePage } from './server/pages/line-page.js';
@@ -165,8 +166,11 @@ app.get('/api/static-network-shapes', (req, res) => {
 // rutekart); samme kilder (også et konstant tomt ET-resultat ved feil) gir samme ferdige entry.
 const NO_SHAPES = Object.freeze([]);
 let lastShapesEntry = null;
+// Faktisk trasé fra JP for linjene som alltid vises + flybuss (erstatter rette ET-streker)
+const lineGeometry = createLineGeometryService({ timeoutMs: 15000 });
 // Sortert, så samme sett gir samme ETag
-const liveShapes = memoEntry((all, etShapes) => sortShapes(mergeShapes(all, etShapes)));
+const liveShapes = memoEntry((all, etShapes, geometry) =>
+  sortShapes(applyLineGeometry(mergeShapes(all, etShapes), geometry)));
 const liveShapesEntry = memoEntry((shapes) => {
   lastShapesEntry = makeJsonEntry(shapes, lastShapesEntry); // samme innhold → samme entry
   return lastShapesEntry;
@@ -197,7 +201,7 @@ async function getLiveSources() {
 
 async function getLiveEntries() {
   const { vehiclesData, etResult } = await getLiveSources();
-  const shapes = liveShapes(getAllShapes(), etShapesSnapshot(etResult?.shapes ?? NO_SHAPES));
+  const shapes = liveShapes(getAllShapes(), etShapesSnapshot(etResult?.shapes ?? NO_SHAPES), lineGeometry.getShapes());
   const shapesEntry = liveShapesEntry(shapes);
   const vehiclesEntry = liveVehiclesEntry(vehiclesData, etResult, shapes, shapesEntry);
   return { vehiclesEntry, shapesEntry, shapesVersion: shapesVersionOf(shapesEntry) };
@@ -537,6 +541,21 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
+const LINE_GEOMETRY_DELAY_MS = 45000;
+const LINE_GEOMETRY_RETRY_MS = 11 * 60 * 1000; // etter negativ cache (10 min)
+let lineGeometryRetries = 0;
+function refreshLineGeometry(isRetry = false) {
+  if (!isRetry) lineGeometryRetries = 0;
+  lineGeometry.refresh(isRetry ? {} : { maxAgeMs: 23 * 60 * 60 * 1000 })
+    .then(({ failed }) => {
+      if (failed > 0 && lineGeometryRetries < 3) {
+        lineGeometryRetries++;
+        setTimeout(() => refreshLineGeometry(true), LINE_GEOMETRY_RETRY_MS);
+      }
+    })
+    .catch((e) => console.warn('[RuterLive] Linjetrasé:', e.message));
+}
+
 async function startup() {
   loadFlybussShapes(); // Synkron – statiske koordinater
   // Åpne porten først: Render vekker tjenesten og forventer svar raskt (ellers «hibernate-wake-error»).
@@ -561,6 +580,9 @@ async function startup() {
     setTimeout(prewarmLineStops, 20000); // Stopplister til linjesidene
     setTimeout(refreshFlybussFromJp, 15000); // Etter oppstart
     setInterval(refreshFlybussFromJp, FLYBUSS_REFRESH_MS);
+    // Linjetrasé etter GTFS-lastingen (minnetopp), deretter hvert døgn; nytt forsøk ved feil
+    setTimeout(() => refreshLineGeometry(), LINE_GEOMETRY_DELAY_MS);
+    setInterval(() => refreshLineGeometry(), 24 * 60 * 60 * 1000);
   });
 }
 startup();

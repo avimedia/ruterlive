@@ -353,26 +353,13 @@ function drawStopGroups(stops, stopsLayer) {
 
 function addStopMarkers(map, shapes, visibleModes, onlyRouteStops = false) {
   const named = [];
-  const unnamed = new Set();
   for (const shape of shapes) {
     const mode = shape.mode?.toLowerCase();
     const color = getShapeColor(mode, shape.line + (shape.from || ''));
     const pts = [...(shape.pointsAreTrace ? [] : shape.points ?? []), ...(shape.quayStops ?? [])];
     for (const [lat, lon, quayId, name] of pts) {
+      // Punkter uten quayId og navn er traséhjørner (JP/OSM-polylinjer), ikke holdeplasser
       if (quayId || name) named.push({ lat, lon, quayId, name: name || '', color });
-      else {
-        const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
-        if (unnamed.has(key)) continue;
-        unnamed.add(key);
-        L.circleMarker([lat, lon], {
-          radius: 4,
-          fillColor: color,
-          color: 'rgba(255,255,255,0.8)',
-          weight: 1,
-          fillOpacity: 0.7,
-          interactive: false,
-        }).addTo(map.routeLayerGroup);
-      }
     }
   }
 

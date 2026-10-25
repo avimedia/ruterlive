@@ -1328,6 +1328,7 @@ path.leaflet-interactive:focus {
   to { stroke-dashoffset: -12; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .route-ahead-march { animation: rl-march 1.5s steps(12) infinite; }
-  .route-ahead-casing { stroke-dasharray: none; stroke-width: 4px; stroke-opacity: 0.55; }
+  /* Prikkene og kanten under dem starter samtidig og marsjerer i takt */
+  .route-ahead-march,
+  .route-ahead-casing { animation: rl-march 1.5s steps(12) infinite; }
 }

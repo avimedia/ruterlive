@@ -7,12 +7,23 @@ import L from 'leaflet';
 import { getMap } from './map.js';
 import { isFlytogLineCode } from '../config.js';
 import { setLineHighlight } from './markers.js';
-import { matchLines, chipLabel, lineCodes, parseLineParam, MODE_COLORS, modeLabel } from '../shared/line-list.js';
+import {
+  matchLines,
+  chipLabel,
+  parseLineParam,
+  MODE_COLORS,
+  modeLabel,
+  lineHighlightOf,
+  vehicleOnLine,
+  vehicleLineRef,
+  normLineCode,
+  preferredAuthority,
+} from '../shared/line-list.js';
 
 let vehicles = [];
 let shapes = [];
 let liveCodes = [];
-let active = null; // { line, codes: Set<string> }
+let active = null; // { line, codes: Set<string>, highlight }
 let overlay = null;
 let pendingFit = false;
 let overlayKey = '';
@@ -36,10 +47,6 @@ function shapeMode(s) {
   return m === 'coach' ? 'flybuss' : m || 'bus';
 }
 
-function normCode(s) {
-  return String(s ?? '').toUpperCase().replace(/-\d+$/, '').replace(/^0+(?=.)/, '');
-}
-
 /** Kalles fra main.js hver gang kjøretøy/ruter er slått sammen. */
 export function setLineSearchData(nextVehicles, nextShapes) {
   vehicles = nextVehicles || [];
@@ -49,9 +56,13 @@ export function setLineSearchData(nextVehicles, nextShapes) {
     const code = String(v.line?.publicCode || '').trim();
     if (!code) continue;
     const mode = vehicleMode(v);
-    seen.set(`${mode}|${code.toUpperCase()}`, { code, mode });
+    const key = `${mode}|${code.toUpperCase()}`;
+    const e = seen.get(key) || { code, mode, auths: new Set() };
+    const ref = vehicleLineRef(v);
+    if (ref) e.auths.add(ref.split(':')[0]);
+    seen.set(key, e);
   }
-  liveCodes = [...seen.values()];
+  liveCodes = [...seen.values()].map(({ code, mode, auths }) => ({ code, mode, authority: preferredAuthority(auths) }));
   if (active) refreshActive();
 }
 
@@ -61,12 +72,12 @@ export function searchLines(query) {
 
 function vehiclesOfActive() {
   if (!active) return [];
-  return vehicles.filter((v) => vehicleMode(v) === active.line.mode && active.codes.has(normCode(v.line?.publicCode)));
+  return vehicles.filter((v) => vehicleOnLine(v, vehicleMode(v), active.highlight));
 }
 
 function shapesOfActive() {
   if (!active) return [];
-  return shapes.filter((s) => shapeMode(s) === active.line.mode && active.codes.has(normCode(s.line)));
+  return shapes.filter((s) => shapeMode(s) === active.line.mode && active.codes.has(normLineCode(s.line)));
 }
 
 function toLatLngs(points) {
@@ -109,16 +120,18 @@ function dist(v, c) {
 }
 
 function fetchJpRoute() {
-  // Kodene gjenbrukes av andre fylker: hent bare JP-rute når ET ikke har noen rute, for kjøretøyet nærmest kartsenteret
+  // Kodene gjenbrukes av andre fylker: hent bare JP-rute når ET ikke har noen rute, for linjas kjøretøy
+  // (helst ett med linje-ID) nærmest kartsenteret
   if (shapesOfActive().length) return;
   const c = getMap()?.getCenter();
   const first = vehiclesOfActive()
     .filter((v) => v.destinationName && v.location)
-    .sort((a, b) => dist(a, c) - dist(b, c))[0];
+    .sort((a, b) => Number(!!vehicleLineRef(b)) - Number(!!vehicleLineRef(a)) || dist(a, c) - dist(b, c))[0];
   if (!first) return;
   const params = { line: String(first.line.publicCode), mode: active.line.mode, dest: String(first.destinationName).slice(0, 100) };
-  const ref = first.line?.ref || first.line?.lineRef;
+  const ref = vehicleLineRef(first);
   if (ref && /^[A-Z]{3}:Line:[A-Za-z0-9_.-]{1,64}$/.test(ref)) params.ref = ref;
+  else if (active.highlight.authority) params.authority = active.highlight.authority;
   const token = ++jpToken;
   fetch(`/api/vehicle-route?${new URLSearchParams(params)}`)
     .then((r) => (r.ok ? r.json() : null))
@@ -155,9 +168,10 @@ function refreshActive() {
 
 export function selectLine(line, { fitMap = true } = {}) {
   clearLine({ keepChip: true });
-  active = { line, codes: new Set(lineCodes(line).map(normCode)) };
+  const highlight = lineHighlightOf(line);
+  active = { line, codes: new Set(highlight.codes), highlight };
   pendingFit = fitMap;
-  setLineHighlight({ mode: line.mode, codes: lineCodes(line) });
+  setLineHighlight(highlight);
   jpShape = null;
   overlayKey = '';
   jpToken = 0;

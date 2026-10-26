@@ -1,10 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { LINES } from '../server/line-catalog.js';
-import { LINE_LIST, matchLines, parseLineQuery, chipLabel, parseLineParam } from '../shared/line-list.js';
+import {
+  LINE_LIST,
+  matchLines,
+  parseLineQuery,
+  chipLabel,
+  parseLineParam,
+  lineHighlightOf,
+  vehicleOnLine,
+  preferredAuthority,
+} from '../shared/line-list.js';
 
 test('LINE_LIST samsvarer med server/line-catalog.js', () => {
-  const key = (l) => `${l.mode}|${l.code}|${[...(l.aliases || [])].join(',')}|${l.title}`;
+  const key = (l) => `${l.mode}|${l.code}|${[...(l.aliases || [])].join(',')}|${l.title}|${l.authority}`;
   assert.deepEqual(LINE_LIST.map(key), LINES.map(key));
 });
 
@@ -53,4 +62,43 @@ test('?linje= gir linje', () => {
   assert.equal(parseLineParam('?linje=999'), null);
   assert.equal(parseLineParam('?lat=1'), null);
   assert.equal(parseLineParam(''), null);
+});
+
+const bus = (code, ref) => ({ mode: 'bus', line: ref === undefined ? { publicCode: code } : { publicCode: code, lineRef: ref } });
+
+test('linjetreff foretrekker linjas authority når kjøretøyet har linje-ID', () => {
+  const h = lineHighlightOf(matchLines('buss 31')[0]);
+  assert.equal(h.authority, 'RUT');
+  assert.equal(vehicleOnLine(bus('31', 'RUT:Line:31'), 'bus', h), true);
+  assert.equal(vehicleOnLine({ mode: 'bus', line: { publicCode: '31', ref: 'RUT:Line:31' } }, 'bus', h), true);
+  assert.equal(vehicleOnLine(bus('31', 'VKT:Line:31_x'), 'bus', h), false);
+  assert.equal(vehicleOnLine(bus('31'), 'bus', h), true); // uten linje-ID: kode og modus
+  assert.equal(vehicleOnLine(bus('31', null), 'bus', h), true);
+  assert.equal(vehicleOnLine(bus('32', 'RUT:Line:32'), 'bus', h), false);
+  assert.equal(vehicleOnLine(bus('31', 'RUT:Line:31'), 'tram', h), false);
+  assert.equal(vehicleOnLine(bus('031', 'RUT:Line:31'), 'bus', h), true);
+});
+
+test('linjetreff for andre authorities og alias', () => {
+  const fb = lineHighlightOf(matchLines('FB1')[0]);
+  assert.equal(fb.authority, 'NBU');
+  assert.equal(vehicleOnLine(bus('FB1', 'NBU:Line:FB1'), 'flybuss', fb), true);
+  assert.equal(vehicleOnLine(bus('FB1', 'RUT:Line:FB1'), 'flybuss', fb), false);
+  const l2 = lineHighlightOf(matchLines('L2')[0]);
+  assert.equal(vehicleOnLine({ mode: 'rail', line: { publicCode: 'L2x', lineRef: 'VYG:Line:L2x' } }, 'rail', l2), true);
+  // Brakar-linje 4 er buss, ikke T-bane 4
+  const t4 = lineHighlightOf(matchLines('t4')[0]);
+  assert.equal(vehicleOnLine(bus('4', 'BRA:Line:4_6022'), 'bus', t4), false);
+  assert.equal(vehicleOnLine({ mode: 'metro', line: { publicCode: '4', lineRef: 'BRA:Line:4_6022' } }, 'metro', t4), false);
+});
+
+test('live-linjer utenfor listen får authority fra kjøretøyene (RUT først)', () => {
+  assert.equal(preferredAuthority(['VKT', 'RUT']), 'RUT');
+  assert.equal(preferredAuthority(['BRA']), 'BRA');
+  assert.equal(preferredAuthority(['BRA', 'VKT']), null);
+  assert.equal(preferredAuthority([]), null);
+  const live = matchLines('785', [{ code: '785', mode: 'bus', authority: 'RUT' }])[0];
+  assert.equal(lineHighlightOf(live).authority, 'RUT');
+  const none = matchLines('786', [{ code: '786', mode: 'bus', authority: null }])[0];
+  assert.equal(vehicleOnLine(bus('786', 'BRA:Line:786'), 'bus', lineHighlightOf(none)), true);
 });

@@ -23,30 +23,30 @@ export function modeLabel(mode) {
 
 const BUS = ['20', '21', '23', '25', '28', '30', '31', '34', '37', '54', '60', '70', '74', '81', '100', '110', '150', '160'];
 
-function line(code, mode, title, aliases = []) {
-  return { code, mode, title, aliases };
+function line(code, mode, title, aliases = [], authority = 'RUT') {
+  return { code, mode, title, aliases, authority };
 }
 
 export const LINE_LIST = [
   ...['1', '2', '3', '4', '5'].map((n) => line(n, 'metro', `T-bane linje ${n}`)),
   ...['12', '13', '15', '17', '18', '19'].map((n) => line(n, 'tram', `Trikk linje ${n}`)),
-  line('L1', 'rail', 'Tog L1'),
-  line('L2', 'rail', 'Tog L2', ['L2x']),
-  line('R12', 'rail', 'Tog R12'),
-  line('R13', 'rail', 'Tog R13', ['R13x']),
-  line('R14', 'rail', 'Tog R14'),
-  line('R21', 'rail', 'Tog R21'),
-  line('R22', 'rail', 'Tog R22'),
-  line('R23', 'rail', 'Tog R23', ['R23x']),
-  line('RE10', 'rail', 'Tog RE10'),
-  line('RE11', 'rail', 'Tog RE11', ['RX11']),
-  line('RE20', 'rail', 'Tog RE20', ['RX20']),
-  line('RE30', 'rail', 'Tog RE30'),
-  line('FLY1', 'flytog', 'Flytoget FLY1'),
-  line('FLY2', 'flytog', 'Flytoget FLY2'),
-  line('FB1', 'flybuss', 'Flybuss FB1'),
-  line('FB3', 'flybuss', 'Flybuss FB3'),
-  line('FB5', 'flybuss', 'Flybuss FB5'),
+  line('L1', 'rail', 'Tog L1', [], 'VYG'),
+  line('L2', 'rail', 'Tog L2', ['L2x'], 'VYG'),
+  line('R12', 'rail', 'Tog R12', [], 'VYG'),
+  line('R13', 'rail', 'Tog R13', ['R13x'], 'VYG'),
+  line('R14', 'rail', 'Tog R14', [], 'VYG'),
+  line('R21', 'rail', 'Tog R21', [], 'VYG'),
+  line('R22', 'rail', 'Tog R22', [], 'VYG'),
+  line('R23', 'rail', 'Tog R23', ['R23x'], 'VYG'),
+  line('RE10', 'rail', 'Tog RE10', [], 'VYG'),
+  line('RE11', 'rail', 'Tog RE11', ['RX11'], 'VYG'),
+  line('RE20', 'rail', 'Tog RE20', ['RX20'], 'VYG'),
+  line('RE30', 'rail', 'Tog RE30', [], 'VYG'),
+  line('FLY1', 'flytog', 'Flytoget FLY1', [], 'FLT'),
+  line('FLY2', 'flytog', 'Flytoget FLY2', [], 'FLT'),
+  line('FB1', 'flybuss', 'Flybuss FB1', [], 'NBU'),
+  line('FB3', 'flybuss', 'Flybuss FB3', [], 'NBU'),
+  line('FB5', 'flybuss', 'Flybuss FB5', [], 'NBU'),
   ...BUS.map((n) => line(n, 'bus', `Buss ${n}`)),
 ];
 
@@ -100,7 +100,8 @@ export function matchLines(query, extra = [], { exactOnly = false } = {}) {
     const key = `${e.mode}|${code.toUpperCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    all.push({ code, mode: e.mode, title: `${modeLabel(e.mode)} ${code}`, aliases: [] });
+    const authority = typeof e.authority === 'string' && /^[A-Z]{3}$/.test(e.authority) ? e.authority : null;
+    all.push({ code, mode: e.mode, title: `${modeLabel(e.mode)} ${code}`, aliases: [], authority });
   }
   const out = [];
   for (const l of all) {
@@ -134,4 +135,41 @@ export function parseLineParam(search) {
   const raw = new URLSearchParams(search || '').get('linje');
   if (!raw || raw.length > 20) return null;
   return matchLines(raw, [], { exactOnly: true })[0] ?? null;
+}
+
+/** Linjekode slik kjøretøy og ruter sammenlignes: store bokstaver, uten «-2»-suffiks og ledende nuller. */
+export function normLineCode(s) {
+  return String(s ?? '').toUpperCase().replace(/-\d+$/, '').replace(/^0+(?=.)/, '');
+}
+
+/** Linje-ID-en til kjøretøyet (f.eks. RUT:Line:31), eller null. */
+export function vehicleLineRef(v) {
+  const ref = v?.line?.ref || v?.line?.lineRef;
+  return typeof ref === 'string' && ref ? ref : null;
+}
+
+/** Uthevingen for en valgt linje: { mode, codes (normalisert), authority|null }. */
+export function lineHighlightOf(l) {
+  if (!l) return null;
+  const authority = typeof l.authority === 'string' && /^[A-Z]{3}$/.test(l.authority) ? l.authority : null;
+  return { mode: l.mode, codes: lineCodes(l).map(normLineCode), authority };
+}
+
+/**
+ * Om kjøretøyet tilhører den uthevede linja. mode er kjøretøyets normaliserte modus.
+ * Har linja en authority og kjøretøyet en linje-ID fra en annen authority (samme kode i et annet fylke),
+ * er det ikke treff. Kjøretøy uten linje-ID kjennes igjen på kode og modus.
+ */
+export function vehicleOnLine(v, mode, h) {
+  if (!h || mode !== h.mode) return false;
+  if (!h.codes.includes(normLineCode(v?.line?.publicCode))) return false;
+  const ref = vehicleLineRef(v);
+  return !(h.authority && ref && !ref.startsWith(`${h.authority}:`));
+}
+
+/** Foretrukket authority for en live-linje: RUT hvis noen av kjøretøyene er Ruters, ellers den eneste. */
+export function preferredAuthority(authorities) {
+  const set = new Set([...(authorities || [])].filter(Boolean));
+  if (set.has('RUT')) return 'RUT';
+  return set.size === 1 ? [...set][0] : null;
 }

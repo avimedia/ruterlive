@@ -6,6 +6,7 @@ import { gpsGlideMs } from './feed-policy.js';
 import { onLinePosition } from './line-geometry.js';
 import { delayLabel, shownDelay, DELAY_MAJOR_S } from '../shared/vehicle-delay.js';
 import { headingFromMove, angleDiff, MIN_HEADING_CHANGE_DEG } from './vehicle-heading.js';
+import { vehicleOnLine } from '../shared/line-list.js';
 
 const MODE_TO_CLASS = {
   bus: 'bus',
@@ -139,20 +140,22 @@ function applyDecor(marker) {
   syncHeading(marker, d);
 }
 
-/** Linjesøk: { mode, codes: ['31'] } dimmer alle andre kjøretøy (klassen rl-dim), null fjerner dimmingen. */
+/**
+ * Linjesøk: { mode, codes: ['31'], authority: 'RUT' } (se lineHighlightOf i shared/line-list.js) dimmer
+ * alle andre kjøretøy (klassen rl-dim), null fjerner dimmingen.
+ */
 let lineHighlight = null;
 
 function syncDim(marker, v) {
   const d = decorOf(marker);
-  const lineCode = String(v.line?.publicCode || '').toUpperCase();
-  const dim = !!lineHighlight && !(normalizeMode(v) === lineHighlight.mode && lineHighlight.codes.includes(lineCode));
+  const dim = !!lineHighlight && !vehicleOnLine(v, normalizeMode(v), lineHighlight);
   if (d.dim === dim) return;
   d.dim = dim;
   applyDecor(marker);
 }
 
 export function setLineHighlight(h) {
-  lineHighlight = h ? { mode: h.mode, codes: (h.codes || []).map((c) => String(c).toUpperCase()) } : null;
+  lineHighlight = h ? { mode: h.mode, codes: h.codes || [], authority: h.authority || null } : null;
   for (const v of lastVehicles) {
     const marker = vehicleMarkers.get(v.vehicleId);
     if (marker) syncDim(marker, v);

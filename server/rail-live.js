@@ -73,9 +73,24 @@ export function createRailLive({ getRail = getCachedRailVehicles, railEt = creat
   };
 }
 
+let sharedEt = null;
 let shared = null;
+function sharedLive() {
+  if (!shared) {
+    sharedEt = createRailEtService();
+    shared = createRailLive({ railEt: sharedEt });
+  }
+  return shared;
+}
+
 /** Delt instans for server.js og live-vehicles.js. */
 export function withNationalRail(vehiclesData) {
-  if (!shared) shared = createRailLive();
-  return shared(vehiclesData);
+  return sharedLive()(vehiclesData);
+}
+
+/** Ved oppstart: første henting av GPS-tog og BNR-ET, så togene er med i første svar til klientene. */
+export function prewarmNationalRail() {
+  sharedLive();
+  getCachedRailVehicles().catch(() => {});
+  return sharedEt.refresh();
 }

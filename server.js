@@ -25,7 +25,8 @@ import { buildVehiclesPayload } from './server/vehicles-payload.js';
 import { sortShapes, createThrottledSnapshot } from './server/shapes-version.js';
 import { createLineGeometryService, applyLineGeometry } from './server/line-geometry.js';
 import { LINES, getLineBySlug, getLineStops, getLineText, prewarmLineStops, jpQuery } from './server/line-catalog.js';
-import { createStopPlaceLookup, QUAY_INFO_FIELDS } from './server/stop-search.js';
+import { createStopPlaceLookup } from './server/stop-search.js';
+import { createDepartureBoard } from './server/departure-board.js';
 import { createVehicleRouteService, parseVehicleRouteParams } from './server/vehicle-route.js';
 import { renderLinePage } from './server/pages/line-page.js';
 import { getGuideBySlug, loadGuideBody, loadAboutBody, GUIDES } from './server/guide-catalog.js';
@@ -350,58 +351,22 @@ app.get('/api/vehicle-route', async (req, res) => {
   }
 });
 
-// Avgangstavle for holdeplass – Entur Journey Planner quay.estimatedCalls
-// Avganger for én quay, eller flere (sammenslått stasjon på kartet): ?quayId=NSR:Quay:1,NSR:Quay:2
-// Svaret har også quays (plattform/retning per quay) og place (stoppested, kommune, linjer) til overskriften.
-// Quay-infoen fra avgangskallet legges i søkecachen, så overskriften ikke koster et eget JP-kall.
+// Avgangstavle for holdeplass – Entur Journey Planner quay.estimatedCalls (server/departure-board.js)
+// ?quayId=NSR:Quay:1[,NSR:Quay:2] utvides til alle quays på stoppestedet, så tavla viser alle retninger
+// uansett hvilken markør som ble trykket; &expand=0 gir bare de gitte quayene.
+// Svaret har quays (plattform/retning per quay), place (stoppested, kommune, linjer) og estimatedCalls med quayId.
 const DEPARTURE_MAX_QUAYS = 30;
 const stopPlaces = createStopPlaceLookup();
+const departureBoard = createDepartureBoard({ lookup: stopPlaces, jpQueryFn: jpQuery });
 app.get('/api/departures', async (req, res) => {
   const ids = [...new Set(String(req.query.quayId || '').split(',').map((s) => s.trim()).filter(Boolean))];
   if (ids.length === 0 || ids.length > DEPARTURE_MAX_QUAYS || !ids.every((id) => /^NSR:Quay:\d+$/.test(id))) {
     return res.status(400).json({ error: 'Mangler eller ugyldig quayId' });
   }
   try {
-    const timeRange = 21600; // 6t frem – raskere respons
-    // Flere quays: færre per quay, så svaret ikke vokser med antall plattformer
-    const numberOfDepartures = ids.length === 1 ? 12 : Math.max(3, Math.ceil(30 / ids.length));
-    const data = await jpQuery(
-      `query($ids: [String]!) {
-        quays(ids: $ids) {
-          ${QUAY_INFO_FIELDS}
-          estimatedCalls(timeRange: ${timeRange}, numberOfDepartures: ${numberOfDepartures}) {
-            realtime
-            aimedDepartureTime
-            expectedDepartureTime
-            destinationDisplay { frontText }
-            serviceJourney {
-              journeyPattern {
-                line { publicCode transportMode }
-              }
-            }
-          }
-        }
-      }`,
-      fetch,
-      8000,
-      { ids }
-    );
-    const quays = (data?.quays ?? []).filter(Boolean);
-    stopPlaces.seedQuays(quays, ids);
-    const place = await stopPlaces.header(ids).catch(() => null);
+    const board = await departureBoard.get(ids, { expand: req.query.expand !== '0' });
     res.set('Cache-Control', 'public, max-age=30');
-    res.json({
-      id: ids[0],
-      name: place?.name ?? quays.find((q) => q.name)?.name ?? null,
-      place,
-      quays: quays.map((q) => ({
-        id: q.id,
-        name: q.name ?? null,
-        publicCode: (q.publicCode ?? '').trim() || null,
-        description: (q.description ?? '').trim() || null,
-      })),
-      estimatedCalls: quays.flatMap((q) => (q.estimatedCalls ?? []).map((c) => ({ ...c, quayId: q.id }))),
-    });
+    res.json(board);
   } catch (err) {
     res.status(503).json({ error: err.message, estimatedCalls: [] });
   }

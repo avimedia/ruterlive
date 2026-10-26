@@ -320,7 +320,10 @@ function updateStops(map) {
   }
 }
 
-/** quayIds: én quay-ID eller flere (sammenslått stasjon); avgangstavla viser alle. */
+/**
+ * quayIds: én quay-ID eller flere (sammenslått stasjon). Serveren utvider dem til hele stoppestedet,
+ * så tavla viser alle retninger og plattformer, og to markører på samme sted gir samme tavle.
+ */
 function createStopMarker(lat, lon, quayIds, name, color, stopsLayer) {
   const ids = (Array.isArray(quayIds) ? quayIds : [quayIds]).filter(Boolean);
   const label = (name || 'Holdeplass').trim();
@@ -467,7 +470,8 @@ function departureRowHtml(c, now) {
 
 /**
  * Avgangstavle (popup på desktop, bunnark på mobil – samme HTML): stoppested med kommune og linjer,
- * så avgangene gruppert per quay med retning/plattform som overskrift.
+ * så avgangene gruppert per quay med retning/plattform som overskrift. Overskriften er stoppestedets
+ * navn fra serveren, som kan avvike fra markørens etikett.
  */
 async function showDepartureBoard(popup, quayIds) {
   popup.setContent('<div class="departure-loading">Henter avganger…</div>');
@@ -488,7 +492,7 @@ async function showDepartureBoard(popup, quayIds) {
       .join('');
     const badges = lineBadgesHtml(data?.place?.lines ?? [], { max: 24 });
     const html = `
-      <div class="departure-board">
+      <div class="departure-board${groups.length > 1 ? ' departure-board--grouped' : ''}">
         <div class="departure-place">
           <h4 class="departure-stop-name" data-name="${escapeHtml(name)}" data-locality="${escapeHtml(locality)}">${escapeHtml(name)}${locality ? ` <span class="departure-locality">· ${escapeHtml(locality)}</span>` : ''}</h4>
           ${badges ? `<div class="departure-place-lines">${badges}</div>` : ''}

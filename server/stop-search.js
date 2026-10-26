@@ -20,14 +20,14 @@ export const MAX_PLACES = 12;
 /** Quays med samme navn innenfor denne avstanden blir ett sted når JP mangler (reserve). */
 const FALLBACK_GROUP_KM = 0.5;
 
-/** Quay-feltene som trengs for gruppering og overskrift; brukes også av /api/departures. */
+/** Quay-feltene som trengs for gruppering, overskrift og utvidelse til hele stoppestedet (avgangstavla). */
 export const QUAY_INFO_FIELDS = `id
     name
     publicCode
     description
     latitude
     longitude
-    stopPlace { id name latitude longitude quays { lines { publicCode transportMode } } }
+    stopPlace { id name latitude longitude quays(filterByInUse: true) { id lines { publicCode transportMode } } }
     lines { publicCode transportMode }`;
 
 const QUAYS_QUERY = `query($ids: [String]!) {
@@ -78,6 +78,8 @@ export function parseStopPlace(sp) {
     lat: Number.isFinite(sp.latitude) ? sp.latitude : null,
     lon: Number.isFinite(sp.longitude) ? sp.longitude : null,
     lines: Array.isArray(sp.quays) ? parseLines(sp.quays.flatMap((q) => q?.lines ?? [])) : null,
+    // Alle quays i bruk på stedet: avgangstavla utvider én quay til hele stoppestedet
+    quayIds: Array.isArray(sp.quays) ? sp.quays.map((q) => q?.id).filter(Boolean) : null,
   };
 }
 
@@ -374,10 +376,12 @@ export function createStopPlaceLookup({ fetchFn = fetch, now = Date.now, timeout
     },
   });
 
-  /** Legg JP-quays (f.eks. fra avgangskallet) i cachen, så overskriften ikke trenger eget kall. */
-  function seedQuays(jpQuays, requestedIds = []) {
+  /**
+   * Legg JP-quays (f.eks. fra avgangskallet) i cachen, så overskriften ikke trenger eget kall.
+   * places: allerede tolkede stoppesteder (id → parseStopPlace); quays med stopPlace { id } peker da på dem.
+   */
+  function seedQuays(jpQuays, requestedIds = [], places = new Map()) {
     const found = new Set();
-    const places = new Map();
     for (const q of jpQuays ?? []) {
       const info = parseQuay(q, places);
       if (info) {

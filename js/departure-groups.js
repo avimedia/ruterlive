@@ -37,7 +37,31 @@ function flatSelection(calls) {
   return [...byMode.values()].flat().sort((a, b) => depTime(a) - depTime(b)).slice(0, 10);
 }
 
+/** Retning mot sentrum i en overskrift («mot sentrum», «retning sentrum»), ikke «fra sentrum». */
+const TOWARDS_CENTRE = /\b(mot|retning|til)\s+(oslo\s+)?sentrum\b/i;
+/** Destinasjoner som betyr «mot sentrum» når quayen mangler retning. */
+const CENTRE_DESTINATIONS = /^(oslo\s+s|jernbanetorget|nationaltheatret|stortinget|oslo bussterminal|(oslo\s+)?sentrum)\b/i;
+
+const natural = (a, b) => String(a).localeCompare(String(b), 'nb', { numeric: true, sensitivity: 'base' });
+
+function frontText(c) {
+  return String(c?.destinationDisplay?.frontText ?? '').trim();
+}
+
+/** De vanligste destinasjonene (maks to) fra en quay, til overskrift når quayen mangler retning. */
+export function destinationsOf(calls, max = 2) {
+  const count = new Map();
+  for (const c of calls) {
+    const d = frontText(c);
+    if (d) count.set(d, (count.get(d) ?? 0) + 1);
+  }
+  return [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, max).map(([d]) => d);
+}
+
 /**
+ * Avganger gruppert per retning. Quays uten description og plattform får «Mot X, Y» ut fra
+ * destinasjonene når stedet har flere quays, så to retninger på en vanlig holdeplass blir to grupper.
+ * Fast rekkefølge: mot sentrum først (når det kan sees), så plattform/spor, så retningsnavn, så quay-ID.
  * @param {object[]} calls estimatedCalls (med quayId)
  * @param {{ id, publicCode?, description? }[]} quays
  * @returns {{ header: string|null, calls: object[] }[]}
@@ -45,21 +69,40 @@ function flatSelection(calls) {
 export function groupDepartures(calls, quays = []) {
   const sorted = (calls ?? []).filter((c) => depTime(c) > 0).sort((a, b) => depTime(a) - depTime(b));
   const byId = new Map((quays ?? []).map((q) => [q.id, q]));
-  const modesByQuay = new Map();
+  const callsByQuay = new Map();
   for (const c of sorted) {
-    const set = modesByQuay.get(c.quayId) ?? new Set();
-    set.add(callMode(c));
-    modesByQuay.set(c.quayId, set);
+    if (!callsByQuay.has(c.quayId)) callsByQuay.set(c.quayId, []);
+    callsByQuay.get(c.quayId).push(c);
   }
+  const multi = callsByQuay.size > 1;
   const groups = new Map();
-  for (const c of sorted) {
-    const header = quayHeader(byId.get(c.quayId), [...(modesByQuay.get(c.quayId) ?? [])]) ?? '';
-    if (!groups.has(header)) groups.set(header, []);
-    groups.get(header).push(c);
+  for (const [quayId, list] of callsByQuay) {
+    const quay = byId.get(quayId);
+    const explicit = quayHeader(quay, [...new Set(list.map(callMode))]);
+    const dests = explicit || !multi ? [] : destinationsOf(list);
+    const header = explicit ?? (dests.length ? `Mot ${dests.join(', ')}` : '');
+    const centre = explicit ? TOWARDS_CENTRE.test(explicit) : dests.some((d) => CENTRE_DESTINATIONS.test(d));
+    const code = String(quay?.publicCode ?? '').trim();
+    let g = groups.get(header);
+    if (!g) {
+      g = { header, explicit: Boolean(explicit), centre, code, quayId: String(quayId ?? ''), calls: [] };
+      groups.set(header, g);
+    }
+    g.centre ||= centre;
+    if (code && (!g.code || natural(code, g.code) < 0)) g.code = code;
+    if (natural(String(quayId ?? ''), g.quayId) < 0) g.quayId = String(quayId ?? '');
+    g.calls.push(...list);
   }
   if (groups.size <= 1) return sorted.length ? [{ header: null, calls: flatSelection(sorted) }] : [];
   const perGroup = groups.size <= 2 ? 5 : groups.size <= 4 ? 3 : 2;
-  return [...groups.entries()]
-    .sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b, 'nb', { numeric: true })))
-    .map(([header, list]) => ({ header: header || null, calls: list.slice(0, perGroup) }));
+  return [...groups.values()]
+    .sort(
+      (a, b) =>
+        (a.header === '' ? -1 : b.header === '' ? 1 : 0) ||
+        Number(b.centre) - Number(a.centre) ||
+        (a.code && b.code ? natural(a.code, b.code) : a.code ? -1 : b.code ? 1 : 0) ||
+        (a.explicit && b.explicit ? natural(a.header, b.header) : 0) ||
+        natural(a.quayId, b.quayId)
+    )
+    .map((g) => ({ header: g.header || null, calls: g.calls.sort((x, y) => depTime(x) - depTime(y)).slice(0, perGroup) }));
 }

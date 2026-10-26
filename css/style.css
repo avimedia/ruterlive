@@ -1726,6 +1726,8 @@ path.leaflet-interactive:focus {
   text-transform: none;
 }
 .departure-sheet .departure-table tr.departure-group + tr { border-top: none; }
+/* Flere retninger i arket: tre avganger per retning, så neste retning synes uten å rulle */
+.departure-sheet .departure-board--grouped tr.departure-group ~ tr:nth-child(n+5) { display: none; }
 .departure-sheet-title .departure-locality { font-size: 0.9em; }
 
 /* iOS Safari zoomer inn ved fokus på felt med skrift under 16 px (og blir stående delvis inn-zoomet).

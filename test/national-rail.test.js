@@ -213,6 +213,8 @@ test('createRailVehiclesCache: cache 30 s, feil gir EMPTY_RAIL uten unhandled re
     const failing = createRailVehiclesCache({ fetchFn: async () => { throw new Error('nede'); }, now: () => t });
     assert.equal(await failing.get(), EMPTY_RAIL);
     const c = createRailVehiclesCache({ fetchFn, now: () => t });
+    assert.equal(await c.get(), EMPTY_RAIL, 'første kall venter ikke på Entur');
+    await new Promise((r) => setTimeout(r, 0));
     const a = await c.get();
     assert.equal(a.data.vehicles[0].vehicleId, 'v1');
     t += 10000;

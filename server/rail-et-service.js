@@ -14,9 +14,9 @@ import { createEtStreamParser } from './et-parse.js';
 import { buildVehiclePath, positionAt } from '../shared/vehicle-path.js';
 import { CLIENT_NAME } from './entur-client.js';
 import { getGtfsQuayCache } from './gtfs-stops-loader.js';
+import { jpQuery } from './line-catalog.js';
 
 const ET_URL = 'https://api.entur.io/realtime/v1/rest/et?datasetId=BNR&maxSize=2000';
-const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const REFRESH_MS = 4 * 60 * 1000;
 const BACKOFF_AFTER_429_MS = 10 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 45000;
@@ -142,16 +142,9 @@ export function createQuayCoords({ jpFetch, now = () => Date.now(), gtfs = getGt
   return { get, ensure, size: () => cache.size };
 }
 
-async function defaultJpFetch(query) {
-  const res = await fetch(JP_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'ET-Client-Name': CLIENT_NAME },
-    body: JSON.stringify({ query }),
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!res.ok) throw new Error(`JP ${res.status}`);
-  const json = await res.json();
-  return json?.data ?? null;
+/** Hard tidsgrense via jpQuery: AbortSignal alene har ikke stoppet hengende JP-kall i prod. */
+function defaultJpFetch(query) {
+  return jpQuery(query, fetch, 20000);
 }
 
 /** Laster ned og parser BNR-ET med én tidsgrense for hele svaret (også body). */

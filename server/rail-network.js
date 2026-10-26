@@ -243,9 +243,12 @@ export function createRailNetworkService({
 
   const query = async (q, variables) => {
     jpCalls++;
-    const data = await jpQuery(q, fetchFn, timeoutMs, variables);
-    if (pauseMs) await sleep(pauseMs);
-    return data;
+    try {
+      return await jpQuery(q, fetchFn, timeoutMs, variables);
+    } finally {
+      // Pause også etter feil, så en 429 ikke blir mange kall i rask rekkefølge
+      if (pauseMs) await sleep(pauseMs);
+    }
   };
 
   async function fetchLine(line) {
@@ -301,10 +304,11 @@ export function createRailNetworkService({
       } catch (e) {
         failed++;
         console.warn(`[RuterLive] Togrute ${line.code}:`, e.message);
+        if (/JP 429/.test(e.message)) break; // rate limit: resten hentes ved neste forsøk
       }
     }
     // Linjer som ikke lenger finnes i JP faller ut
-    for (const id of [...perLine.keys()]) if (!lines.some((l) => l.id === id)) perLine.delete(id);
+    if (failed === 0) for (const id of [...perLine.keys()]) if (!lines.some((l) => l.id === id)) perLine.delete(id);
     const shapes = rebuild(lines);
     console.log(`[RuterLive] Togruter fra JP (hele landet): ${shapes.length} ruter for ${lines.length} linjer, ${failed} feil (JP-kall totalt: ${jpCalls})`);
     return { shapes, failed };

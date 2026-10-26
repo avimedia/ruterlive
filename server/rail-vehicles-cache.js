@@ -89,7 +89,8 @@ export function createRailVehiclesCache({ fetchFn = fetchWithRetry, now = () => 
       lastFetch = now(); // ikke nytt forsøk ved hver forespørsel etter feil
       return cached ?? EMPTY_RAIL;
     });
-    return cached ?? p;
+    // Uten svar ennå: ikke la /api/vehicles-live vente på tog-GPS, Oslo-dataene er klare
+    return cached ?? EMPTY_RAIL;
   }
 
   return { get };

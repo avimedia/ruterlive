@@ -109,8 +109,10 @@ export function initFollowButton() {
   // Knappen ligger inne i kartelementet: klikk skal ikke nå kartet (det lukker popupen og fjerner valget)
   L.DomEvent.disableClickPropagation(btn);
   btn.addEventListener('click', () => setFollowing(!following));
-  // Bare brukerens egne dra-bevegelser (panTo gir ikke dragstart)
-  map.on('dragstart', () => {
+  // Brukerens egne bevegelser slår av følging: dra, zoom (hjul/klyp/knapper) og tastatur.
+  // Følging panorerer uten movestart (noMoveStart / _rawPanBy) og zoomer aldri, så alle
+  // movestart/zoomstart kommer fra brukeren.
+  map.on('dragstart movestart zoomstart', () => {
     if (following) setFollowing(false);
   });
   onMarkerTick(() => {

@@ -41,6 +41,7 @@ import { createStopService } from './server/stop-service.js';
 import { renderStopPage, renderStopIndex } from './server/pages/stop-page.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
 import { CLIENT_NAME } from './server/entur-client.js';
+import { withNationalRail } from './server/rail-live.js';
 
 function sendNotFound(res) {
   res.set('Cache-Control', 'no-store');
@@ -198,7 +199,9 @@ const legacyInitialEntry = memoEntry((vehiclesData, etResult, all) => makeJsonEn
 }));
 
 async function getLiveSources() {
-  const [vehiclesData, etResult] = await Promise.all([getCachedVehicles(), getEtVehiclesAndShapes()]);
+  const [osloData, etResult] = await Promise.all([getCachedVehicles(), getEtVehiclesAndShapes()]);
+  // Tog i hele landet: GPS uten bbox + ET (BNR) for tog uten GPS. Samme objekt når kildene er uendret.
+  const vehiclesData = await withNationalRail(osloData);
   return { vehiclesData, etResult };
 }
 

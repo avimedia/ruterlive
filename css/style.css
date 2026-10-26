@@ -404,9 +404,6 @@ body {
 /* «Følg» valgt kjøretøy: over «Finn meg», bare synlig når et kjøretøy er valgt */
 .btn-follow {
   bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 6.5rem + 104px + var(--sheet-height, 0px));
-/* «Følg» valgt kjøretøy: over delingsknappen, bare synlig når et kjøretøy er valgt */
-.btn-follow {
-  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 6.5rem + 52px + var(--sheet-height, 0px));
   width: auto;
   min-width: 44px;
   padding: 0 0.9rem;

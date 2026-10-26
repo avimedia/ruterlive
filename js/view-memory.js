@@ -3,11 +3,12 @@
  * Rene funksjoner (parse/serialize) er testet i test/view-memory.test.js.
  */
 
+import { getRegion } from '../shared/regions.js';
+
 export const VIEW_KEY = 'ruterlive-view';
 export const LAYERS_KEY = 'ruterlive-layers';
 
-// Samme Oslo-bbox som i js/api.js
-export const OSLO_BOUNDS = { minLat: 59.45, maxLat: 60.2, minLon: 10.15, maxLon: 11.25 };
+export const OSLO_BOUNDS = getRegion().vehicleBounds;
 export const MIN_REMEMBER_ZOOM = 9;
 export const MAX_ZOOM = 19;
 

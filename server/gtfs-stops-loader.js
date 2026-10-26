@@ -7,6 +7,7 @@
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { dedupeInFlight } from './in-flight.js';
 import { readZipEntry } from './zip-range.js';
+import { getRegion } from '../shared/regions.js';
 
 const GTFS_URL =
   'https://storage.googleapis.com/marduk-production/outbound/gtfs/rb_norway-aggregated-gtfs-basic.zip';
@@ -18,7 +19,7 @@ let gtfsCoordMap = null;
 let lastLoadTime = 0;
 
 /** Stor-Oslo bbox – reduserer minne på server (Render gratisplan). */
-const OSLO_BBOX = { minLat: 59.2, maxLat: 60.8, minLon: 10.0, maxLon: 11.6 };
+const OSLO_BBOX = getRegion().stopsBounds;
 
 /**
  * Parser stops.txt CSV.

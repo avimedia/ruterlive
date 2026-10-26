@@ -1,8 +1,9 @@
 import L from 'leaflet';
 import { clearRouteSelection } from './routes.js';
+import { getRegion } from '../shared/regions.js';
 
-const OSLO_CENTER = [59.9110, 10.7525]; // Oslo S / Jernbanetorget
-const DEFAULT_ZOOM = 14;
+const OSLO_CENTER = getRegion().center;
+const DEFAULT_ZOOM = getRegion().defaultZoom;
 
 // Kartverket gråtone (CC BY 4.0, ingen nøkkel). Mørkt tema = samme fliser med CSS-filter
 // på .basemap-tiles (se css/style.css), så rutelinjer, markører og jernbaneoverlay påvirkes ikke.

@@ -11,6 +11,7 @@
 import { LINES, jpQuery } from './line-catalog.js';
 import { decodePolyline, simplifyLine } from './polyline.js';
 import { hashString } from './json-cache.js';
+import { getRegion } from '../shared/regions.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FAILURE_TTL_MS = 10 * 60 * 1000;
@@ -204,7 +205,7 @@ export function isRealTrace(points, stopCount) {
  * Stor-Oslo med togstrekningene (Skien, Kongsberg, Eidsvoll, Kongsvinger, Halden).
  * Fjerntogdelene (Lillehammer, Gjøvik, Göteborg) klippes bort for å holde payloaden liten.
  */
-export const REGION_BBOX = Object.freeze({ s: 59.0, n: 60.45, w: 9.4, e: 12.1 });
+export const REGION_BBOX = getRegion().geometryBounds;
 
 const inBbox = (p, b) => p[0] >= b.s && p[0] <= b.n && p[1] >= b.w && p[1] <= b.e;
 

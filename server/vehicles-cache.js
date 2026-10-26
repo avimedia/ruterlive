@@ -5,11 +5,12 @@
 import { normalizeGpsVehicles } from '../shared/gps-vehicles.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { CLIENT_NAME } from './entur-client.js';
+import { getRegion } from '../shared/regions.js';
 
 const GRAPHQL_URL = 'https://api.entur.io/realtime/v2/vehicles/graphql';
 const CACHE_MS = 20000; // 20 sekund
 
-const OSLO_BOUNDS = { minLat: 59.45, maxLat: 60.2, minLon: 10.15, maxLon: 11.25 };
+const OSLO_BOUNDS = getRegion().vehicleBounds;
 
 const VEHICLES_QUERY = `{
   vehicles(boundingBox: { minLat: ${OSLO_BOUNDS.minLat}, maxLat: ${OSLO_BOUNDS.maxLat}, minLon: ${OSLO_BOUNDS.minLon}, maxLon: ${OSLO_BOUNDS.maxLon} }) {

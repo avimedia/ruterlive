@@ -1,10 +1,11 @@
 import { normalizeGpsVehicles } from '../shared/gps-vehicles.js';
 import { isHidden } from './visibility.js';
+import { getRegion } from '../shared/regions.js';
 
 const POLL_MS = 20000;
 const POLL_BACKOFF_MS = 45000; // Ved 502/503: lengre intervall for å ikke spamme
 const RETRY_DELAYS = [2000, 4000, 8000]; // Backoff ved 502/503 (cold start)
-const OSLO_BOUNDS = { minLat: 59.45, maxLat: 60.2, minLon: 10.15, maxLon: 11.25 };
+const OSLO_BOUNDS = getRegion().vehicleBounds;
 
 // I prod: cached. I dev: direkte proxy (Vite har ikke cache)
 const VEHICLES_URL = import.meta.env.DEV ? '/api/entur/graphql' : '/api/vehicles-cached';

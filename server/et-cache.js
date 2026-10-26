@@ -7,8 +7,10 @@
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { createEtStreamParser } from './et-parse.js';
 import { CLIENT_NAME } from './entur-client.js';
+import { getRegion } from '../shared/regions.js';
 
-const ET_URL = 'https://api.entur.io/realtime/v1/rest/et?datasetId=RUT&maxSize=3000';
+// Ett ET-kall per oppdatering; datasettet kommer fra regionen
+const ET_URL = `https://api.entur.io/realtime/v1/rest/et?datasetId=${getRegion().etDatasets[0]}&maxSize=3000`;
 const REFRESH_MS = 90000; // 90 sek – færre kall mot Entur
 const BACKOFF_AFTER_429_MS = 300000; // 5 min venting ved 429
 

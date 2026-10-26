@@ -9,9 +9,9 @@ import { getEtJourneys } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { fetchJpRoutes } from './jp-route-fetcher.js';
 import { ensureLineModes, getLineMode } from './line-modes.js';
+import { CLIENT_NAME } from './entur-client.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
-const CLIENT_NAME = 'ruterlive-web';
 
 const MAX_QUAYS_TO_FETCH = 500;
 const JP_BATCH_SIZE = 25;

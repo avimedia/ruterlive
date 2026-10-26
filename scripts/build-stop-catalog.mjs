@@ -7,7 +7,7 @@ import { writeFileSync } from 'node:fs';
 import { STOPS, slugify, stripStopSuffix } from '../server/stop-catalog.js';
 import { jpQuery } from '../server/line-catalog.js';
 
-const HEADERS = { 'ET-Client-Name': 'ruterlive-web' };
+const HEADERS = { 'ET-Client-Name': process.env.ENTUR_CLIENT_NAME || 'ruterlive-web' };
 
 // Behold «featured» fra eksisterende katalog (håndplukkede knutepunkter med egen tekst).
 const FEATURED_IDS = new Set(STOPS.filter((s) => s.featured).map((s) => s.id));

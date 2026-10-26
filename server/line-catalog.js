@@ -5,6 +5,7 @@
 
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { CLIENT_NAME } from './entur-client.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -115,7 +116,7 @@ export async function jpQuery(query, fetchFn, timeoutMs = TIMEOUT_MS, variables 
   const request = (async () => {
     const res = await fetchFn(JP_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': 'ruterlive-web' },
+      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': CLIENT_NAME },
       body: JSON.stringify(variables ? { query, variables } : { query }),
       signal: controller.signal,
     });

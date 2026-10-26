@@ -5,9 +5,9 @@
  */
 
 import { fetchWithRetry } from './fetch-with-retry.js';
+import { CLIENT_NAME } from './entur-client.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
-const CLIENT_NAME = 'ruterlive-web';
 
 export const LINE_MODE_TTL_MS = 24 * 60 * 60 * 1000;
 export const LINE_MODE_NEGATIVE_TTL_MS = 10 * 60 * 1000;

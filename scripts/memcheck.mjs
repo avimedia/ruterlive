@@ -48,7 +48,7 @@ const startScript = JSON.parse(readFileSync(path.join(rot, 'package.json'), 'utf
 const nodeFlagg = startScript.split(/\s+/).filter((t) => t.startsWith('--'));
 const server = spawn(process.execPath, [...nodeFlagg, 'server.js'], {
   cwd: rot,
-  env: { ...process.env, PORT: String(PORT) },
+  env: { ENTUR_CLIENT_NAME: 'ruterlive-dev', ...process.env, PORT: String(PORT) },
   stdio: 'ignore',
 });
 let serverDod = false;

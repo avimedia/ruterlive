@@ -10,6 +10,7 @@
 import { jpQuery } from './line-catalog.js';
 import { LruCache } from './stop-service.js';
 import { isFlytogLineCode } from '../config.js';
+import { CLIENT_NAME } from './entur-client.js';
 
 export const INFO_TTL_MS = 24 * 60 * 60 * 1000;
 export const NEGATIVE_TTL_MS = 10 * 60 * 1000;
@@ -277,7 +278,7 @@ async function fetchJson(url, fetchFn, timeoutMs) {
     }, timeoutMs);
   });
   const request = (async () => {
-    const res = await fetchFn(url, { headers: { 'ET-Client-Name': 'ruterlive-web' }, signal: controller.signal });
+    const res = await fetchFn(url, { headers: { 'ET-Client-Name': CLIENT_NAME }, signal: controller.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   })();

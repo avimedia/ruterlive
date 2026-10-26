@@ -6,9 +6,9 @@
 
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { createEtStreamParser } from './et-parse.js';
+import { CLIENT_NAME } from './entur-client.js';
 
 const ET_URL = 'https://api.entur.io/realtime/v1/rest/et?datasetId=RUT&maxSize=3000';
-const CLIENT_NAME = 'ruterlive-web';
 const REFRESH_MS = 90000; // 90 sek – færre kall mot Entur
 const BACKOFF_AFTER_429_MS = 300000; // 5 min venting ved 429
 

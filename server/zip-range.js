@@ -6,8 +6,8 @@
  */
 
 import zlib from 'node:zlib';
+import { CLIENT_NAME } from './entur-client.js';
 
-const CLIENT_NAME = 'ruterlive-web';
 const TAIL_BYTES = 65536 + 22; // EOCD + maks kommentarlengde
 const LOCAL_HEADER_MARGIN = 1024; // plass til navn/extra i lokal header i samme forespørsel
 const RANGE_TIMEOUT_MS = 60000;

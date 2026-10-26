@@ -6,9 +6,9 @@ import { fetchWithRetry } from './fetch-with-retry.js';
 import { getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { isFlytogLineCode } from '../config.js';
 import { decodePolyline } from './polyline.js';
+import { CLIENT_NAME } from './entur-client.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
-const CLIENT_NAME = 'ruterlive-web';
 const JP_QUAY_BATCH = 25;
 
 async function fetchQuayCoords(quayIds, quayCoordCache) {

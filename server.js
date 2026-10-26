@@ -40,6 +40,7 @@ import { FEATURED_STOPS, getStopBySlug, getStopText } from './server/stop-catalo
 import { createStopService } from './server/stop-service.js';
 import { renderStopPage, renderStopIndex } from './server/pages/stop-page.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
+import { CLIENT_NAME } from './server/entur-client.js';
 
 function sendNotFound(res) {
   res.set('Cache-Control', 'no-store');
@@ -442,7 +443,7 @@ app.use(
     proxyReqPathResolver: (req) => '/realtime/v2/vehicles' + (req.url && req.url.startsWith('/') ? req.url : '/' + (req.url || '')),
     userResDecorator: bufferForCompression,
     proxyReqOptDecorator: (opt) => {
-      opt.headers['ET-Client-Name'] = 'ruterlive-web';
+      opt.headers['ET-Client-Name'] = CLIENT_NAME;
       return opt;
     },
   })
@@ -453,7 +454,7 @@ app.use(
   proxy('https://api.entur.io', {
     proxyReqPathResolver: (req) => '/realtime/v1/rest' + (req.url && req.url.startsWith('/') ? req.url : '/' + (req.url || '')),
     proxyReqOptDecorator: (opt) => {
-      opt.headers['ET-Client-Name'] = 'ruterlive-web';
+      opt.headers['ET-Client-Name'] = CLIENT_NAME;
       return opt;
     },
     timeout: 60000, // ET returnerer stor XML; gi tid for full overføring
@@ -466,7 +467,7 @@ app.use(
     proxyReqPathResolver: (req) => '/geocoder/v1' + (req.url && req.url.startsWith('/') ? req.url : '/' + (req.url || '')),
     userResDecorator: bufferForCompression,
     proxyReqOptDecorator: (opt) => {
-      opt.headers['ET-Client-Name'] = 'ruterlive-web';
+      opt.headers['ET-Client-Name'] = CLIENT_NAME;
       return opt;
     },
   })
@@ -483,7 +484,7 @@ app.use(
     proxyReqPathResolver: (req) => '/journey-planner/v3' + (req.url && req.url.startsWith('/') ? req.url : '/' + (req.url || '')),
     userResDecorator: bufferForCompression,
     proxyReqOptDecorator: (opt) => {
-      opt.headers['ET-Client-Name'] = 'ruterlive-web';
+      opt.headers['ET-Client-Name'] = CLIENT_NAME;
       return opt;
     },
   })

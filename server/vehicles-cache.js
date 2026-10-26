@@ -4,9 +4,9 @@
 
 import { normalizeGpsVehicles } from '../shared/gps-vehicles.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
+import { CLIENT_NAME } from './entur-client.js';
 
 const GRAPHQL_URL = 'https://api.entur.io/realtime/v2/vehicles/graphql';
-const CLIENT_NAME = 'ruterlive-web';
 const CACHE_MS = 20000; // 20 sekund
 
 const OSLO_BOUNDS = { minLat: 59.45, maxLat: 60.2, minLon: 10.15, maxLon: 11.25 };

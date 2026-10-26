@@ -41,6 +41,8 @@ import { createStopService } from './server/stop-service.js';
 import { renderStopPage, renderStopIndex } from './server/pages/stop-page.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
 import { CLIENT_NAME } from './server/entur-client.js';
+import { createRailNetworkService } from './server/rail-network.js';
+import { withNationalRail, prewarmNationalRail } from './server/rail-live.js';
 
 function sendNotFound(res) {
   res.set('Cache-Control', 'no-store');
@@ -171,9 +173,11 @@ const NO_SHAPES = Object.freeze([]);
 let lastShapesEntry = null;
 // Faktisk trasé fra JP for linjene som alltid vises + flybuss (erstatter rette ET-streker)
 const lineGeometry = createLineGeometryService({ timeoutMs: 15000 });
+// Togrutene i hele landet (JP); erstatter Oslo-utsnittene og de eldre togkartene for linjene de dekker
+const railNetwork = createRailNetworkService();
 // Sortert, så samme sett gir samme ETag
-const liveShapes = memoEntry((all, etShapes, geometry) =>
-  sortShapes(applyLineGeometry(mergeShapes(all, etShapes), geometry)));
+const liveShapes = memoEntry((all, etShapes, geometry, railNet) =>
+  sortShapes(applyLineGeometry(applyLineGeometry(mergeShapes(all, etShapes), geometry), railNet)));
 const liveShapesEntry = memoEntry((shapes) => {
   lastShapesEntry = makeJsonEntry(shapes, lastShapesEntry); // samme innhold → samme entry
   return lastShapesEntry;
@@ -198,13 +202,15 @@ const legacyInitialEntry = memoEntry((vehiclesData, etResult, all) => makeJsonEn
 }));
 
 async function getLiveSources() {
-  const [vehiclesData, etResult] = await Promise.all([getCachedVehicles(), getEtVehiclesAndShapes()]);
+  const [osloData, etResult] = await Promise.all([getCachedVehicles(), getEtVehiclesAndShapes()]);
+  // Tog i hele landet: GPS uten bbox + ET (BNR) for tog uten GPS. Samme objekt når kildene er uendret.
+  const vehiclesData = await withNationalRail(osloData);
   return { vehiclesData, etResult };
 }
 
 async function getLiveEntries() {
   const { vehiclesData, etResult } = await getLiveSources();
-  const shapes = liveShapes(getAllShapes(), etShapesSnapshot(etResult?.shapes ?? NO_SHAPES), lineGeometry.getShapes());
+  const shapes = liveShapes(getAllShapes(), etShapesSnapshot(etResult?.shapes ?? NO_SHAPES), lineGeometry.getShapes(), railNetwork.getShapes());
   const shapesEntry = liveShapesEntry(shapes);
   const vehiclesEntry = liveVehiclesEntry(vehiclesData, etResult, shapes, shapesEntry);
   return { vehiclesEntry, shapesEntry, shapesVersion: shapesVersionOf(shapesEntry) };
@@ -514,6 +520,21 @@ function refreshLineGeometry(isRetry = false) {
     .catch((e) => console.warn('[RuterLive] Linjetrasé:', e.message));
 }
 
+const RAIL_NETWORK_DELAY_MS = 25000;
+const RAIL_NETWORK_RETRY_MS = 11 * 60 * 1000;
+let railNetworkRetries = 0;
+function refreshRailNetwork(isRetry = false) {
+  if (!isRetry) railNetworkRetries = 0;
+  railNetwork.refresh()
+    .then(({ failed }) => {
+      if (failed > 0 && railNetworkRetries < 3) {
+        railNetworkRetries++;
+        setTimeout(() => refreshRailNetwork(true), RAIL_NETWORK_RETRY_MS);
+      }
+    })
+    .catch((e) => console.warn('[RuterLive] Togruter (hele landet):', e.message));
+}
+
 async function startup() {
   loadFlybussShapes(); // Synkron – statiske koordinater
   // Åpne porten først: Render vekker tjenesten og forventer svar raskt (ellers «hibernate-wake-error»).
@@ -527,6 +548,8 @@ async function startup() {
       }
     });
     getCachedVehicles().catch((e) => console.warn('[RuterLive] Vehicles cache prewarm:', e.message));
+    // Tog i hele landet (GPS + BNR-ET); etter GTFS-start, så quay-oppslag i JP bare gjelder utenfor Oslo
+    setTimeout(() => prewarmNationalRail().catch(() => {}), 20000);
     startEtCachePoll();
     refreshRouteShapes()
       .then((shapes) => console.log(`[RuterLive] Rutekart cache: ${shapes?.length ?? 0} linjer (inkl. jernbane, flybuss)`))
@@ -541,6 +564,9 @@ async function startup() {
     // Linjetrasé etter GTFS-lastingen (minnetopp), deretter hvert døgn; nytt forsøk ved feil
     setTimeout(() => refreshLineGeometry(), LINE_GEOMETRY_DELAY_MS);
     setInterval(() => refreshLineGeometry(), 24 * 60 * 60 * 1000);
+    // Togruter i hele landet: før linjetraseen (lette JP-kall, ett om gangen), deretter hvert døgn
+    setTimeout(() => refreshRailNetwork(), RAIL_NETWORK_DELAY_MS);
+    setInterval(() => refreshRailNetwork(), 24 * 60 * 60 * 1000);
   });
 }
 startup();

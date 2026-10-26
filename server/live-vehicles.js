@@ -6,6 +6,7 @@
 import { getCachedVehicles } from './vehicles-cache.js';
 import { getEtVehiclesAndShapes } from './et-vehicles-service.js';
 import { matchRouteForVehicle } from '../shared/route-match.js';
+import { withNationalRail } from './rail-live.js';
 
 function shapeKey(s) {
   return `${(s.mode || '').toLowerCase()}|${(s.line || '').toString()}|${s.from || ''}|${s.to || ''}`;
@@ -76,10 +77,11 @@ export function withoutDelay(vehicles) {
 }
 
 export async function getLiveData(getAllShapes = () => []) {
-  const [vehiclesData, etResult] = await Promise.all([
+  const [osloData, etResult] = await Promise.all([
     getCachedVehicles(),
     getEtVehiclesAndShapes(),
   ]);
+  const vehiclesData = await withNationalRail(osloData);
   return {
     vehicles: mergeVehicles(vehiclesData, etResult),
     routeShapes: mergeShapes(getAllShapes(), etResult?.shapes ?? []),

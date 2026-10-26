@@ -4,6 +4,7 @@
 
 import L from 'leaflet';
 import { getMap } from './map.js';
+import { restoreView, initViewMemory } from './view-memory.js';
 
 const TIP_KEY = 'ruterlive-tip-seen';
 
@@ -105,6 +106,8 @@ export function applyUrlParams() {
   const lng = params.get('lng');
   const z = params.get('z');
   const map = getMap();
+  if (map && !(lat && lng)) restoreView(map); // URL-parametre går alltid foran husket utsnitt
+  if (map) initViewMemory(map);
   if (map && lat && lng) {
     const numLat = parseFloat(lat);
     const numLng = parseFloat(lng);

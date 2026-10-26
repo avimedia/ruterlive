@@ -1,6 +1,7 @@
 import L from 'leaflet';
 import { setRoutesVisible } from './routes.js';
 import { setOpenRailwayMapVisible, isOpenRailwayMapVisible } from './map.js';
+import { restoreLayerState, saveLayerState } from './view-memory.js';
 import { formatVehicleCounts } from './vehicle-count-text.js';
 
 const MODE_CONFIG = {
@@ -74,9 +75,14 @@ export function initLayers(callback) {
     }
   });
 
+  restoreLayerState();
+  const routesEl = document.getElementById('routes-toggle');
+  if (routesEl) setRoutesVisible(routesEl.checked);
+
   controls.querySelectorAll('input[data-mode]').forEach((input) => {
     input.addEventListener('change', (e) => {
       e.stopPropagation();
+      saveLayerState();
       const modes = getVisibleModes();
       onFilterChange?.(modes);
     });
@@ -98,6 +104,7 @@ export function initLayers(callback) {
     routesToggle.addEventListener('change', (e) => {
       e.stopPropagation();
       setRoutesVisible(routesToggle.checked);
+      saveLayerState();
       onFilterChange?.(getVisibleModes());
     });
     routesToggle.addEventListener('click', (e) => e.stopPropagation());

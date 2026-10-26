@@ -1,5 +1,6 @@
 import { runWhenVisible } from './visibility.js';
 import { initMap, getMap } from './map.js';
+import { initLocate } from './locate.js';
 import { initTheme } from './theme.js';
 import { initStopSearch } from './search.js';
 import { initSiteMenu } from './site-menu.js';
@@ -155,6 +156,7 @@ initKeyboardNav();
 initPwa();
 applyUrlParams();
 initFollowButton();
+initLocate();
 const map = getMap();
 if (map) {
   map.on('click', () => {

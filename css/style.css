@@ -386,9 +386,24 @@ body {
   border-color: var(--text-dim);
 }
 
-/* «Følg» valgt kjøretøy: over delingsknappen, bare synlig når et kjøretøy er valgt */
-.btn-follow {
+/* «Finn meg»: rett over delingsknappen */
+.btn-locate {
   bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 6.5rem + 52px);
+}
+.btn-locate[hidden] { display: none; }
+.btn-locate.active {
+  background: #2b7fff;
+  border-color: #2b7fff;
+  color: #fff;
+}
+.btn-locate:focus-visible {
+  outline: 2px solid #2b7fff;
+  outline-offset: 2px;
+}
+
+/* «Følg» valgt kjøretøy: over «Finn meg», bare synlig når et kjøretøy er valgt */
+.btn-follow {
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 6.5rem + 104px);
   width: auto;
   min-width: 44px;
   padding: 0 0.9rem;

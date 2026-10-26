@@ -48,7 +48,17 @@ const ANIM_SKIP_THRESHOLD_KM = 2; // Ved sprang > 2 km: sett posisjon direkte (u
 const TICK_MS = 1000;
 const EASE_MS = 2000;
 const MIN_MOVE_DEG = 2e-6; // ca. 0,2 m – mindre endringer gir ikke setLatLng
+/** Bevegelse under ca. en halv skjermpiksel (lengdegrad) gir ikke setLatLng; posisjonen tas igjen ved neste tikk. */
+const MIN_MOVE_PX = 0.5;
 const BOUNDS_PAD = 0.15;
+/**
+ * Bare kjøretøy innenfor utsnittet + denne margen har markør (DOM-element) på kartet. Resten har
+ * bare bevegelsestilstand og legges på kartet på riktig plass når de kommer innenfor (tikk, moveend, polling).
+ * Valgt kjøretøy og markør med åpen popup beholdes alltid.
+ */
+const CULL_PAD = 0.3;
+/** Fra og med denne zoomen og utover: enkle markører (ingen skygge, ingen CSS-glidning), se .rl-far i CSS. */
+const ZOOM_FAR = 11;
 
 /** vehicleId -> { path, to, from, start, dur } */
 const motion = new Map();
@@ -193,7 +203,9 @@ function setMotionTarget(id, marker, path, lat, lon) {
   const prev = motion.get(id);
   const st = prev || {};
   st.path = path || null;
-  if (haversineKm(cur.lat, cur.lng, target[0], target[1]) > ANIM_SKIP_THRESHOLD_KM) {
+  // Markør utenfor kartet (utenfor utsnittet): ingen overgang, den plasseres når den vises
+  if (!marker._map || haversineKm(cur.lat, cur.lng, target[0], target[1]) > ANIM_SKIP_THRESHOLD_KM) {
+    if (!path && !(st.to && st.to[0] === target[0] && st.to[1] === target[1])) st.changedAt = perfNow;
     st.from = null;
     st.to = path ? null : target;
     marker.setLatLng(target);
@@ -214,17 +226,78 @@ function setMotionTarget(id, marker, path, lat, lon) {
   if (!prev) motion.set(id, st);
 }
 
-/** Flytter markøren uten CSS-overgang (ellers sklir den over kartet fra utdatert posisjon). */
-function setLatLngNoGlide(marker, pos) {
-  const icon = marker._icon;
-  if (!icon) {
+/**
+ * Flytter markørene uten CSS-overgang (ellers sklir de over kartet fra utdatert posisjon).
+ * Én tvungen stilberegning for hele lista, ikke én per markør.
+ */
+function setLatLngsNoGlide(list) {
+  if (list.length === 0) return;
+  let probe = null;
+  for (const [marker, pos] of list) {
+    if (marker._icon) {
+      marker._icon.style.transition = 'none';
+      probe = marker._icon;
+    }
     marker.setLatLng(pos);
-    return;
   }
-  icon.style.transition = 'none';
-  marker.setLatLng(pos);
-  void icon.offsetWidth; // tving stilberegning før overgangen slås på igjen
-  icon.style.transition = '';
+  if (!probe) return;
+  void probe.offsetWidth; // tving stilberegning før overgangen slås på igjen
+  for (const [marker] of list) if (marker._icon) marker._icon.style.transition = '';
+}
+
+function cullViewOf(map) {
+  const b = map.getBounds().pad(CULL_PAD);
+  return { s: b.getSouth(), n: b.getNorth(), w: b.getWest(), e: b.getEast() };
+}
+
+/** Valgt kjøretøy og åpen popup tas aldri av kartet (ellers lukkes popupen og valget forsvinner). */
+function keepOnMap(id, marker) {
+  return id === rafVehicleId || marker.isPopupOpen();
+}
+
+/** Legger markøren på kartet på posisjonen kjøretøyet har nå (nytt ikonelement, ingen glidning). */
+function showMarker(map, id, marker, st, geoView, wallNow, perfNow, showLine) {
+  const pos = motionPosition(st, wallNow, perfNow, id, geoView);
+  if (pos) marker.setLatLng(pos);
+  marker._rlSkipped = false;
+  setIconIfChanged(marker, marker._rlMode, marker._rlLine, showLine);
+  marker.addTo(map);
+  if (pos) {
+    decorOf(marker).lastPos = null; // kursen regnes fra posisjonene etter at den kom i bilde
+    updateDecor(marker, st, pos, wallNow, geoView.zoom >= ZOOM_LINE_VISIBLE);
+  }
+}
+
+/** Rett posisjon (uten trasé og overgang): nok til å avgjøre om markøren skal på kartet. */
+function roughPosition(st, wallNow) {
+  return st.path ? positionAt(st.path, wallNow) : st.to;
+}
+
+/** Legger til/fjerner markører etter utsnittet uten å flytte dem (polling, filter). */
+function syncVisibility() {
+  const map = getMap();
+  if (!map || motion.size === 0) return;
+  const { s, n, w, e } = cullViewOf(map);
+  const inCull = (p) => !!p && p[0] >= s && p[0] <= n && p[1] >= w && p[1] <= e;
+  const wallNow = Date.now();
+  const perfNow = performance.now();
+  let geoView = null;
+  const showLine = shouldShowLineOnMarker();
+  for (const [id, st] of motion) {
+    const marker = vehicleMarkers.get(id);
+    if (!marker) continue;
+    if (!marker._rlWanted) {
+      if (marker._map) map.removeLayer(marker);
+      continue;
+    }
+    if (marker._map) {
+      const cur = marker._latlng;
+      if (!inCull([cur.lat, cur.lng]) && !keepOnMap(id, marker)) map.removeLayer(marker);
+    } else if (inCull(roughPosition(st, wallNow))) {
+      geoView ??= geoViewOf(map);
+      showMarker(map, id, marker, st, geoView, wallNow, perfNow, showLine);
+    }
+  }
 }
 
 /** Zoom og utsnitt (med margin) for trasé-posisjon. Samme for tikket og animasjonsløkka, ellers hopper valgt kjøretøy. */
@@ -237,35 +310,51 @@ function tickMarkers() {
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
   const map = getMap();
   if (!map || motion.size === 0) return;
+  if (map._animatingZoom) return; // zoomend gir moveend, som tikker på nytt
   const geoView = geoViewOf(map);
-  const { s, n, w, e } = geoView;
+  const { s, n, w, e } = cullViewOf(map);
   const inView = (lat, lon) => lat >= s && lat <= n && lon >= w && lon <= e;
   const wallNow = Date.now();
   const perfNow = performance.now();
   const headingVisible = geoView.zoom >= ZOOM_LINE_VISIBLE;
+  const minMove = Math.max(MIN_MOVE_DEG, (MIN_MOVE_PX * 360) / (256 * 2 ** geoView.zoom));
+  const showLine = shouldShowLineOnMarker();
+  const snaps = [];
+  const toShow = [];
   for (const [id, st] of motion) {
     const marker = vehicleMarkers.get(id);
-    if (!marker || !marker._map) continue; // skjult av filter
+    if (!marker || !marker._rlWanted) continue; // skjult av filter
+    if (!marker._map) {
+      const p = roughPosition(st, wallNow);
+      if (p && inView(p[0], p[1])) toShow.push([id, marker, st]);
+      continue;
+    }
     const cur = marker._latlng;
     const pos = motionPosition(st, wallNow, perfNow, id, geoView);
     if (!pos) continue;
     if (!inView(cur.lat, cur.lng) && !inView(pos[0], pos[1])) {
-      marker._rlSkipped = true; // posisjonen er utdatert til den kommer i bilde
+      if (keepOnMap(id, marker)) marker._rlSkipped = true; // posisjonen er utdatert til den kommer i bilde
+      else map.removeLayer(marker);
       continue;
     }
     updateDecor(marker, st, pos, wallNow, headingVisible);
     if (id === rafVehicleId && rafId) continue; // flyttes av animasjonsløkka (60 fps)
-    if (Math.abs(cur.lat - pos[0]) < MIN_MOVE_DEG && Math.abs(cur.lng - pos[1]) < MIN_MOVE_DEG) {
-      marker._rlSkipped = false;
+    if (Math.abs(cur.lat - pos[0]) < minMove && Math.abs(cur.lng - pos[1]) < minMove) {
+      if (marker._rlSkipped || snapAll) {
+        marker._rlSkipped = false;
+        snaps.push([marker, pos]);
+      }
       continue;
     }
     if (marker._rlSkipped || snapAll) {
       marker._rlSkipped = false;
-      setLatLngNoGlide(marker, pos);
+      snaps.push([marker, pos]);
     } else {
       marker.setLatLng(pos);
     }
   }
+  setLatLngsNoGlide(snaps);
+  for (const [id, marker, st] of toShow) showMarker(map, id, marker, st, geoView, wallNow, perfNow, showLine);
   snapAll = false;
   for (const fn of tickListeners) fn();
 }
@@ -289,8 +378,11 @@ function ensureTicker() {
   if (container) {
     // CSS-glidning av av under zoom, ellers henger markørene etter kartet
     container.classList.add('vehicle-glide');
+    const syncFar = () => container.classList.toggle('rl-far', map.getZoom() <= ZOOM_FAR);
+    syncFar();
     map.on('zoomstart', () => container.classList.remove('vehicle-glide'));
     map.on('zoomend', () => {
+      syncFar();
       requestAnimationFrame(() => requestAnimationFrame(() => container.classList.add('vehicle-glide')));
     });
     map.on('moveend', tickMarkers);
@@ -415,7 +507,11 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
   // Add or update markers
   for (const v of vehicles) {
     const mode = normalizeMode(v);
-    if (!visibleModes.has(mode)) continue;
+    if (!visibleModes.has(mode)) {
+      const hidden = vehicleMarkers.get(v.vehicleId);
+      if (hidden) hidden._rlWanted = false;
+      continue;
+    }
 
     const lat = v.location?.latitude;
     const lon = v.location?.longitude;
@@ -472,6 +568,9 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
     const path = Array.isArray(v.path) && v.path.length >= 2 ? v.path : null;
     let marker = vehicleMarkers.get(v.vehicleId);
     if (marker) {
+      marker._rlWanted = true;
+      marker._rlMode = mode;
+      marker._rlLine = lineCode;
       setMotionTarget(v.vehicleId, marker, path, lat, lon);
       setIconIfChanged(marker, mode, lineCode, showLine);
       if (marker._rlTooltip !== tooltipText) {
@@ -498,9 +597,12 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
       marker._rlPopupHtml = popupHtml;
       marker._rlTooltip = tooltipText;
       marker._rlIconKey = `${mode}|${lineCode}|${showLine ? 1 : 0}`;
-      // Nytt ikonelement hver gang markøren legges på kartet (filter av/på): skriv tilstanden på nytt
+      marker._rlWanted = true;
+      marker._rlMode = mode;
+      marker._rlLine = lineCode;
+      // Nytt ikonelement hver gang markøren legges på kartet (utsnitt, filter): skriv tilstanden på nytt
       marker.on('add', () => applyDecor(marker));
-      marker.addTo(map);
+      // Legges på kartet av syncVisibility når den er innenfor utsnittet
       vehicleMarkers.set(v.vehicleId, marker);
       motion.set(v.vehicleId, { path, to: path ? null : start, from: null, start: 0, dur: 1 });
     }
@@ -519,6 +621,7 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
       });
     }
   }
+  syncVisibility();
 }
 
 export function applyFilter(visibleModes) {
@@ -533,19 +636,13 @@ export function applyFilter(visibleModes) {
     const marker = vehicleMarkers.get(v.vehicleId);
     if (!marker) continue;
 
-    if (visibleModes.has(mode)) {
-      if (!map.hasLayer(marker)) {
-        marker._rlSkipped = true; // posisjonen kan være utdatert mens den var skjult
-        marker.addTo(map);
-      }
-      const lineCode = v.line?.publicCode || '?';
-      setIconIfChanged(marker, mode, lineCode, showLine);
-    } else {
-      if (map.hasLayer(marker)) {
-        map.removeLayer(marker);
-      }
+    marker._rlWanted = visibleModes.has(mode);
+    if (marker._rlWanted && map.hasLayer(marker)) {
+      setIconIfChanged(marker, mode, v.line?.publicCode || '?', showLine);
     }
   }
+  // Skjulte markører fjernes; synlige innenfor utsnittet legges på kartet på riktig plass
+  syncVisibility();
 }
 
 function countByMode(vehicles, filterMode) {

@@ -1059,6 +1059,9 @@ path.leaflet-interactive:focus {
 /* Valgt kjøretøy flyttes per bilde med requestAnimationFrame (js/markers.js): ingen CSS-overgang */
 .vehicle-glide .leaflet-marker-icon.vehicle-marker.rl-raf { transition: none; }
 
+/* Zoom 11 og ut (.rl-far, js/markers.js): enkle markører uten skygge og uten glidning (under én piksel per tikk) */
+.rl-far .leaflet-marker-icon.vehicle-marker { box-shadow: none; transition: none; }
+
 .vehicle-marker.bus { background: #e63946; --rl-mode: #e63946; }
 .vehicle-marker.flybuss { background: #ff6b35; --rl-mode: #ff6b35; }
 .vehicle-marker.metro { background: #2a9d8f; --rl-mode: #2a9d8f; }
@@ -1071,6 +1074,8 @@ path.leaflet-interactive:focus {
 .vehicle-marker.rl-late { box-shadow: 0 0 0 2px #f4a261, 0 1px 3px var(--shadow); }
 /* Rød ring + kontrastkant (hvit i lyst, svart i mørkt tema) så den skiller seg fra røde bussmarkører */
 .vehicle-marker.rl-late-major { box-shadow: 0 0 0 2.5px #d62828, 0 0 0 4.5px var(--rl-halo); }
+.rl-far .leaflet-marker-icon.vehicle-marker.rl-late { box-shadow: 0 0 0 2px #f4a261; }
+.rl-far .leaflet-marker-icon.vehicle-marker.rl-late-major { box-shadow: 0 0 0 2.5px #d62828, 0 0 0 4.5px var(--rl-halo); }
 
 /* Står på holdeplass (ifølge rutetidene): diskret, statisk ring utenfor markøren */
 .vehicle-marker.rl-dwell {

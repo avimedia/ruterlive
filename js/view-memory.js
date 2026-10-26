@@ -3,12 +3,11 @@
  * Rene funksjoner (parse/serialize) er testet i test/view-memory.test.js.
  */
 
-import { getRegion } from '../shared/regions.js';
+import { NORWAY_BOUNDS } from '../shared/regions.js';
 
 export const VIEW_KEY = 'ruterlive-view';
 export const LAYERS_KEY = 'ruterlive-layers';
 
-export const OSLO_BOUNDS = getRegion().vehicleBounds;
 export const MIN_REMEMBER_ZOOM = 9;
 export const MAX_ZOOM = 19;
 
@@ -17,8 +16,8 @@ export function isValidView(v) {
   const { lat, lng, z } = v;
   if (![lat, lng, z].every((n) => typeof n === 'number' && Number.isFinite(n))) return false;
   if (z < MIN_REMEMBER_ZOOM || z > MAX_ZOOM) return false;
-  return lat >= OSLO_BOUNDS.minLat && lat <= OSLO_BOUNDS.maxLat
-    && lng >= OSLO_BOUNDS.minLon && lng <= OSLO_BOUNDS.maxLon;
+  return lat >= NORWAY_BOUNDS.minLat && lat <= NORWAY_BOUNDS.maxLat
+    && lng >= NORWAY_BOUNDS.minLon && lng <= NORWAY_BOUNDS.maxLon;
 }
 
 /** Returnerer JSON-streng, eller null hvis utsnittet ikke bør huskes. */

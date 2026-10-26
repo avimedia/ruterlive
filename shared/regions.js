@@ -25,6 +25,9 @@ export const REGIONS = Object.freeze({
 
 export const DEFAULT_REGION = 'oslo';
 
+// Hele Norge (grov boks). Tog vises i hele landet, så kartutsnitt her kan huskes.
+export const NORWAY_BOUNDS = Object.freeze({ minLat: 57.8, maxLat: 71.3, minLon: 4.0, maxLon: 31.5 });
+
 /** Regionen med gitt id, ellers standardregionen. */
 export function getRegion(id = DEFAULT_REGION) {
   return REGIONS[id] || REGIONS[DEFAULT_REGION];

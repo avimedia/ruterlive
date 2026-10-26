@@ -8,8 +8,9 @@ test('visning: rundtur', () => {
 });
 
 test('visning: utenfor Oslo-bbox eller lavt zoom huskes ikke', () => {
-  assert.equal(serializeView(63.4, 10.4, 14), null);
-  assert.equal(serializeView(59.9, 5.3, 14), null);
+  assert.notEqual(serializeView(63.4, 10.4, 14), null); // Trondheim: tog i hele landet
+  assert.notEqual(serializeView(59.9, 5.3, 14), null); // Bergen
+  assert.equal(serializeView(52.5, 13.4, 14), null); // utenfor Norge
   assert.equal(serializeView(59.9, 10.7, 8), null);
   assert.notEqual(serializeView(59.9, 10.7, 9), null);
   assert.equal(serializeView(59.9, 10.7, 20), null);

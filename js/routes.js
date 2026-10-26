@@ -66,7 +66,7 @@ function shapeModeForFilter(shape) {
   return m || 'bus';
 }
 
-/** T-bane, trikk, regiontog og flytoget vises alltid. Buss, flybuss og båt kun ved valgt kjøretøy. */
+/** T-bane, trikk, tog og flytoget vises alltid. Buss, flybuss og båt kun ved valgt kjøretøy. */
 const ALWAYS_SHOWN_MODES = new Set(['metro', 'tram', 'rail', 'flytog']);
 const VEHICLE_CLICK_MODES = new Set(['bus', 'water', 'flybuss']);
 

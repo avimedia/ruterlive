@@ -8,7 +8,7 @@ const MODE_NOUNS = [
   ['metro', 'T-banetog', 'T-banetog'],
   ['tram', 'trikk', 'trikker'],
   ['water', 'båt', 'båter'],
-  ['rail', 'regiontog', 'regiontog'],
+  ['rail', 'tog', 'tog'],
   ['flytog', 'flytog', 'flytog'],
 ];
 

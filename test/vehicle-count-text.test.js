@@ -5,7 +5,7 @@ import { formatVehicleCounts } from '../js/vehicle-count-text.js';
 test('bruker flertall når antallet ikke er 1', () => {
   assert.equal(
     formatVehicleCounts({ total: 900, bus: 856, flybuss: 3, metro: 20, tram: 12, water: 2, rail: 5, flytog: 2 }),
-    '900 kjøretøy: 856 busser, 3 flybusser, 20 T-banetog, 12 trikker, 2 båter, 5 regiontog, 2 flytog'
+    '900 kjøretøy: 856 busser, 3 flybusser, 20 T-banetog, 12 trikker, 2 båter, 5 tog, 2 flytog'
   );
 });
 

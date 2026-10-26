@@ -10,7 +10,7 @@ const MODE_CONFIG = {
   metro: { label: 'T-bane', key: 'metro' },
   tram: { label: 'Trikk', key: 'tram' },
   water: { label: 'Båt', key: 'water' },
-  rail: { label: 'Regiontog', key: 'rail' },
+  rail: { label: 'Tog', key: 'rail' },
   flytog: { label: 'Flytoget', key: 'flytog' },
 };
 

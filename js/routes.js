@@ -3,6 +3,7 @@ import { getMap } from './map.js';
 import { isFlytogLineCode } from '../config.js';
 import { splitRouteAt, chooseClosestShape } from './route-split.js';
 import { groupStops } from './stop-groups.js';
+import { prefersDepartureSheet, showDepartures } from './departure-sheet.js';
 
 const MODE_COLORS = {
   bus: '#e63946',
@@ -341,6 +342,15 @@ function createStopMarker(lat, lon, quayIds, name, color, stopsLayer) {
   });
   marker._quayId = ids[0];
   const popup = L.popup({ className: 'departure-board-popup', maxWidth: 460 });
+  // Mobil: bunnark i stedet for popup (gjelder både klikk og openPopup() fra søk)
+  marker.openPopup = function (...args) {
+    if (!prefersDepartureSheet()) return L.Marker.prototype.openPopup.apply(this, args);
+    this._map?.closePopup();
+    setTimeout(() => this.closeTooltip(), 0); // Leaflet åpner tooltipen på trykk etter dette
+    const target = { setContent: (html) => showDepartures({ name: label, quayIds: ids, html }) };
+    showDepartures({ name: label, quayIds: ids, load: () => showDepartureBoard(target, ids) });
+    return this;
+  };
   marker.bindPopup(popup, { autoClose: true, closeOnClick: true });
   marker.on('click', (e) => L.DomEvent.stopPropagation(e));
   marker.on('popupopen', () => {

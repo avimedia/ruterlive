@@ -39,7 +39,7 @@ const bnrXml = `<Siri><ServiceDelivery><EstimatedTimetableDelivery><EstimatedJou
 <EstimatedVehicleJourney><LineRef>SJV:Line:F1</LineRef><DatedVehicleJourneyRef>638:2026-10-26</DatedVehicleJourneyRef><Cancellation>true</Cancellation>
 <EstimatedCalls><EstimatedCall><StopPointRef>NSR:Quay:9</StopPointRef><StopPointName>Oslo S</StopPointName><ExpectedDepartureTime>${iso(0)}</ExpectedDepartureTime></EstimatedCall>
 <EstimatedCall><StopPointRef>NSR:Quay:8</StopPointRef><StopPointName>Lillestrøm</StopPointName><ExpectedArrivalTime>${iso(20)}</ExpectedArrivalTime></EstimatedCall></EstimatedCalls></EstimatedVehicleJourney>
-<EstimatedVehicleJourney><LineRef>XYZ:Line:25</LineRef><DatedVehicleJourneyRef>25:2026-10-26</DatedVehicleJourneyRef>
+<EstimatedVehicleJourney><LineRef>RUT:Line:25</LineRef><DatedVehicleJourneyRef>25:2026-10-26</DatedVehicleJourneyRef>
 <EstimatedCalls><EstimatedCall><StopPointRef>NSR:Quay:5</StopPointRef><StopPointName>A</StopPointName><ExpectedDepartureTime>${iso(0)}</ExpectedDepartureTime></EstimatedCall></EstimatedCalls></EstimatedVehicleJourney>
 </EstimatedJourneyVersionFrame></EstimatedTimetableDelivery></ServiceDelivery></Siri>`;
 
@@ -51,7 +51,7 @@ function parseBnr(xml = bnrXml) {
 
 test('BNR-parser: fast modus rail, innstilte turer og kall hoppes over', () => {
   const js = parseBnr();
-  assert.deepEqual(js.map((j) => j.lineRef), ['SJN:Line:R70', 'XYZ:Line:25']);
+  assert.deepEqual(js.map((j) => j.lineRef), ['SJN:Line:R70', 'RUT:Line:25']);
   assert.ok(js.every((j) => j.mode === 'rail'), 'linjenummer 25 skal ikke bli buss');
   assert.deepEqual(js[0].estimatedCalls.map((c) => c.quayId), ['NSR:Quay:3', 'NSR:Quay:4']);
   assert.equal(js[0].estimatedCalls[0].delay, 300);
@@ -59,7 +59,7 @@ test('BNR-parser: fast modus rail, innstilte turer og kall hoppes over', () => {
 
 test('ET-parser uten valg: uendret oppførsel (R70 uten tall hoppes over, innstilte kall beholdes)', () => {
   const js = parseEtJourneys(bnrXml);
-  assert.deepEqual(js.map((j) => j.lineRef), ['XYZ:Line:25']);
+  assert.deepEqual(js.map((j) => j.lineRef), ['RUT:Line:25']);
   assert.equal(js[0].mode, 'bus');
 });
 

@@ -59,6 +59,8 @@ ET shapes for buses are often partial trips, so for a selected bus/boat (and fly
 
 ### Shared code
 
+`shared/regions.js` holds the region settings (center, zoom, vehicle/stops/geometry bounds, ET dataset, map link); Oslo is the only region so far, and server and client read their Oslo values from it instead of hard-coded copies. `shared/line-mode.js` has `getModeFromLineNumFallback` (Ruter lines `RUT:` only; other operators give null) and `mapJpTransportMode`, replacing the old copies.
+
 `config.js` (e.g. `MAX_ROUTE_SPAN_KM`, `isFlytogLineCode`) and `shared/et-journeys.js` (ET vehicle id + one journey per vehicle) are imported by both server and client. Flytoget's line codes are `FLY1`/`FLY2`; `F1`, `F4`, `F6` are Vy/SJ trains.
 
 ET contains several journeys per physical vehicle (previous, current, next trip) sharing one `VehicleRef`, and many journeys lack it. `selectJourneysForVehicles` keeps one journey per vehicle; route shapes are still built from all journeys.

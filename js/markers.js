@@ -505,7 +505,18 @@ function shouldShowLineOnMarker() {
   return map ? map.getZoom() >= ZOOM_LINE_VISIBLE : false;
 }
 
-export function updateMarkers(vehicles, visibleModes, opts = {}) {
+export 
+/**
+ * Popup for kjøretøy. Leaflet panorerer kartet («autoPan») når popupen åpnes OG hver gang
+ * innholdet oppdateres. Innholdet oppdateres ved hver polling, så kartet rykket tilbake til
+ * kjøretøyet mens brukeren så på noe annet. Derfor: autoPan bare ved åpning.
+ */
+function bindVehiclePopup(marker, html) {
+  marker.bindPopup(html, { className: 'vehicle-popup', autoPan: true });
+  marker.on('popupopen', (e) => { e.popup.options.autoPan = false; });
+  marker.on('popupclose', (e) => { e.popup.options.autoPan = true; });
+}
+function updateMarkers(vehicles, visibleModes, opts = {}) {
   const map = getMap();
   if (!map) return;
   const { onVehicleSelect, onVehicleDeselect, getSelectedVehicleId } = opts;
@@ -603,7 +614,7 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
       }
       // Samme popup-objekt (ellers følger ikke en åpen popup markøren etter neste polling)
       const popup = marker.getPopup();
-      if (!popup) marker.bindPopup(popupHtml, { className: 'vehicle-popup' });
+      if (!popup) bindVehiclePopup(marker, popupHtml);
       else if (marker._rlPopupHtml !== popupHtml) popup.setContent(popupHtml);
       marker._rlPopupHtml = popupHtml;
     } else {
@@ -617,7 +628,7 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
           direction: 'top',
           offset: [0, -8],
         });
-      marker.bindPopup(popupHtml, { className: 'vehicle-popup' });
+      bindVehiclePopup(marker, popupHtml);
       marker._rlPopupHtml = popupHtml;
       marker._rlTooltip = tooltipText;
       marker._rlIconKey = `${mode}|${lineCode}|${showLine ? 1 : 0}`;

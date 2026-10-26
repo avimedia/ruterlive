@@ -505,7 +505,6 @@ function shouldShowLineOnMarker() {
   return map ? map.getZoom() >= ZOOM_LINE_VISIBLE : false;
 }
 
-export 
 /**
  * Popup for kjøretøy. Leaflet panorerer kartet («autoPan») når popupen åpnes OG hver gang
  * innholdet oppdateres. Innholdet oppdateres ved hver polling, så kartet rykket tilbake til
@@ -516,7 +515,8 @@ function bindVehiclePopup(marker, html) {
   marker.on('popupopen', (e) => { e.popup.options.autoPan = false; });
   marker.on('popupclose', (e) => { e.popup.options.autoPan = true; });
 }
-function updateMarkers(vehicles, visibleModes, opts = {}) {
+
+export function updateMarkers(vehicles, visibleModes, opts = {}) {
   const map = getMap();
   if (!map) return;
   const { onVehicleSelect, onVehicleDeselect, getSelectedVehicleId } = opts;

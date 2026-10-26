@@ -8,19 +8,7 @@
 
 import { journeyVehicleId } from '../shared/et-journeys.js';
 import { callDelaySeconds } from '../shared/vehicle-delay.js';
-
-const METRO_LINE_NUMS = new Set([1, 2, 3, 4, 5, 6]);
-const TRAM_LINE_NUMS = new Set([11, 12, 13, 14, 15, 16, 17, 18, 19]);
-
-function getModeFromLineNumFallback(lineRef) {
-  const m = /:Line:(\d+)/.exec(lineRef || '');
-  const num = m ? parseInt(m[1], 10) : null;
-  if (!num) return null;
-  if (METRO_LINE_NUMS.has(num)) return 'metro';
-  if (TRAM_LINE_NUMS.has(num)) return 'tram';
-  if (num >= 20) return 'bus';
-  return null;
-}
+import { getModeFromLineNumFallback } from '../shared/line-mode.js';
 
 function parseIsoTime(str) {
   if (!str) return null;

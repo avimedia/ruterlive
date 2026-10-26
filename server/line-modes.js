@@ -6,20 +6,15 @@
 
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { CLIENT_NAME } from './entur-client.js';
+import { mapJpTransportMode } from '../shared/line-mode.js';
+
+export { mapJpTransportMode };
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 
 export const LINE_MODE_TTL_MS = 24 * 60 * 60 * 1000;
 export const LINE_MODE_NEGATIVE_TTL_MS = 10 * 60 * 1000;
 export const LINE_MODE_BATCH_SIZE = 50;
-
-export function mapJpTransportMode(jpMode) {
-  if (!jpMode) return null;
-  const m = (typeof jpMode === 'object' ? jpMode?.name ?? jpMode?.transportMode : jpMode).toString().toLowerCase();
-  if (['metro', 'bus', 'tram', 'water', 'rail'].includes(m)) return m;
-  if (['ferry', 'ferje'].includes(m)) return 'water';
-  return null;
-}
 
 /**
  * Ren cache: ref -> { mode, expires }. mode null = negativt svar (kort levetid).

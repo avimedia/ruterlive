@@ -6,41 +6,16 @@
 import { MAX_ROUTE_SPAN_KM } from '../config.js';
 import { journeyVehicleId, selectJourneysForVehicles } from '../shared/et-journeys.js';
 import { callDelaySeconds } from '../shared/vehicle-delay.js';
+import { getModeFromLineNumFallback, mapJpTransportMode } from '../shared/line-mode.js';
+import { getRegion } from '../shared/regions.js';
 
-const ET_URL = import.meta.env.DEV ? '/api/entur-et/et?datasetId=RUT&maxSize=3000' : '/api/et-cached';
+const ET_URL = import.meta.env.DEV ? `/api/entur-et/et?datasetId=${getRegion().etDatasets[0]}&maxSize=3000` : '/api/et-cached';
 const JP_GRAPHQL_URL = '/api/entur-jp/graphql';
 const CLIENT_NAME = 'ruterlive-web';
 const RETRY_DELAYS = [2000, 4000, 8000]; // Backoff ved 502/503 (cold start)
 
-// Fallback ved manglende JP-data: T-bane 1–6, Trikk 11–19, resten buss (linjenummer er upålitelig for båt)
-const METRO_LINE_NUMS = new Set([1, 2, 3, 4, 5, 6]);
-const TRAM_LINE_NUMS = new Set([11, 12, 13, 14, 15, 16, 17, 18, 19]);
-
 const quayCoordCache = new Map();
 const lineModeCache = new Map(); // lineRef -> 'bus'|'metro'|'tram'|'water'|'rail'|null
-
-function getLineNum(lineRef) {
-  const m = /:Line:(\d+)/.exec(lineRef || '');
-  return m ? parseInt(m[1], 10) : null;
-}
-
-/** Fallback når JP ikke har transportmodus. Unngår 90–99/390–399 som båt – linjenumre er upålitelige. */
-function getModeFromLineNumFallback(lineRef) {
-  const num = getLineNum(lineRef);
-  if (!num) return null;
-  if (METRO_LINE_NUMS.has(num)) return 'metro';
-  if (TRAM_LINE_NUMS.has(num)) return 'tram';
-  if (num >= 20) return 'bus';
-  return null;
-}
-
-function mapJpTransportMode(jpMode) {
-  if (!jpMode) return null;
-  const m = (typeof jpMode === 'object' ? jpMode?.name ?? jpMode?.transportMode : jpMode).toString().toLowerCase();
-  if (['metro', 'bus', 'tram', 'water', 'rail'].includes(m)) return m;
-  if (['ferry', 'ferje'].includes(m)) return 'water';
-  return null;
-}
 
 const MAX_QUAYS_TO_FETCH = 500; // Flere holdeplasser = flere busser med beregnet posisjon
 

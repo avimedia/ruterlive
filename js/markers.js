@@ -103,7 +103,7 @@ function setIconIfChanged(marker, mode, lineCode, showLine) {
  */
 function decorOf(marker) {
   if (!marker._rlDecor) {
-    marker._rlDecor = { delay: 0, dwell: false, gpsBearing: null, heading: null, headingShown: null, lastPos: null, raf: false };
+    marker._rlDecor = { delay: 0, dwell: false, gpsBearing: null, heading: null, headingShown: null, lastPos: null, raf: false, dim: false };
   }
   return marker._rlDecor;
 }
@@ -124,8 +124,29 @@ function applyDecor(marker) {
   icon.classList.toggle('rl-late-major', late === 'rl-late-major');
   icon.classList.toggle('rl-dwell', d.dwell);
   icon.classList.toggle('rl-raf', d.raf);
+  icon.classList.toggle('rl-dim', d.dim);
   d.headingShown = null;
   syncHeading(marker, d);
+}
+
+/** Linjesøk: { mode, codes: ['31'] } dimmer alle andre kjøretøy (klassen rl-dim), null fjerner dimmingen. */
+let lineHighlight = null;
+
+function syncDim(marker, v) {
+  const d = decorOf(marker);
+  const lineCode = String(v.line?.publicCode || '').toUpperCase();
+  const dim = !!lineHighlight && !(normalizeMode(v) === lineHighlight.mode && lineHighlight.codes.includes(lineCode));
+  if (d.dim === dim) return;
+  d.dim = dim;
+  applyDecor(marker);
+}
+
+export function setLineHighlight(h) {
+  lineHighlight = h ? { mode: h.mode, codes: (h.codes || []).map((c) => String(c).toUpperCase()) } : null;
+  for (const v of lastVehicles) {
+    const marker = vehicleMarkers.get(v.vehicleId);
+    if (marker) syncDim(marker, v);
+  }
 }
 
 function setDelay(marker, delay) {
@@ -504,6 +525,7 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
       vehicleMarkers.set(v.vehicleId, marker);
       motion.set(v.vehicleId, { path, to: path ? null : start, from: null, start: 0, dur: 1 });
     }
+    syncDim(marker, v);
     const decor = decorOf(marker);
     const gpsBearing = !path && Number.isFinite(v.bearing) ? ((Math.round(v.bearing) % 360) + 360) % 360 : null;
     if (gpsBearing !== decor.gpsBearing) {

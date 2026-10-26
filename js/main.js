@@ -12,6 +12,7 @@ import { matchRouteForVehicle } from '../shared/route-match.js';
 import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons, onMarkerTick, getMarkerLatLng, setAnimatedVehicle } from './markers.js';
 import { initFollowButton, setFollowVehicle } from './follow.js';
 import { initLayers, getVisibleModes, updateVehicleCount, setRetryHandler } from './layers.js';
+import { setLineSearchData } from './line-search.js';
 import { updateRouteLines, updateSelectedVehicleSplit } from './routes.js';
 import { setLineGeometryData, withoutTracedLines } from './line-geometry.js';
 import {
@@ -117,6 +118,7 @@ function mergeAndUpdate() {
     }
   }
   const visibleModes = getVisibleModes();
+  setLineSearchData(merged, routeShapes);
   setLineGeometryData(routeShapes, merged); // ET-kjøretøy følger trasé i markers.js
   updateMarkers(merged, visibleModes, {
     onVehicleSelect: (v) => {

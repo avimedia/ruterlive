@@ -4,6 +4,7 @@
 
 import L from 'leaflet';
 import { getMap } from './map.js';
+import { applyLineFromUrl } from './line-search.js';
 
 const TIP_KEY = 'ruterlive-tip-seen';
 
@@ -112,4 +113,5 @@ export function applyUrlParams() {
       map.setView([numLat, numLng], z ? parseInt(z, 10) : map.getZoom());
     }
   }
+  applyLineFromUrl(); // ?linje=31
 }

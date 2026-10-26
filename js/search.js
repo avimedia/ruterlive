@@ -3,6 +3,8 @@
  */
 
 import { focusStopFromSearch } from './routes.js';
+import { searchLines, selectLine, initLineChip } from './line-search.js';
+import { MODE_COLORS } from '../shared/line-list.js';
 
 let debounceTimer = null;
 const DEBOUNCE_MS = 250;
@@ -14,6 +16,8 @@ export function initStopSearch() {
   const wrap = document.getElementById('stop-search-wrap');
   const trigger = wrap?.querySelector('.stop-search-trigger');
   if (!input || !resultsEl || !wrap) return;
+  initLineChip(wrap, input);
+  let currentLines = [];
 
   if (trigger) {
     trigger.addEventListener('click', () => {
@@ -24,7 +28,7 @@ export function initStopSearch() {
     input.addEventListener('blur', () => {
       setTimeout(() => {
         const hasResults = resultsEl.querySelector('li[data-id]');
-        if (!input.value.trim() && !hasResults) {
+        if (!input.value.trim() && !hasResults && !wrap.classList.contains('has-line')) {
           wrap.classList.remove('search-expanded');
           trigger.setAttribute('aria-expanded', 'false');
           resultsEl.hidden = true;
@@ -44,8 +48,23 @@ export function initStopSearch() {
     resultsEl.removeAttribute('aria-expanded');
   }
 
-  function showResults(items) {
-    resultsEl.innerHTML = items
+  function linesHtml(lines, withStopsHeading) {
+    if (!lines.length) return '';
+    return (
+      '<li class="stop-search-heading" role="presentation">Linjer</li>' +
+      lines
+        .map(
+          (l, i) =>
+            `<li role="option" tabindex="-1" class="line-result" data-line="${i}"><span class="line-badge" style="background:${MODE_COLORS[l.mode] || '#888'}">${escapeHtml(l.code)}</span>${escapeHtml(l.title)}</li>`
+        )
+        .join('') +
+      (withStopsHeading ? '<li class="stop-search-heading" role="presentation">Holdeplasser</li>' : '')
+    );
+  }
+
+  function showResults(items, lines = currentLines) {
+    const heading = linesHtml(lines, items.length > 0);
+    resultsEl.innerHTML = heading + items
       .map(
         (s) => {
           const displayName = s.displayName ?? s.name;
@@ -72,16 +91,22 @@ export function initStopSearch() {
   input.addEventListener('input', () => {
     clearTimeout(debounceTimer);
     const q = input.value.trim();
+    currentLines = q ? searchLines(q) : [];
     if (q.length < MIN_QUERY_LEN) {
-      hideResults();
+      if (currentLines.length) showResults([]);
+      else hideResults();
       return;
     }
+    if (currentLines.length) showResults([]); // linjene vises straks, holdeplassene kommer etter hentingen
     debounceTimer = setTimeout(() => {
       fetch(`/api/stops-search?q=${encodeURIComponent(q)}&limit=15`)
         .then((r) => (r.ok ? r.json() : []))
         .then((stops) => {
+          if (input.value.trim() !== q) return;
           if (stops?.length) {
             showResults(stops);
+          } else if (currentLines.length) {
+            showResults([]);
           } else {
             resultsEl.innerHTML = '<li class="stop-search-empty">Ingen treff</li>';
             resultsEl.hidden = false;
@@ -104,6 +129,17 @@ export function initStopSearch() {
   });
 
   resultsEl.addEventListener('click', (e) => {
+    const lineLi = e.target.closest('li[data-line]');
+    if (lineLi) {
+      const line = currentLines[Number(lineLi.dataset.line)];
+      if (line) {
+        selectLine(line);
+        input.value = '';
+        hideResults();
+        input.blur();
+      }
+      return;
+    }
     const li = e.target.closest('li[data-id]');
     if (!li || li.classList.contains('stop-search-empty')) return;
     const id = li.dataset.id;
@@ -120,7 +156,7 @@ export function initStopSearch() {
 
   resultsEl.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
-    const selected = resultsEl.querySelector('li[data-id].highlighted, li[data-id]:first-child');
+    const selected = resultsEl.querySelector('li.highlighted') || resultsEl.querySelector('li[data-id], li[data-line]');
     if (selected) selected.click();
   });
 
@@ -138,6 +174,24 @@ export function initStopSearch() {
     if (e.key === 'Escape') {
       hideResults();
       input.blur();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const items = [...resultsEl.querySelectorAll('li[data-id], li[data-line]')];
+      if (resultsEl.hidden || !items.length) return;
+      e.preventDefault();
+      const cur = items.findIndex((li) => li.classList.contains('highlighted'));
+      const next = e.key === 'ArrowDown' ? (cur + 1) % items.length : (cur - 1 + items.length) % items.length;
+      items.forEach((li, i) => li.classList.toggle('highlighted', i === next));
+      items[next].scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter') {
+      const sel = resultsEl.querySelector('li.highlighted') || resultsEl.querySelector('li[data-id], li[data-line]');
+      if (sel && !resultsEl.hidden) {
+        e.preventDefault();
+        sel.click();
+      }
     }
   });
 }

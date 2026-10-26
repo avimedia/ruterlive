@@ -1344,3 +1344,69 @@ path.leaflet-interactive:focus {
   .route-ahead-march,
   .route-ahead-casing { animation: rl-march 1.5s steps(12) infinite; }
 }
+
+/* Linjesøk: dimmede kjøretøy, resultatseksjon og chip */
+.vehicle-marker.rl-dim { opacity: 0.25; }
+
+.stop-search-results li.stop-search-heading {
+  cursor: default;
+  padding: 0.35rem 0.75rem 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.stop-search-results li.line-result {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.stop-search-results li.line-result:hover,
+.stop-search-results li.line-result.highlighted {
+  background: var(--bg-input-hover);
+  color: var(--text-primary);
+}
+
+.stop-search-results li[data-id].highlighted {
+  background: var(--bg-input-hover);
+}
+
+.line-badge {
+  min-width: 2.1rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.35rem;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+.line-chip {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  margin-right: 0.35rem;
+  padding: 0 0.7rem;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--bg-panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.line-chip[hidden] { display: none; }
+.line-chip:hover { background: var(--bg-input-hover); }
+.line-chip:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+.line-chip-dot { width: 0.65rem; height: 0.65rem; border-radius: 50%; }
+.line-chip-x { font-size: 1.1rem; line-height: 1; color: var(--text-muted); }
+.stop-search-wrap.has-line .stop-search-input { min-width: 0; }

@@ -41,16 +41,21 @@ let highlightedRoutes = [];
 const DIM_OPACITY = 0.3;
 const AHEAD_DASH = '2, 10';
 let routesVisible = true;
-let lastRenderedShapesKey = '';
-let lastRenderedModesKey = '';
-let lastSelectedVehicleKey = '';
-let lastRenderedStopsKey = '';
-let lastRenderedBboxKey = '';
-let lastRenderedRoutesVisible = null;
+/** Nøkkel for tegnede rutelinjer; panorering og zoom endrer den ikke. */
+let lastLinesKey = '';
+/** Fra siste tegning av rutelinjer: uthevet rute, modi og rutekart for holdeplassene. */
+let lastHighlighted = [];
+let lastStopShapes = [];
+let lastStopModes = new Set();
+/** Holdeplassene: modus + linjenøkkel, og utsnittet (med margin) de er tegnet for. */
+let lastStopsKey = '';
+let stopsBounds = null;
 let bboxFetchId = 0;
 
 /** Zoom-nivå før holdeplasser vises (med navn). */
 const ZOOM_STOPS_VISIBLE = 15;
+/** Holdeplasser tegnes for utsnittet + denne margen; små panoreringer tegner ikke på nytt. */
+const STOPS_PAD = 0.5;
 
 function shapeModeForFilter(shape) {
   const m = (shape.mode || '').toLowerCase();
@@ -178,6 +183,10 @@ function vehicleRouteFor(vehicle) {
   return { shape: null, pending: true };
 }
 
+/**
+ * Rutelinjer tegnes bare når rutekart, synlige modi, valgt kjøretøy eller «vis ruter» endres.
+ * Holdeplassene oppdateres for seg (updateStops): ved zoom og når utsnittet går utenfor det de er tegnet for.
+ */
 export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
   const map = getMap();
   if (!map || !map.routeLayerGroup) return;
@@ -188,37 +197,29 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
     : '';
   const shapesKey = shapes?.length ? `${shapes.length}-${shapes.slice(0, 5).map((s) => s.line + s.from).join('|')}` : '0';
   const modesKey = [...(visibleModes || [])].sort().join(',');
-  const mapZoom = map.getZoom();
-  const stopsVisibleKey = mapZoom >= ZOOM_STOPS_VISIBLE ? '1' : '0';
-  const b = map.getBounds();
-  const bboxKey = mapZoom >= ZOOM_STOPS_VISIBLE ? `${b.getSouth().toFixed(2)},${b.getNorth().toFixed(2)},${b.getWest().toFixed(2)},${b.getEast().toFixed(2)}` : '';
-  if (shapesKey === lastRenderedShapesKey && modesKey === lastRenderedModesKey && selectedKey === lastSelectedVehicleKey && stopsVisibleKey === lastRenderedStopsKey && bboxKey === lastRenderedBboxKey && routesVisible === lastRenderedRoutesVisible) {
-    return;
+  const linesKey = `${shapesKey}#${modesKey}#${selectedKey}#${routesVisible ? 1 : 0}`;
+  if (linesKey !== lastLinesKey) {
+    lastLinesKey = linesKey;
+    drawRouteLines(map, shapes, visibleModes, selectedVehicle);
   }
-  lastRenderedBboxKey = bboxKey;
-  lastRenderedRoutesVisible = routesVisible;
-  lastRenderedShapesKey = shapesKey;
-  lastRenderedModesKey = modesKey;
-  lastSelectedVehicleKey = selectedKey;
-  lastRenderedStopsKey = stopsVisibleKey;
+  updateStops(map);
+}
 
+function drawRouteLines(map, shapes, visibleModes, selectedVehicle) {
   map.routeLayerGroup.clearLayers();
-  if (map.stopsLayerGroup) map.stopsLayerGroup.clearLayers();
   routeLayers = [];
   selectedPolyline = null;
   highlightedRoutes = [];
+  lastHighlighted = [];
+  lastStopShapes = [];
+  lastStopModes = new Set(visibleModes);
 
   if (import.meta.env.DEV) {
     console.debug('[RuterLive] updateRouteLines:', { routesVisible, shapesCount: shapes?.length ?? 0, selectedVehicle: !!selectedVehicle });
   }
 
-  if (!routesVisible || !shapes?.length) {
-    // Tegn likevel bbox-holdeplasser ved høy zoom
-    if (map.getZoom() >= ZOOM_STOPS_VISIBLE) {
-      addStopMarkers(map, [], visibleModes);
-    }
-    return;
-  }
+  // Uten ruter: bbox-holdeplasser ved høy zoom (updateStops)
+  if (!routesVisible || !shapes?.length) return;
 
   // Inkluder valgt kjøretøys modus slik at flybuss/buss/båt-ruter vises ved klikk
   const effectiveModes = new Set(visibleModes);
@@ -291,17 +292,29 @@ export function updateRouteLines(shapes, visibleModes, selectedVehicle = null) {
     addRoutePolyline(map, shape, drawn, true, selectedVehicle, false);
   }
 
-  // Holdeplasser: ved valgt kjøretøy kun rutens stopp (zoom 12+), ellers zoom 15+ med bbox
-  const showStopsForSelection = highlighted.length > 0 && mapZoom >= 12;
-  const showStopsForAll = mapZoom >= ZOOM_STOPS_VISIBLE;
-  if (showStopsForSelection || showStopsForAll) {
-    const shapesForStops = showStopsForSelection
-      ? highlighted
-      : (shapes ?? []).filter((s) => effectiveModes.has(shapeModeForFilter(s)));
-    const onlyRouteStops = showStopsForSelection;
-    addStopMarkers(map, shapesForStops, effectiveModes, onlyRouteStops);
-  }
+  lastHighlighted = highlighted;
+  lastStopShapes = shapes.filter((s) => effectiveModes.has(shapeModeForFilter(s)));
+  lastStopModes = effectiveModes;
+}
 
+/**
+ * Holdeplasser: ved valgt kjøretøy kun rutens stopp (zoom 12+), ellers zoom 15+ for utsnittet med margin.
+ * Tegnes på nytt bare når modus/linjer endres eller utsnittet går utenfor det som er tegnet.
+ */
+function updateStops(map) {
+  const zoom = map.getZoom();
+  const mode = lastHighlighted.length > 0 && zoom >= 12 ? 'route' : zoom >= ZOOM_STOPS_VISIBLE ? 'view' : 'none';
+  const key = `${lastLinesKey}|${mode}`;
+  if (key === lastStopsKey && (mode !== 'view' || stopsBounds?.contains(map.getBounds()))) return;
+  lastStopsKey = key;
+  bboxFetchId++; // svar på eldre bbox-henting forkastes
+  stopsBounds = null;
+  if (map.stopsLayerGroup) map.stopsLayerGroup.clearLayers();
+  if (mode === 'route') addStopMarkers(map, lastHighlighted, lastStopModes, true);
+  else if (mode === 'view') {
+    stopsBounds = map.getBounds().pad(STOPS_PAD);
+    addStopMarkers(map, lastStopShapes, lastStopModes, false, stopsBounds);
+  }
 }
 
 function escapeHtml(s) {
@@ -367,15 +380,19 @@ function drawStopGroups(stops, stopsLayer) {
   return markers;
 }
 
-function addStopMarkers(map, shapes, visibleModes, onlyRouteStops = false) {
+/** bounds: bare holdeplasser innenfor (og bbox-henting for samme område); uten bounds alle rutens stopp. */
+function addStopMarkers(map, shapes, visibleModes, onlyRouteStops = false, bounds = null) {
   const named = [];
+  const s = bounds?.getSouth(), n = bounds?.getNorth(), w = bounds?.getWest(), e = bounds?.getEast();
   for (const shape of shapes) {
     const mode = shape.mode?.toLowerCase();
     const color = getShapeColor(mode, shape.line + (shape.from || ''));
     const pts = [...(shape.pointsAreTrace ? [] : shape.points ?? []), ...(shape.quayStops ?? [])];
     for (const [lat, lon, quayId, name] of pts) {
       // Punkter uten quayId og navn er traséhjørner (JP/OSM-polylinjer), ikke holdeplasser
-      if (quayId || name) named.push({ lat, lon, quayId, name: name || '', color });
+      if (!quayId && !name) continue;
+      if (bounds && !(lat >= s && lat <= n && lon >= w && lon <= e)) continue;
+      named.push({ lat, lon, quayId, name: name || '', color });
     }
   }
 
@@ -385,11 +402,11 @@ function addStopMarkers(map, shapes, visibleModes, onlyRouteStops = false) {
   // Ved valgt kjøretøy: kun rutens stopp – ikke hent alle holdeplasser i kartvisning
   if (onlyRouteStops) return;
 
-  const bounds = map.getBounds();
-  const minLat = bounds.getSouth();
-  const maxLat = bounds.getNorth();
-  const minLon = bounds.getWest();
-  const maxLon = bounds.getEast();
+  const b = bounds || map.getBounds();
+  const minLat = b.getSouth();
+  const maxLat = b.getNorth();
+  const minLon = b.getWest();
+  const maxLon = b.getEast();
   const thisFetchId = ++bboxFetchId;
   fetch(
     `/api/stops-in-bbox?minLat=${minLat}&maxLat=${maxLat}&minLon=${minLon}&maxLon=${maxLon}&limit=1500`

@@ -5,6 +5,8 @@
 import { focusStopFromSearch } from './routes.js';
 import { searchLines, selectLine, initLineChip } from './line-search.js';
 import { MODE_COLORS } from '../shared/line-list.js';
+import { getMap } from './map.js';
+import { lineBadgesHtml, formatDistance, escapeHtml } from './stop-place-format.js';
 
 let debounceTimer = null;
 const DEBOUNCE_MS = 250;
@@ -62,30 +64,29 @@ export function initStopSearch() {
     );
   }
 
+  function placeHtml(s) {
+    const name = s.name || s.displayName || 'Holdeplass';
+    const quayIds = (s.quays?.length ? s.quays.map((q) => q.id) : [s.id]).filter(Boolean);
+    const badges = lineBadgesHtml(s.lines, { max: 12 });
+    const dist = formatDistance(s.distanceKm);
+    return `<li role="option" tabindex="-1" class="stop-result" data-id="${escapeHtml(quayIds.join(','))}" data-lat="${s.lat}" data-lon="${s.lon}" data-name="${escapeHtml(name)}">` +
+      `<span class="stop-result-top"><span class="stop-result-name">${escapeHtml(name)}${s.locality ? `<span class="stop-result-locality"> · ${escapeHtml(s.locality)}</span>` : ''}</span>` +
+      `${dist ? `<span class="stop-result-dist">${dist}</span>` : ''}</span>` +
+      `${badges ? `<span class="stop-result-lines">${badges}</span>` : ''}</li>`;
+  }
+
   function showResults(items, lines = currentLines) {
     const heading = linesHtml(lines, items.length > 0);
-    resultsEl.innerHTML = heading + items
-      .map(
-        (s) => {
-          const displayName = s.displayName ?? s.name;
-          return `<li role="option" tabindex="-1" data-id="${escapeAttr(s.id)}" data-lat="${s.lat}" data-lon="${s.lon}" data-name="${escapeAttr(displayName)}">${escapeHtml(displayName)}</li>`;
-        }
-      )
-      .join('');
+    resultsEl.innerHTML = heading + items.map(placeHtml).join('');
     resultsEl.hidden = false;
     resultsEl.setAttribute('aria-expanded', 'true');
   }
 
-  function escapeAttr(s) {
-    const d = document.createElement('div');
-    d.textContent = s ?? '';
-    return d.innerHTML.replace(/"/g, '&quot;');
-  }
-
-  function escapeHtml(s) {
-    const d = document.createElement('div');
-    d.textContent = s ?? '';
-    return d.innerHTML;
+  /** Kartets midtpunkt, så nærmeste stoppested med samme navn kommer først. */
+  function searchUrl(q) {
+    const c = getMap()?.getCenter?.();
+    const pos = c ? `&lat=${c.lat.toFixed(3)}&lng=${c.lng.toFixed(3)}` : '';
+    return `/api/stops-search?q=${encodeURIComponent(q)}${pos}`;
   }
 
   input.addEventListener('input', () => {
@@ -99,7 +100,7 @@ export function initStopSearch() {
     }
     if (currentLines.length) showResults([]); // linjene vises straks, holdeplassene kommer etter hentingen
     debounceTimer = setTimeout(() => {
-      fetch(`/api/stops-search?q=${encodeURIComponent(q)}&limit=15`)
+      fetch(searchUrl(q))
         .then((r) => (r.ok ? r.json() : []))
         .then((stops) => {
           if (input.value.trim() !== q) return;
@@ -121,7 +122,7 @@ export function initStopSearch() {
     if (resultsEl.innerHTML && !resultsEl.hidden) return;
     const q = input.value.trim();
     if (q.length >= MIN_QUERY_LEN) {
-      fetch(`/api/stops-search?q=${encodeURIComponent(q)}&limit=15`)
+      fetch(searchUrl(q))
         .then((r) => (r.ok ? r.json() : []))
         .then((stops) => (stops?.length ? showResults(stops) : hideResults()))
         .catch(() => {});
@@ -129,6 +130,9 @@ export function initStopSearch() {
   });
 
   resultsEl.addEventListener('click', (e) => {
+    // Treffet fjernes fra DOM-en under klikket; uten dette tolker Leaflet klikket som et kartklikk
+    // og lukker popupen som nettopp ble åpnet
+    e.stopPropagation();
     const lineLi = e.target.closest('li[data-line]');
     if (lineLi) {
       const line = currentLines[Number(lineLi.dataset.line)];
@@ -142,12 +146,12 @@ export function initStopSearch() {
     }
     const li = e.target.closest('li[data-id]');
     if (!li || li.classList.contains('stop-search-empty')) return;
-    const id = li.dataset.id;
+    const ids = (li.dataset.id || '').split(',').filter(Boolean);
     const lat = parseFloat(li.dataset.lat);
     const lon = parseFloat(li.dataset.lon);
     const name = li.dataset.name;
-    if (id && !isNaN(lat) && !isNaN(lon)) {
-      focusStopFromSearch(id, lat, lon, name);
+    if (ids.length && !isNaN(lat) && !isNaN(lon)) {
+      focusStopFromSearch(ids, lat, lon, name);
       input.value = '';
       hideResults();
       input.blur();

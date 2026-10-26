@@ -156,6 +156,14 @@ export function getGtfsQuayCache() {
 }
 
 /**
+ * Hele GTFS-kartet Map<quayId, { lat, lon, name }> for søk. Må ikke muteres.
+ * @returns {Map<string, { lat: number, lon: number, name: string }>|null}
+ */
+export function getGtfsStopsMap() {
+  return gtfsQuayCache;
+}
+
+/**
  * Returnerer holdeplasser innenfor bbox.
  * @param {number} minLat
  * @param {number} maxLat

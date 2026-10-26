@@ -17,14 +17,15 @@ import { getFlybussShapes } from './server/flybuss-shapes.js';
 import { getFallbackRailShapes } from './server/rail-fallback-shapes.js';
 import { startEtCachePoll } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
-import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, searchStops } from './server/gtfs-stops-loader.js';
+import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, getGtfsStopsMap } from './server/gtfs-stops-loader.js';
 import { getMergedVehicles, countVehiclesForLine, mergeShapes, mergeVehicles, withRouteInfo, withoutDelay } from './server/live-vehicles.js';
 import { getEtVehiclesAndShapes } from './server/et-vehicles-service.js';
 import { makeJsonEntry, sendJson, memoEntry } from './server/json-cache.js';
 import { buildVehiclesPayload } from './server/vehicles-payload.js';
 import { sortShapes, createThrottledSnapshot } from './server/shapes-version.js';
 import { createLineGeometryService, applyLineGeometry } from './server/line-geometry.js';
-import { LINES, getLineBySlug, getLineStops, getLineText, prewarmLineStops } from './server/line-catalog.js';
+import { LINES, getLineBySlug, getLineStops, getLineText, prewarmLineStops, jpQuery } from './server/line-catalog.js';
+import { createStopPlaceLookup, QUAY_INFO_FIELDS } from './server/stop-search.js';
 import { createVehicleRouteService, parseVehicleRouteParams } from './server/vehicle-route.js';
 import { renderLinePage } from './server/pages/line-page.js';
 import { getGuideBySlug, loadGuideBody, loadAboutBody, GUIDES } from './server/guide-catalog.js';
@@ -351,7 +352,10 @@ app.get('/api/vehicle-route', async (req, res) => {
 
 // Avgangstavle for holdeplass – Entur Journey Planner quay.estimatedCalls
 // Avganger for én quay, eller flere (sammenslått stasjon på kartet): ?quayId=NSR:Quay:1,NSR:Quay:2
+// Svaret har også quays (plattform/retning per quay) og place (stoppested, kommune, linjer) til overskriften.
+// Quay-infoen fra avgangskallet legges i søkecachen, så overskriften ikke koster et eget JP-kall.
 const DEPARTURE_MAX_QUAYS = 30;
+const stopPlaces = createStopPlaceLookup();
 app.get('/api/departures', async (req, res) => {
   const ids = [...new Set(String(req.query.quayId || '').split(',').map((s) => s.trim()).filter(Boolean))];
   if (ids.length === 0 || ids.length > DEPARTURE_MAX_QUAYS || !ids.every((id) => /^NSR:Quay:\d+$/.test(id))) {
@@ -361,37 +365,42 @@ app.get('/api/departures', async (req, res) => {
     const timeRange = 21600; // 6t frem – raskere respons
     // Flere quays: færre per quay, så svaret ikke vokser med antall plattformer
     const numberOfDepartures = ids.length === 1 ? 12 : Math.max(3, Math.ceil(30 / ids.length));
-    const resJp = await fetch('https://api.entur.io/journey-planner/v3/graphql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': 'ruterlive-web' },
-      body: JSON.stringify({
-        query: `query($ids: [String]!) {
-          quays(ids: $ids) {
-            id
-            name
-            estimatedCalls(timeRange: ${timeRange}, numberOfDepartures: ${numberOfDepartures}) {
-              realtime
-              aimedDepartureTime
-              expectedDepartureTime
-              destinationDisplay { frontText }
-              serviceJourney {
-                journeyPattern {
-                  line { publicCode transportMode }
-                }
+    const data = await jpQuery(
+      `query($ids: [String]!) {
+        quays(ids: $ids) {
+          ${QUAY_INFO_FIELDS}
+          estimatedCalls(timeRange: ${timeRange}, numberOfDepartures: ${numberOfDepartures}) {
+            realtime
+            aimedDepartureTime
+            expectedDepartureTime
+            destinationDisplay { frontText }
+            serviceJourney {
+              journeyPattern {
+                line { publicCode transportMode }
               }
             }
           }
-        }`,
-        variables: { ids },
-      }),
-    });
-    const data = await resJp.json();
-    const quays = (data?.data?.quays ?? []).filter(Boolean);
+        }
+      }`,
+      fetch,
+      8000,
+      { ids }
+    );
+    const quays = (data?.quays ?? []).filter(Boolean);
+    stopPlaces.seedQuays(quays, ids);
+    const place = await stopPlaces.header(ids).catch(() => null);
     res.set('Cache-Control', 'public, max-age=30');
     res.json({
       id: ids[0],
-      name: quays.find((q) => q.name)?.name ?? null,
-      estimatedCalls: quays.flatMap((q) => q.estimatedCalls ?? []),
+      name: place?.name ?? quays.find((q) => q.name)?.name ?? null,
+      place,
+      quays: quays.map((q) => ({
+        id: q.id,
+        name: q.name ?? null,
+        publicCode: (q.publicCode ?? '').trim() || null,
+        description: (q.description ?? '').trim() || null,
+      })),
+      estimatedCalls: quays.flatMap((q) => (q.estimatedCalls ?? []).map((c) => ({ ...c, quayId: q.id }))),
     });
   } catch (err) {
     res.status(503).json({ error: err.message, estimatedCalls: [] });
@@ -437,42 +446,17 @@ app.get('/api/stops-in-bbox', async (req, res) => {
   }
 });
 
-// Søk etter holdeplasser etter navn – beriker med retning fra Journey Planner
+// Søk etter holdeplasser etter navn: ett treff per stoppested med kommune, linjer og quays.
+// Gruppering og linjer fra JP, kommune fra geocoderen; begge cachet per ID i 24 t (stopPlaces).
 app.get('/api/stops-search', async (req, res) => {
   try {
     await ensureGtfsStopsLoaded();
-    const q = (req.query.q || '').toString().trim();
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
-    const stops = searchStops(q, limit);
-    if (stops.length === 0) {
-      res.set('Cache-Control', 'public, max-age=300');
-      return res.json([]);
-    }
-    // Hent retning/description fra Journey Planner for å skille holdeplasser med samme navn
-    const ids = stops.slice(0, 15).map((s) => s.id);
-    const lines = ids.map((id, i) => `q${i}: quay(id: "${id}") { id name description publicCode }`).join('\n');
-    const jpRes = await fetch('https://api.entur.io/journey-planner/v3/graphql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': 'ruterlive-web' },
-      body: JSON.stringify({ query: `query { ${lines} }` }),
-    });
-    const jpData = await jpRes.json();
-    const data = jpData?.data;
-    const enriched = stops.map((s, i) => {
-      const quay = data?.[`q${i}`];
-      let displayName = s.name;
-      if (quay?.description?.trim()) {
-        const desc = quay.description.trim();
-        if (!displayName.toLowerCase().includes(desc.toLowerCase())) {
-          displayName = `${s.name} (${desc})`;
-        }
-      } else if (quay?.publicCode?.trim()) {
-        displayName = `${s.name} – ${quay.publicCode}`;
-      }
-      return { ...s, displayName };
-    });
+    const q = (req.query.q || '').toString().trim().slice(0, 60);
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    const places = await stopPlaces.search(getGtfsStopsMap(), q, { lat, lng });
     res.set('Cache-Control', 'public, max-age=300');
-    res.json(enriched);
+    res.json(places);
   } catch (err) {
     res.status(503).json([]);
   }

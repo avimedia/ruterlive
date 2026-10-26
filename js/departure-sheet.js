@@ -268,11 +268,24 @@ function render() {
     modes.replaceChildren();
   } else {
     body.innerHTML = state.html;
+    // Overskriften fra tavla (stoppested + kommune) flyttes til arkets tittel
     const h = body.querySelector('.departure-stop-name');
-    if (h?.textContent.trim()) title.textContent = h.textContent.trim();
+    const placeName = (h?.dataset.name || h?.textContent || '').trim();
+    if (placeName) {
+      title.textContent = placeName;
+      const locality = (h?.dataset.locality || '').trim();
+      if (locality) {
+        const span = document.createElement('span');
+        span.className = 'departure-locality';
+        span.textContent = ` · ${locality}`;
+        title.appendChild(span);
+      }
+    }
     const found = state.status === 'ready' ? decorate(body) : [];
+    // Linjemerkene i tavla viser allerede modusene; modusmerkene trengs bare uten dem
+    const hasPlaceLines = Boolean(body.querySelector('.departure-place-lines'));
     modes.replaceChildren(
-      ...found.map(({ label, color }) => {
+      ...(hasPlaceLines ? [] : found).map(({ label, color }) => {
         const s = document.createElement('span');
         s.className = 'departure-sheet-mode';
         s.style.setProperty('--mode-color', color);

@@ -33,6 +33,8 @@ const STIER = [
   '/api/route-shapes',
   '/api/vehicle-route?line=30&mode=bus&dest=Nydalen&ref=RUT%3ALine%3A30',
   '/api/vehicle-route?line=20&mode=bus&dest=Galgeberg',
+  '/api/stops-search?q=bjerke&lat=59.91&lng=10.75',
+  '/api/departures?quayId=NSR:Quay:11015,NSR:Quay:10988,NSR:Quay:10985,NSR:Quay:11020',
 ];
 
 if (!existsSync(path.join(rot, 'dist', 'index.html'))) {

@@ -4,6 +4,8 @@ import { isFlytogLineCode } from '../config.js';
 import { splitRouteAt, chooseClosestShape } from './route-split.js';
 import { groupStops } from './stop-groups.js';
 import { prefersDepartureSheet, showDepartures } from './departure-sheet.js';
+import { groupDepartures } from './departure-groups.js';
+import { lineBadgesHtml, escapeHtml } from './stop-place-format.js';
 
 const MODE_COLORS = {
   bus: '#e63946',
@@ -318,12 +320,6 @@ function updateStops(map) {
   }
 }
 
-function escapeHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
 /** quayIds: én quay-ID eller flere (sammenslått stasjon); avgangstavla viser alle. */
 function createStopMarker(lat, lon, quayIds, name, color, stopsLayer) {
   const ids = (Array.isArray(quayIds) ? quayIds : [quayIds]).filter(Boolean);
@@ -341,7 +337,8 @@ function createStopMarker(lat, lon, quayIds, name, color, stopsLayer) {
     zIndexOffset: 1000,
   });
   marker._quayId = ids[0];
-  const popup = L.popup({ className: 'departure-board-popup', maxWidth: 460 });
+  // Luft oppe til venstre for logo, søk og meny, så tavla ikke havner bak dem
+  const popup = L.popup({ className: 'departure-board-popup', maxWidth: 460, autoPanPaddingTopLeft: [16, 120], autoPanPaddingBottomRight: [70, 20] });
   // Mobil: bunnark i stedet for popup (gjelder både klikk og openPopup() fra søk)
   marker.openPopup = function (...args) {
     if (!prefersDepartureSheet()) return L.Marker.prototype.openPopup.apply(this, args);
@@ -448,6 +445,30 @@ const MODE_COLORS_DEP = {
   flytog: '#e056fd',
 };
 
+function departureRowHtml(c, now) {
+  const time = c.expectedDepartureTime || c.aimedDepartureTime;
+  const dep = new Date(time).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
+  const mins = Math.round((new Date(time).getTime() - now) / 60000);
+  const minsText = mins < 0 ? 'nå' : mins <= 1 ? '1 min' : `${mins} min`;
+  const line = c.serviceJourney?.journeyPattern?.line?.publicCode || '?';
+  const mode = (c.serviceJourney?.journeyPattern?.line?.transportMode || 'bus')?.toLowerCase();
+  const lineColor = MODE_COLORS_DEP[mode] || MODE_COLORS_DEP.bus;
+  let dest = (c.destinationDisplay?.frontText || '').trim();
+  if (dest.length > 38) dest = dest.slice(0, 36) + '…';
+  const isDelayed =
+    c.realtime &&
+    c.expectedDepartureTime &&
+    c.aimedDepartureTime &&
+    new Date(c.expectedDepartureTime).getTime() > new Date(c.aimedDepartureTime).getTime() + 60000;
+  const delayBadge = isDelayed ? ' <span class="departure-delayed">Forsinket</span>' : '';
+  const realtime = c.realtime && !isDelayed ? ' <span class="departure-realtime">Sanntid</span>' : '';
+  return `<tr><td class="departure-line" style="color:${lineColor}">${escapeHtml(line)}</td><td class="departure-dest">${escapeHtml(dest)}</td><td class="departure-time">${dep}</td><td class="departure-mins">${minsText}</td><td class="departure-badges">${realtime}${delayBadge}</td></tr>`;
+}
+
+/**
+ * Avgangstavle (popup på desktop, bunnark på mobil – samme HTML): stoppested med kommune og linjer,
+ * så avgangene gruppert per quay med retning/plattform som overskrift.
+ */
 async function showDepartureBoard(popup, quayIds) {
   popup.setContent('<div class="departure-loading">Henter avganger…</div>');
 
@@ -455,53 +476,28 @@ async function showDepartureBoard(popup, quayIds) {
     const ids = (Array.isArray(quayIds) ? quayIds : [quayIds]).slice(0, DEPARTURE_MAX_QUAYS);
     const res = await fetch(`/api/departures?quayId=${ids.map(encodeURIComponent).join(',')}`);
     const data = await res.json();
-    const name = data?.name || 'Holdeplass';
-    const allCalls = (data?.estimatedCalls ?? [])
-      .map((c) => {
-        const time = c.expectedDepartureTime || c.aimedDepartureTime || '';
-        return { ...c, depTime: time ? new Date(time).getTime() : 0 };
-      })
-      .filter((c) => c.depTime > 0)
-      .sort((a, b) => a.depTime - b.depTime);
-
-    const MAX_PER_MODE = 3;
-    const byMode = new Map();
-    for (const c of allCalls) {
-      const mode = (c.serviceJourney?.journeyPattern?.line?.transportMode || 'bus')?.toLowerCase();
-      const list = byMode.get(mode) ?? [];
-      if (list.length < MAX_PER_MODE) list.push(c);
-      byMode.set(mode, list);
-    }
-    const calls = [...byMode.values()].flat().sort((a, b) => a.depTime - b.depTime).slice(0, 10);
-
+    const name = data?.place?.name || data?.name || 'Holdeplass';
+    const locality = data?.place?.locality || '';
+    const groups = groupDepartures(data?.estimatedCalls ?? [], data?.quays ?? []);
     const now = Date.now();
-    const rows = calls.map((c) => {
-      const time = c.expectedDepartureTime || c.aimedDepartureTime;
-      const dep = new Date(time).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
-      const mins = Math.round((new Date(time).getTime() - now) / 60000);
-      const minsText = mins < 0 ? 'nå' : mins <= 1 ? '1 min' : `${mins} min`;
-      const line = c.serviceJourney?.journeyPattern?.line?.publicCode || '?';
-      const mode = (c.serviceJourney?.journeyPattern?.line?.transportMode || 'bus')?.toLowerCase();
-      const lineColor = MODE_COLORS_DEP[mode] || MODE_COLORS_DEP.bus;
-      let dest = (c.destinationDisplay?.frontText || '').trim();
-      if (dest.length > 38) dest = dest.slice(0, 36) + '…';
-      const isDelayed =
-        c.realtime &&
-        c.expectedDepartureTime &&
-        c.aimedDepartureTime &&
-        new Date(c.expectedDepartureTime).getTime() > new Date(c.aimedDepartureTime).getTime() + 60000;
-      const delayBadge = isDelayed ? ' <span class="departure-delayed">Forsinket</span>' : '';
-      const realtime = c.realtime && !isDelayed ? ' <span class="departure-realtime">Sanntid</span>' : '';
-      return `<tr><td class="departure-line" style="color:${lineColor}">${escapeHtml(line)}</td><td class="departure-dest">${escapeHtml(dest)}</td><td class="departure-time">${dep}</td><td class="departure-mins">${minsText}</td><td class="departure-badges">${realtime}${delayBadge}</td></tr>`;
-    });
+    const body = groups
+      .map(
+        (g) =>
+          `<tbody>${g.header ? `<tr class="departure-group"><th colspan="5" scope="colgroup">${escapeHtml(g.header)}</th></tr>` : ''}${g.calls.map((c) => departureRowHtml(c, now)).join('')}</tbody>`
+      )
+      .join('');
+    const badges = lineBadgesHtml(data?.place?.lines ?? [], { max: 24 });
     const html = `
       <div class="departure-board">
-        <h4 class="departure-stop-name">${escapeHtml(name)}</h4>
+        <div class="departure-place">
+          <h4 class="departure-stop-name" data-name="${escapeHtml(name)}" data-locality="${escapeHtml(locality)}">${escapeHtml(name)}${locality ? ` <span class="departure-locality">· ${escapeHtml(locality)}</span>` : ''}</h4>
+          ${badges ? `<div class="departure-place-lines">${badges}</div>` : ''}
+        </div>
         <table class="departure-table">
           <thead><tr><th>Linje</th><th>Destinasjon</th><th>Kl</th><th></th><th></th></tr></thead>
-          <tbody>${rows.join('')}</tbody>
+          ${body}
         </table>
-        ${calls.length === 0 ? '<p class="departure-empty">Ingen avganger de neste timene.</p>' : ''}
+        ${groups.length === 0 ? '<p class="departure-empty">Ingen avganger de neste timene.</p>' : ''}
       </div>`;
     popup.setContent(html);
   } catch (err) {
@@ -630,19 +626,25 @@ function addRoutePolyline(map, shape, drawn, isHighlighted, vehicle = null, dim 
 }
 
 
-/** Fokuser på holdeplass fra søk – flyr til, legger til marker og åpner avgangstavle. */
-export function focusStopFromSearch(quayId, lat, lon, name) {
+/** Fokuser på stoppested fra søk – flyr til, legger til marker og åpner avgangstavla for alle quays. */
+export function focusStopFromSearch(quayIds, lat, lon, name) {
   const map = getMap();
   if (!map || !map.searchResultLayer || !map.stopsLayerGroup) return;
   map.searchResultLayer.clearLayers();
   const color = MODE_COLORS.bus;
-  createStopMarker(lat, lon, quayId, name || 'Holdeplass', color, map.searchResultLayer);
-  const layers = map.searchResultLayer.getLayers();
-  const marker = layers[0];
-  if (marker) {
+  createStopMarker(lat, lon, quayIds, name || 'Holdeplass', color, map.searchResultLayer);
+  const marker = map.searchResultLayer.getLayers()[0];
+  if (!marker) return;
+  // Åpne tavla når flyturen er ferdig, så popupen panoreres inn i bildet etter at kartet står stille
+  let opened = false;
+  const open = () => {
+    if (opened || !map.searchResultLayer.hasLayer(marker)) return;
+    opened = true;
     marker.openPopup();
-    map.flyTo([lat, lon], 16, { duration: 0.5 });
-  }
+  };
+  map.once('moveend', open);
+  setTimeout(open, 900);
+  map.flyTo([lat, lon], 16, { duration: 0.5 });
 }
 
 /** Oppdater farge på valgt rutelinje ved temaendring. */

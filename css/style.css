@@ -1648,3 +1648,84 @@ path.leaflet-interactive:focus {
 .departure-sheet .departure-loading,
 .departure-sheet .departure-empty,
 .departure-sheet .departure-error { padding: 1.25rem 1rem; font-size: 0.95rem; }
+
+/* ---------- Stoppested i søk og avgangstavle (js/stop-place-format.js) ---------- */
+.stop-search-results { max-height: min(360px, 60vh); }
+.stop-search-results li.stop-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.stop-result-name { color: var(--text-primary); font-weight: 500; }
+.stop-result-locality,
+.departure-locality { color: var(--text-dim); font-weight: 400; }
+.stop-result-top {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.stop-result-name { min-width: 0; overflow-wrap: anywhere; }
+.stop-result-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.stop-result-dist {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.mini-badge-group { display: contents; }
+/* Litt ekstra luft mellom modusene */
+.mini-badge-group + .mini-badge-group > .mini-badge:first-child { margin-left: 0.3rem; }
+.mini-badge {
+  display: inline-block;
+  min-width: 1.5rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.25rem;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #fff;
+}
+.mini-badge--dark { color: #1a1a1a; }
+.mini-badge-more { font-size: 0.72rem; color: var(--text-dim); align-self: center; }
+
+.departure-place { margin-bottom: 0.4rem; }
+.departure-place .departure-stop-name { margin-bottom: 0.3rem; }
+.departure-place-lines { display: flex; flex-wrap: wrap; gap: 0.2rem; }
+.departure-table tr.departure-group th {
+  padding: 0.7rem 0 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: normal;
+  min-width: 0;
+  width: auto;
+}
+.departure-table tbody:first-of-type tr.departure-group th { padding-top: 0.35rem; }
+.departure-board-popup .leaflet-popup-content { max-height: min(60vh, 520px); overflow-y: auto; }
+
+.departure-sheet .departure-place { margin: 0 0 0.25rem; }
+.departure-sheet .departure-place-lines { padding-bottom: 0.25rem; }
+.departure-sheet .departure-table tr.departure-group {
+  display: block;
+  min-height: 0;
+  padding: 0.85rem 0 0.2rem;
+  border-top: none;
+}
+.departure-sheet .departure-table tr.departure-group th {
+  display: block;
+  padding: 0;
+  font-size: 0.82rem;
+  text-transform: none;
+}
+.departure-sheet .departure-table tr.departure-group + tr { border-top: none; }
+.departure-sheet-title .departure-locality { font-size: 0.9em; }
+
+.stop-result-locality { white-space: nowrap; }

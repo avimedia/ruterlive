@@ -173,7 +173,10 @@ function ensureDom() {
   return els;
 }
 
-/** Trykk på kartet utenfor arket lukker det (ikke dra, ikke kontroller eller holdeplasser). */
+/**
+ * Trykk på kartet utenfor arket lukker det (ikke dra, ikke kontroller, holdeplasser eller kjøretøy:
+ * et valgt kjøretøy får popup og «Følg» over arket).
+ */
 function initOutsideTap() {
   let down = null;
   document.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; }, true);
@@ -181,7 +184,7 @@ function initOutsideTap() {
     if (state.status === 'closed') return;
     const t = e.target;
     if (!(t instanceof Element)) return;
-    if (t.closest('.departure-sheet, .stop-marker, .leaflet-control, .btn-float, .map-chrome, #layers-panel, .overlay')) return;
+    if (t.closest('.departure-sheet, .stop-marker, .vehicle-marker, .leaflet-popup, .leaflet-control, .btn-float, .map-chrome, #layers-panel, .overlay')) return;
     if (!t.closest('#map-container')) return;
     if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) return;
     closeDepartures();

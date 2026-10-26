@@ -166,7 +166,7 @@ const CLOSE_JOURNEY_MAX_LEN = 80; // lengste sluttagg vi venter (med prefiks)
  * Parser ET bit for bit mens svaret lastes ned, så hele XML-en (~25 MB) aldri ligger i minnet.
  * push(tekst) kan kalles med vilkårlige biter; end() gir samme turer som parseEtJourneys(hele).
  */
-export function createEtStreamParser() {
+export function createEtStreamParser(opts = {}) {
   const journeys = [];
   const intern = makeInterner();
   let buf = '';
@@ -180,13 +180,13 @@ export function createEtStreamParser() {
       let cut = -1;
       for (let m; (m = CLOSE_JOURNEY_RE.exec(buf));) cut = m.index + m[0].length;
       if (cut > 0) {
-        parseInto(buf.slice(0, cut), journeys, intern);
+        parseInto(buf.slice(0, cut), journeys, intern, opts);
         buf = buf.slice(cut);
       }
       scanFrom = Math.max(0, buf.length - CLOSE_JOURNEY_MAX_LEN);
     },
     end() {
-      if (buf) parseInto(buf, journeys, intern);
+      if (buf) parseInto(buf, journeys, intern, opts);
       buf = '';
       /(?:)/.exec('');
       return journeys;
@@ -194,13 +194,34 @@ export function createEtStreamParser() {
   };
 }
 
-function parseInto(xmlText, journeys, intern) {
+/** Sann når turen selv (ikke bare et kall) er innstilt: <Cancellation> før kall-listene. */
+function isJourneyCancelled(jel) {
+  let end = jel.length;
+  for (const name of ['RecordedCalls', 'EstimatedCalls']) {
+    const el = findElement(jel, name, 0);
+    if (el && el.start < end) end = el.start;
+  }
+  const c = findElement(jel.slice(0, end), 'Cancellation', 0);
+  return !!c && textContent(jel.slice(c.innerStart, c.innerEnd)).trim() === 'true';
+}
+
+const isCallCancelled = (cel) => {
+  const c = findElement(cel, 'Cancellation', 0);
+  return !!c && textContent(cel.slice(c.innerStart, c.innerEnd)).trim() === 'true';
+};
+
+/**
+ * opts.mode: fast modus for alle turer (f.eks. 'rail' for BNR, der linjekoder som R70 ikke er tall).
+ * opts.skipCancelled: hopper over innstilte turer og innstilte kall.
+ */
+function parseInto(xmlText, journeys, intern, opts = {}) {
   const text = (src, name) => firstText(src, name, intern);
 
   for (const jel of eachElement(xmlText, 'EstimatedVehicleJourney')) {
     const lineRef = text(jel, 'LineRef');
-    const mode = getModeFromLineNumFallback(lineRef);
+    const mode = opts.mode || getModeFromLineNumFallback(lineRef);
     if (!mode) continue;
+    if (opts.skipCancelled && isJourneyCancelled(jel)) continue;
 
     const vehicleRef = text(jel, 'VehicleRef') || '';
     const datedVehicleJourneyRef = text(jel, 'DatedVehicleJourneyRef') || '';
@@ -208,6 +229,7 @@ function parseInto(xmlText, journeys, intern) {
 
     const recordedCalls = [];
     for (const cel of eachElement(jel, 'RecordedCall')) {
+      if (opts.skipCancelled && isCallCancelled(cel)) continue;
       const ref = text(cel, 'StopPointRef');
       const name = text(cel, 'StopPointName') || '';
       const dep = parseIsoTime(text(cel, 'ActualDepartureTime')) || parseIsoTime(text(cel, 'ActualArrivalTime'));
@@ -216,6 +238,7 @@ function parseInto(xmlText, journeys, intern) {
 
     const estimatedCalls = [];
     for (const cel of eachElement(jel, 'EstimatedCall')) {
+      if (opts.skipCancelled && isCallCancelled(cel)) continue;
       const ref = text(cel, 'StopPointRef');
       const name = text(cel, 'StopPointName') || '';
       const expDep = parseIsoTime(text(cel, 'ExpectedDepartureTime'));

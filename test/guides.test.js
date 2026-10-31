@@ -41,7 +41,11 @@ test('renderGuideIndex lenker til alle guider og linjer', () => {
   for (const g of GUIDES) assert.ok(html.includes(`/guider/${g.slug}`));
   for (const l of LINES) assert.ok(html.includes(`/linje/${l.slug}`));
   assert.ok(html.includes('<h2>Linjer</h2>'));
-  for (const h of ['T-bane', 'Trikk', 'Tog', 'Flytoget', 'Flybuss']) assert.ok(html.includes(`<h3>${h}</h3>`), h);
+  for (const h of ['T-bane', 'Trikk', 'Flytoget', 'Flybuss']) assert.ok(html.includes(`<h3>${h}</h3>`), h);
+  // Tog gruppert etter region, uten tom «Tog»-gruppe
+  for (const h of ['Østlandet', 'Fjerntog', 'Vestlandet', 'Sørlandet', 'Trøndelag og Nordland']) assert.ok(html.includes(`<h3>Tog: ${h}</h3>`), h);
+  assert.ok(!html.includes('<h3>Tog</h3>'));
+  assert.ok(html.indexOf('/linje/tog-r31') < html.indexOf('/linje/tog-f4') && html.indexOf('/linje/tog-f7') < html.indexOf('/linje/tog-l4'));
   assert.match(html, /<a class="line-badge" data-mode="tram" href="\/linje\/trikk-17" aria-label="Trikk linje 17">17<\/a>/);
 });
 

@@ -72,3 +72,20 @@ test('renderLinePage uten kjøretøytelling (null) utelater «Ute akkurat nå»'
     assert.ok(!html.includes('Ute akkurat nå'), slug);
   }
 });
+
+test('tog utenfor Oslo: kartlenke midt på linjen, tittel uten dobbel strekning', async () => {
+  const { lineTitle } = await import('../server/pages/line-page.js');
+  const f4 = getLineBySlug('tog-f4');
+  const result = { stops: ['Oslo S', 'Drammen stasjon', 'Bergen stasjon'], from: 'Oslo S', to: 'Bergen stasjon' };
+  const html = renderLinePage(f4, result, 4);
+  assert.ok(html.includes(`href="/?lat=${f4.map.lat}&amp;lng=${f4.map.lng}&amp;z=${f4.map.z}"`));
+  assert.ok(!html.includes('lat=59.925'));
+  assert.equal(lineTitle(f4, result), 'Tog F4 Oslo–Bergen (Bergensbanen): stopp og sanntid | livetrafikk.no');
+  // Lang tittel: bare linjetittelen
+  assert.equal(lineTitle(getLineBySlug('tog-r70'), result), 'Tog R70 Trondheim–Steinkjer (Trønderbanen) | livetrafikk.no');
+  // Andre linjer: samme region, ikke Oslo-togene
+  assert.ok(html.includes('/linje/tog-f6') && !html.includes('/linje/tog-l1"'));
+  // Oslo-guiden for fjerntog, ikke for Bergen
+  assert.ok(html.includes('/guider/lokaltog-og-regiontog'));
+  assert.ok(!renderLinePage(getLineBySlug('tog-l4'), result, 1).includes('/guider/lokaltog-og-regiontog'));
+});

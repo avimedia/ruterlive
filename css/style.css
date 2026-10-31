@@ -1870,9 +1870,7 @@ a,
   white-space: nowrap;
 }
 .departure-pin {
-  margin-left: 0.35rem;
-  vertical-align: -2px;
-  color: var(--text-muted, #888);
-  opacity: 0.8;
+  margin-left: 0.4rem;
+  vertical-align: -3px;
+  color: #2a9d8f;
 }
-.departure-row--tap:hover .departure-pin { color: #2a9d8f; opacity: 1; }

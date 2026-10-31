@@ -449,7 +449,7 @@ const MODE_COLORS_DEP = {
 };
 
 // Lite kartnål-ikon: avgangen kan vises på kartet
-const PIN_ICON = '<svg class="departure-pin" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg>';
+const PIN_ICON = '<svg class="departure-pin" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg>';
 
 function departureRowHtml(c, now) {
   const time = c.expectedDepartureTime || c.aimedDepartureTime;

@@ -13,6 +13,7 @@ import { decodeVehiclePath } from '../shared/vehicle-path.js';
 import { matchRouteForVehicle } from '../shared/route-match.js';
 import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons, onMarkerTick, getMarkerLatLng, setAnimatedVehicle } from './markers.js';
 import { initFollowButton, setFollowVehicle } from './follow.js';
+import { initVehicleBar, setVehicleBarVehicle } from './vehicle-bar.js';
 import { initLayers, getVisibleModes, updateVehicleCount, setRetryHandler } from './layers.js';
 import { setLineSearchData } from './line-search.js';
 import { updateRouteLines, updateSelectedVehicleSplit } from './routes.js';
@@ -100,6 +101,7 @@ function setSelectedVehicle(v) {
   selectedVehicleForRoute = v;
   setAnimatedVehicle(v?.vehicleId ?? null);
   setFollowVehicle(v?.vehicleId ?? null);
+  setVehicleBarVehicle(v);
 }
 
 function mergeAndUpdate() {
@@ -140,6 +142,7 @@ function mergeAndUpdate() {
     const fresh = merged.find((v) => v.vehicleId === selectedVehicleForRoute.vehicleId);
     if (fresh) {
       selectedVehicleForRoute = fresh;
+      setVehicleBarVehicle(fresh);
       lastSplitLatLng = null;
       followSelectedVehicle();
     } else {
@@ -160,6 +163,7 @@ initKeyboardNav();
 initPwa();
 applyUrlParams();
 initFollowButton();
+initVehicleBar();
 initLocate();
 const map = getMap();
 if (map) {

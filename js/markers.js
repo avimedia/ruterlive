@@ -33,6 +33,9 @@ function normalizeMode(vehicle) {
   return base;
 }
 
+/** Kartklasse for kjøretøyet (bus, flybuss, metro, tram, water, rail, flytog). */
+export const vehicleModeClass = normalizeMode;
+
 const vehicleMarkers = new Map();
 let lastVehicles = [];
 let lastVisibleModes = new Set();
@@ -650,11 +653,16 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
     }
     setDelay(marker, v.delay);
     if (onVehicleSelect) {
-      marker.off('popupopen popupclose');
-      marker.on('popupopen', () => onVehicleSelect(v));
-      marker.on('popupclose', () => {
-        if (getSelectedVehicleId?.() === v.vehicleId) onVehicleDeselect?.();
-      });
+      // Bare våre egne valg-lyttere byttes ut; autoPan-lytterne fra bindVehiclePopup må bli
+      // (uten dem panorerer en åpen popup kartet tilbake til kjøretøyet ved hver bevegelse)
+      if (marker._rlSelectHandlers) marker.off(marker._rlSelectHandlers);
+      marker._rlSelectHandlers = {
+        popupopen: () => onVehicleSelect(v),
+        popupclose: () => {
+          if (getSelectedVehicleId?.() === v.vehicleId) onVehicleDeselect?.();
+        },
+      };
+      marker.on(marker._rlSelectHandlers);
     }
   }
   syncVisibility();

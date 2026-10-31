@@ -253,7 +253,8 @@ export function applyLineGeometry(shapes, geometryShapes) {
 export function createLineGeometryService({
   fetchFn = (...a) => fetch(...a),
   now = () => Date.now(),
-  lines = LINES,
+  // Tog utenfor Oslo (national) har trasé fra rail-network.js, og her ville de bare blitt klippet bort.
+  lines = LINES.filter((l) => !l.national),
   ttlMs = DAY_MS,
   failureTtlMs = FAILURE_TTL_MS,
   timeoutMs = TIMEOUT_MS,

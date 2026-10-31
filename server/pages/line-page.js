@@ -16,30 +16,32 @@ const MODE_GUIDE = {
   flybuss: { slug: 'flytoget-eller-flybussen', label: 'Flytoget eller flybussen' },
   bus: { slug: 'slik-bruker-du-kartet', label: 'Slik bruker du kartet' },
 };
+const OSLO_RAIL_REGIONS = new Set(['ostlandet', 'fjerntog']);
 const MAX_TITLE = 68;
 const SUFFIX = ' | livetrafikk.no';
 
-/** Endepunkter (fra stoppdata) som «A–B», eller null. */
-function endpoints(stopsResult) {
+/** Endepunkter (fra stoppdata) som «A–B», eller null. Titler med «–» har allerede strekningen. */
+function endpoints(line, stopsResult) {
+  if (line.title.includes('–')) return null;
   const { from, to } = stopsResult ?? {};
   return from && to && from !== to ? `${from}–${to}` : null;
 }
 
 /** Tittel ≤ ~65 tegn: linje + endepunkter + «stopp, kart og sanntid», med trinnvis forkorting. */
 export function lineTitle(line, stopsResult) {
-  const ends = endpoints(stopsResult);
+  const ends = endpoints(line, stopsResult);
   const candidates = [];
   if (ends) {
     candidates.push(`${line.title} ${ends}: stopp, kart og sanntid`, `${line.title} ${ends}: stopp og sanntid`, `${line.title} ${ends}`);
   }
-  candidates.push(`${line.title}: stopp, kart og sanntid`, `${line.title}: stopp og sanntid`);
+  candidates.push(`${line.title}: stopp, kart og sanntid`, `${line.title}: stopp og sanntid`, line.title);
   const fit = candidates.find((c) => (c + SUFFIX).length <= MAX_TITLE);
   return (fit ?? candidates[candidates.length - 1]) + SUFFIX;
 }
 
 function lineDescription(line, stopsResult, hasStops) {
   const label = MODE_LABEL[line.mode] ?? 'Linje';
-  const ends = endpoints(stopsResult);
+  const ends = endpoints(line, stopsResult);
   const route = ends ? ` mellom ${ends.replace('–', ' og ')}` : '';
   const what = hasStops && stopsResult.stops.length >= 3
     ? `Stoppliste (${stopsResult.stops.length} stopp), kart og antall kjøretøy i sanntid`
@@ -65,8 +67,9 @@ function formatDate(iso) {
  */
 export function renderLinePage(line, stopsResult, vehicleCount, text) {
   const hasStops = Boolean(stopsResult?.stops?.length);
-  const zoom = MAP_ZOOM[line.mode] ?? 10;
-  const { lat, lng } = getRegion().mapLink;
+  // Linjer utenfor Oslo har eget kartutsnitt (midt i linjen), ellers Oslo-regionens.
+  const { lat, lng } = line.map ?? getRegion().mapLink;
+  const zoom = line.map?.z ?? MAP_ZOOM[line.mode] ?? 10;
   const mapHref = `/?lat=${lat}&lng=${lng}&z=${zoom}`;
 
   const vehicles = vehicleCount != null && (vehicleCount > 0 || line.mode !== 'flybuss')
@@ -87,12 +90,14 @@ ${stopsResult.stops.map((s) => `      <li>${stopItem(s)}</li>`).join('\n')}
     </ol>`
     : '<p class="note">Stoppliste lastes, prøv igjen om litt.</p>';
 
-  const others = LINES.filter((l) => l.mode === line.mode && l.slug !== line.slug)
+  // Tog: bare linjene i samme region (fjerntog for seg), ellers alle med samme modus.
+  const others = LINES.filter((l) => l.mode === line.mode && l.slug !== line.slug && l.region === line.region)
     .map((l) => `<li>${lineBadge(l, { link: true })}</li>`)
     .join('');
   const othersHtml = others ? `<h2>Andre linjer</h2>\n    <ul class="badge-list">${others}</ul>` : '';
 
-  const guide = MODE_GUIDE[line.mode];
+  // Togguiden handler om togene fra Oslo (Østlandet og fjerntogene), ikke Bergen eller Trøndelag
+  const guide = line.region && !OSLO_RAIL_REGIONS.has(line.region) ? null : MODE_GUIDE[line.mode];
   const body = `    <div class="line-hero">
       <p class="eyebrow"><a href="/guider">Linjer</a> / ${escapeHtml(MODE_LABEL[line.mode] ?? '')}</p>
       <h1 class="line-title">${lineBadge(line, { size: 'lg' })} <span>${escapeHtml(line.title)}</span></h1>

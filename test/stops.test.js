@@ -167,7 +167,8 @@ test('schemaType og catalogLineFor', () => {
   assert.equal(schemaType(['tram', 'bus']), 'BusStation');
   assert.equal(schemaType(['water']), 'BoatTerminal');
   assert.equal(catalogLineFor({ id: 'VYG:Line:L2x', publicCode: 'L2x' })?.slug, 'tog-l2');
-  assert.equal(catalogLineFor({ id: 'SJN:Line:21', publicCode: 'F6' }), undefined);
+  assert.equal(catalogLineFor({ id: 'SJN:Line:21', publicCode: 'F6' })?.slug, 'tog-f6');
+  assert.equal(catalogLineFor({ id: 'SJV:Line:70', publicCode: '70' }), undefined);
 });
 
 test('parseStopInfo slår sammen linjer og leser Ruter-sone', () => {

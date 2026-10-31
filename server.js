@@ -111,6 +111,14 @@ app.get('/health', (_req, res) => {
   res.status(200).send('ok');
 });
 
+// Minne og oppetid for overvåking utenfra (oppetid som starter på nytt = omstart/krasj)
+app.get('/health/details', (_req, res) => {
+  const m = process.memoryUsage();
+  const mb = (n) => Math.round(n / 1048576);
+  res.set('Cache-Control', 'no-store');
+  res.json({ rssMb: mb(m.rss), heapUsedMb: mb(m.heapUsed), uptimeS: Math.round(process.uptime()) });
+});
+
 // ads.txt – kreves av Google AdSense, må være tilgjengelig på roten
 app.get('/ads.txt', (_req, res) => {
   res.type('text/plain');

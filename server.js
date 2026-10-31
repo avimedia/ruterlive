@@ -111,7 +111,7 @@ app.use(compressTextResponses()); // gzip/br for server-rendret HTML og XML
 // Endepunkter som kan gi nye kall mot Entur: romslig grense per IP (mobilnett deler IP-er)
 // og et felles budsjett for kall mot Entur, så et skript ikke bruker opp kvoten for alle.
 const apiRateLimit = createRateLimiter({ max: 600, windowMs: 60_000 });
-const enturBudget = createUpstreamBudget({ perMinute: 180, burst: 60 });
+const enturBudget = createUpstreamBudget({ perMinute: 600, burst: 120 });
 let lastBudgetWarn = 0;
 const userTriggeredFetch = budgetedFetch(enturBudget, (...a) => fetch(...a));
 const enturFetch = (url, opts) => userTriggeredFetch(url, opts).catch((e) => {

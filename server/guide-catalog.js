@@ -31,6 +31,7 @@ export const GUIDES = [
     slug: 'lokaltog-og-regiontog',
     title: 'Lokaltog og regiontog rundt Oslo',
     description: 'Vys lokaltog, regiontog og regionekspress rundt Oslo, og hvordan linjenumrene henger sammen.',
+    updated: '2026-10-31',
   },
   {
     slug: 'slik-bruker-du-kartet',

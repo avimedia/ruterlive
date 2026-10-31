@@ -13,13 +13,15 @@
     "memcheck": "node scripts/memcheck.mjs"
   },
   "dependencies": {
-    "@xmldom/xmldom": "^0.8.11",
-    "adm-zip": "^0.5.16",
     "express": "^4.21.0",
-    "express-http-proxy": "^2.0.0",
     "leaflet": "^1.9.4"
   },
   "devDependencies": {
+    "@xmldom/xmldom": "^0.9.12",
+    "adm-zip": "^0.6.1",
     "vite": "^5.4.0"
+  },
+  "overrides": {
+    "qs": "^6.16.2"
   }
 }

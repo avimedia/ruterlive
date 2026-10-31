@@ -7,7 +7,6 @@
  */
 
 import express from 'express';
-import proxy from 'express-http-proxy';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
@@ -40,7 +39,7 @@ import { FEATURED_STOPS, getStopBySlug, getStopText } from './server/stop-catalo
 import { createStopService } from './server/stop-service.js';
 import { renderStopPage, renderStopIndex } from './server/pages/stop-page.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
-import { CLIENT_NAME } from './server/entur-client.js';
+import { securityHeaders, canonicalHost, createRateLimiter, createUpstreamBudget, budgetedFetch } from './server/security.js';
 import { createRailNetworkService } from './server/rail-network.js';
 import { withNationalRail, prewarmNationalRail } from './server/rail-live.js';
 
@@ -104,7 +103,24 @@ async function refreshFlybussFromJp() {
 }
 
 const app = express();
+app.disable('x-powered-by');
+app.use(canonicalHost());
+app.use(securityHeaders());
 app.use(compressTextResponses()); // gzip/br for server-rendret HTML og XML
+
+// Endepunkter som kan gi nye kall mot Entur: romslig grense per IP (mobilnett deler IP-er)
+// og et felles budsjett for kall mot Entur, så et skript ikke bruker opp kvoten for alle.
+const apiRateLimit = createRateLimiter({ max: 600, windowMs: 60_000 });
+const enturBudget = createUpstreamBudget({ perMinute: 180, burst: 60 });
+let lastBudgetWarn = 0;
+const userTriggeredFetch = budgetedFetch(enturBudget, (...a) => fetch(...a));
+const enturFetch = (url, opts) => userTriggeredFetch(url, opts).catch((e) => {
+  if (/For mange oppslag/.test(e.message) && Date.now() - lastBudgetWarn > 60_000) {
+    lastBudgetWarn = Date.now();
+    console.warn('[RuterLive] Entur-budsjett brukt opp, avviser oppslag en stund');
+  }
+  throw e;
+});
 
 // Health check for Render – slik at deploy/rullende oppdateringer fungerer
 app.get('/health', (_req, res) => {
@@ -115,7 +131,7 @@ app.get('/health', (_req, res) => {
 app.get('/health/details', (_req, res) => {
   const m = process.memoryUsage();
   const mb = (n) => Math.round(n / 1048576);
-  res.set('Cache-Control', 'no-store');
+  res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
   res.json({ rssMb: mb(m.rss), heapUsedMb: mb(m.heapUsed), uptimeS: Math.round(process.uptime()) });
 });
 
@@ -344,14 +360,14 @@ app.get('/api/vehicles-cached', async (_req, res) => {
     res.set('Cache-Control', 'public, max-age=10');
     res.json(data);
   } catch (err) {
-    res.status(503).json({ errors: [{ message: err.message }] });
+    res.status(503).json({ errors: [{ message: 'kjøretøydata utilgjengelig' }] });
   }
 });
 
 // Hel rute for valgt buss/båt/flybuss fra Entur JP (ET har ofte bare deler av turen).
 // Delt cache for alle brukere: 24 t per linje, feil 10 min.
-const vehicleRoutes = createVehicleRouteService();
-app.get('/api/vehicle-route', async (req, res) => {
+const vehicleRoutes = createVehicleRouteService({ fetchFn: enturFetch });
+app.get('/api/vehicle-route', apiRateLimit, async (req, res) => {
   const parsed = parseVehicleRouteParams(req.query);
   if (!parsed.ok) return res.status(400).json({ error: parsed.error });
   try {
@@ -371,9 +387,9 @@ app.get('/api/vehicle-route', async (req, res) => {
 // uansett hvilken markør som ble trykket; &expand=0 gir bare de gitte quayene.
 // Svaret har quays (plattform/retning per quay), place (stoppested, kommune, linjer) og estimatedCalls med quayId.
 const DEPARTURE_MAX_QUAYS = 30;
-const stopPlaces = createStopPlaceLookup();
-const departureBoard = createDepartureBoard({ lookup: stopPlaces, jpQueryFn: jpQuery });
-app.get('/api/departures', async (req, res) => {
+const stopPlaces = createStopPlaceLookup({ fetchFn: enturFetch });
+const departureBoard = createDepartureBoard({ lookup: stopPlaces, jpQueryFn: jpQuery, fetchFn: enturFetch });
+app.get('/api/departures', apiRateLimit, async (req, res) => {
   const ids = [...new Set(String(req.query.quayId || '').split(',').map((s) => s.trim()).filter(Boolean))];
   if (ids.length === 0 || ids.length > DEPARTURE_MAX_QUAYS || !ids.every((id) => /^NSR:Quay:\d+$/.test(id))) {
     return res.status(400).json({ error: 'Mangler eller ugyldig quayId' });
@@ -383,12 +399,12 @@ app.get('/api/departures', async (req, res) => {
     res.set('Cache-Control', 'public, max-age=30');
     res.json(board);
   } catch (err) {
-    res.status(503).json({ error: err.message, estimatedCalls: [] });
+    res.status(503).json({ error: 'avganger utilgjengelig', estimatedCalls: [] });
   }
 });
 
 // Quay-koordinater fra GTFS – brukes av klient for buss-posisjoner
-app.post('/api/quay-coords', express.json({ limit: '100kb' }), async (req, res) => {
+app.post('/api/quay-coords', apiRateLimit, express.json({ limit: '100kb' }), async (req, res) => {
   try {
     await ensureGtfsStopsLoaded();
     const gtfs = getGtfsQuayCache();
@@ -407,7 +423,7 @@ app.post('/api/quay-coords', express.json({ limit: '100kb' }), async (req, res) 
 });
 
 // Holdeplasser innenfor kartutsnitt – for visning av alle stopp ved zoom
-app.get('/api/stops-in-bbox', async (req, res) => {
+app.get('/api/stops-in-bbox', apiRateLimit, async (req, res) => {
   try {
     await ensureGtfsStopsLoaded();
     const minLat = parseFloat(req.query.minLat);
@@ -428,7 +444,7 @@ app.get('/api/stops-in-bbox', async (req, res) => {
 
 // Søk etter holdeplasser etter navn: ett treff per stoppested med kommune, linjer og quays.
 // Gruppering og linjer fra JP, kommune fra geocoderen; begge cachet per ID i 24 t (stopPlaces).
-app.get('/api/stops-search', async (req, res) => {
+app.get('/api/stops-search', apiRateLimit, async (req, res) => {
   try {
     await ensureGtfsStopsLoaded();
     const q = (req.query.q || '').toString().trim().slice(0, 60);
@@ -447,62 +463,16 @@ app.use('/api/et-cached', (_req, res) => {
   res.status(410).json({ error: 'et-cached disabled' });
 });
 
-// Med userResDecorator bufrer proxyen svaret og sender det med res.send, så compressTextResponses
-// kan komprimere JSON (Entur sender ofte ukomprimert). Uten den strømmes svaret rått.
-const bufferForCompression = (_proxyRes, data) => data;
-
-app.use(
-  '/api/entur',
-  proxy('https://api.entur.io', {
-    proxyReqPathResolver: (req) => '/realtime/v2/vehicles' + (req.url && req.url.startsWith('/') ? req.url : '/' + (req.url || '')),
-    userResDecorator: bufferForCompression,
-    proxyReqOptDecorator: (opt) => {
-      opt.headers['ET-Client-Name'] = CLIENT_NAME;
-      return opt;
-    },
-  })
-);
-
-app.use(
-  '/api/entur-et',
-  proxy('https://api.entur.io', {
-    proxyReqPathResolver: (req) => '/realtime/v1/rest' + (req.url && req.url.startsWith('/') ? req.url : '/' + (req.url || '')),
-    proxyReqOptDecorator: (opt) => {
-      opt.headers['ET-Client-Name'] = CLIENT_NAME;
-      return opt;
-    },
-    timeout: 60000, // ET returnerer stor XML; gi tid for full overføring
-  })
-);
-
-app.use(
-  '/api/entur-geocoder',
-  proxy('https://api.entur.io', {
-    proxyReqPathResolver: (req) => '/geocoder/v1' + (req.url && req.url.startsWith('/') ? req.url : '/' + (req.url || '')),
-    userResDecorator: bufferForCompression,
-    proxyReqOptDecorator: (opt) => {
-      opt.headers['ET-Client-Name'] = CLIENT_NAME;
-      return opt;
-    },
-  })
-);
-
 // OSRM fjernet – offentlig server gir 500/429; rutekart bruker rette linjer mellom stopp
 app.use('/api/osrm', (_req, res) => {
   res.status(410).json({ error: 'OSRM disabled' });
 });
 
-app.use(
-  '/api/entur-jp',
-  proxy('https://api.entur.io', {
-    proxyReqPathResolver: (req) => '/journey-planner/v3' + (req.url && req.url.startsWith('/') ? req.url : '/' + (req.url || '')),
-    userResDecorator: bufferForCompression,
-    proxyReqOptDecorator: (opt) => {
-      opt.headers['ET-Client-Name'] = CLIENT_NAME;
-      return opt;
-    },
-  })
-);
+// Rå Entur-proxyer finnes bare i dev (vite.config.js). I prod ville de latt hvem som helst bruke
+// klientnavnet vårt mot Entur; nettleseren bruker serverens egne, cachede endepunkter.
+app.use(['/api/entur', '/api/entur-et', '/api/entur-geocoder', '/api/entur-jp'], (_req, res) => {
+  res.status(410).json({ error: 'ikke tilgjengelig' });
+});
 
 const DIST_DIR = path.join(__dirname, 'dist');
 app.use(precompressedStatic(DIST_DIR));

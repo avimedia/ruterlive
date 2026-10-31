@@ -356,7 +356,7 @@ function createStopMarker(lat, lon, quayIds, name, color, stopsLayer) {
   marker.on('popupopen', () => {
     showDepartureBoard(marker.getPopup(), ids);
   });
-  marker.bindTooltip(`${label} · Klikk for avganger`, { permanent: false, direction: 'top', offset: [0, -8] });
+  marker.bindTooltip(`${escapeHtml(label)} · Klikk for avganger`, { permanent: false, direction: 'top', offset: [0, -8] });
   marker.addTo(stopsLayer);
   return marker;
 }
@@ -579,14 +579,15 @@ function addRoutePolyline(map, shape, drawn, isHighlighted, vehicle = null, dim 
   const to = (shape.to || '').trim() || '—';
   const via = (shape.via || '').trim();
   const samePlace = from !== '—' && to !== '—' && from.toLowerCase() === to.toLowerCase();
-  const tooltipText =
+  // Leaflet setter tooltip-tekst som HTML; navnene kommer fra Entur
+  const tooltipText = escapeHtml(
     from === '—' && to === '—'
       ? line
       : samePlace && via
         ? `Linje ${line}: ${from} – ${via}`
         : samePlace
           ? `Linje ${line}: ${from}`
-          : `Linje ${line}: ${from} → ${to}`;
+          : `Linje ${line}: ${from} → ${to}`);
 
 
   if (isHighlighted && vehicle) {

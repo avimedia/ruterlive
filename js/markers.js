@@ -565,7 +565,9 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
     const destNorm = (dest || '').toLowerCase();
     const routeLabel = from && endStation ? `${from} → ${endStation}` : (dest ? `→ ${dest}` : null);
     const title = routeLabel ? `${lineCode} ${routeLabel}`.trim() : `${lineCode} → ${dest}`.trim();
-    const popupHeader = routeLabel ? `Linje ${lineCode} · ${routeLabel}` : `Linje ${lineCode}`;
+    // Popup og tooltip er HTML i Leaflet; alle navn kommer fra Entur og escapes
+    const e = escapeHtml;
+    const popupHeader = routeLabel ? `Linje ${e(lineCode)} · ${e(routeLabel)}` : `Linje ${e(lineCode)}`;
     const late = delayLabel(v.delay);
     const popupParts = [`<strong>${popupHeader}</strong>`];
     if (late) popupParts.push(`<span class="vehicle-delay">Forsinket ${late}</span>`);
@@ -576,32 +578,32 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
       const towardVia = viaNorm && destNorm.includes(viaNorm);
       const towardFrom = fromNorm && destNorm.includes(fromNorm);
       if (towardVia && !towardFrom) {
-        popupParts.push(`${from} – ${via}`);
+        popupParts.push(`${e(from)} – ${e(via)}`);
       } else if (towardFrom && !towardVia) {
-        popupParts.push(`${via} – ${from}`);
+        popupParts.push(`${e(via)} – ${e(from)}`);
       } else {
-        popupParts.push(`${from} – ${via}`);
+        popupParts.push(`${e(from)} – ${e(via)}`);
       }
       if (nextStop && nextStop.toLowerCase() !== viaNorm && nextStop.toLowerCase() !== fromNorm) {
-        popupParts.push(`Neste: ${nextStop}`);
+        popupParts.push(`Neste: ${e(nextStop)}`);
       }
     } else if (samePlace) {
-      popupParts.push(from);
+      popupParts.push(e(from));
       if (nextStop && nextStop.toLowerCase() !== from.toLowerCase()) {
-        popupParts.push(`Neste: ${nextStop}`);
+        popupParts.push(`Neste: ${e(nextStop)}`);
       }
     } else {
       if (!routeLabel) {
-        if (from) popupParts.push(`Fra: ${from}`);
-        if (endStation) popupParts.push(`Til: ${endStation}`);
+        if (from) popupParts.push(`Fra: ${e(from)}`);
+        if (endStation) popupParts.push(`Til: ${e(endStation)}`);
       }
       if (nextStop && nextStop.toLowerCase() !== endStation.toLowerCase()) {
-        popupParts.push(`Neste: ${nextStop}`);
+        popupParts.push(`Neste: ${e(nextStop)}`);
       }
-      if (via) popupParts.push(`Via: ${via}`);
+      if (via) popupParts.push(`Via: ${e(via)}`);
     }
     const popupHtml = popupParts.join('<br>');
-    const tooltipText = late ? `${title} · ${late}` : title;
+    const tooltipText = e(late ? `${title} · ${late}` : title);
 
     const path = Array.isArray(v.path) && v.path.length >= 2 ? v.path : null;
     let marker = vehicleMarkers.get(v.vehicleId);

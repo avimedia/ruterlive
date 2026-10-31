@@ -514,9 +514,33 @@ function shouldShowLineOnMarker() {
  * kjøretøyet mens brukeren så på noe annet. Derfor: autoPan bare ved åpning.
  */
 function bindVehiclePopup(marker, html) {
-  marker.bindPopup(html, { className: 'vehicle-popup', autoPan: true });
+  // Luft øverst til logo og meny, så popupen ikke havner bak dem
+  marker.bindPopup(html, { className: 'vehicle-popup', autoPan: true, autoPanPaddingTopLeft: [16, 110], autoPanPaddingBottomRight: [16, 90] });
   marker.on('popupopen', (e) => { e.popup.options.autoPan = false; });
   marker.on('popupclose', (e) => { e.popup.options.autoPan = true; });
+}
+
+/**
+ * Flytter kartet til kjøretøyet og velger det (popup, linje nederst). false hvis det ikke er på kartet.
+ */
+export function focusVehicle(vehicleId) {
+  const map = getMap();
+  const marker = vehicleMarkers.get(vehicleId);
+  if (!map || !marker) return false;
+  const ll = marker.getLatLng();
+  if (!marker._map) map.addLayer(marker);
+  const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Popupen åpnes når kartet er fremme; åpnet under flyturen havner den feil (autoPan midt i animasjonen)
+  let opened = false;
+  const open = () => {
+    if (opened) return;
+    opened = true;
+    marker.openPopup();
+  };
+  map.once('moveend', open);
+  setTimeout(open, 900); // ingen moveend når kartet allerede står der
+  map.setView(ll, Math.max(map.getZoom(), 15), { animate: !reduce });
+  return true;
 }
 
 export function updateMarkers(vehicles, visibleModes, opts = {}) {

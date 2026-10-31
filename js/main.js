@@ -14,6 +14,7 @@ import { matchRouteForVehicle } from '../shared/route-match.js';
 import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons, onMarkerTick, getMarkerLatLng, setAnimatedVehicle } from './markers.js';
 import { initFollowButton, setFollowVehicle } from './follow.js';
 import { initVehicleBar, setVehicleBarVehicle } from './vehicle-bar.js';
+import { initDepartureFocus } from './departure-focus.js';
 import { initLayers, getVisibleModes, updateVehicleCount, setRetryHandler } from './layers.js';
 import { setLineSearchData } from './line-search.js';
 import { updateRouteLines, updateSelectedVehicleSplit } from './routes.js';
@@ -164,6 +165,7 @@ initPwa();
 applyUrlParams();
 initFollowButton();
 initVehicleBar();
+initDepartureFocus();
 initLocate();
 const map = getMap();
 if (map) {

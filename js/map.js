@@ -10,12 +10,13 @@ const DEFAULT_ZOOM = getRegion().defaultZoom;
 const TILE_URL = 'https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png';
 
 const TILE_OPTS = {
-  attribution: '&copy; <a href="https://www.kartverket.no/">Kartverket</a> | Sanntidsdata: <a href="https://entur.no/">Entur</a>',
+  attribution: '&copy; <a href="https://www.kartverket.no/">Kartverket</a> · <a href="https://entur.no/">Entur</a>',
   maxZoom: 18,
   className: 'basemap-tiles',
 };
 
-const OPENRAILWAYMAP_ATTR = 'Data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>, Style: <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA 2.0</a> <a href="https://openrailwaymap.org/">OpenRailwayMap</a>';
+// Kort: krav i lisensene er kreditering av OSM og OpenRailwayMap (CC BY-SA)
+const OPENRAILWAYMAP_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> · <a href="https://openrailwaymap.org/">OpenRailwayMap</a> (<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC BY-SA</a>)';
 
 let map = null;
 let tileLayer = null;
@@ -40,6 +41,9 @@ export function initMap() {
   // Av som standard: rutelinjene viser allerede togtraseene; laget lastes bare når brukeren slår det på.
   const ormChecked = localStorage.getItem('ruterlive-openrailwaymap') === 'true';
   if (ormChecked) openRailwayMapLayer.addTo(map);
+
+  // Leaflet-lenken er frivillig; lisensene krever bare kildene over
+  map.attributionControl.setPrefix(false);
 
   // Move zoom control to bottom-right
   map.zoomControl.setPosition('bottomright');

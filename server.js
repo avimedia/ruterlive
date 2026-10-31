@@ -39,6 +39,9 @@ import { FEATURED_STOPS, getStopBySlug, getStopText } from './server/stop-catalo
 import { createStopService } from './server/stop-service.js';
 import { renderStopPage, renderStopIndex } from './server/pages/stop-page.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
+import { findJourneyVehicle, SERVICE_JOURNEY_RE } from './server/journey-vehicle.js';
+import { getCachedRailVehicles } from './server/rail-vehicles-cache.js';
+import { getEtJourneys } from './server/et-cache.js';
 import { securityHeaders, canonicalHost, createRateLimiter, createUpstreamBudget, budgetedFetch } from './server/security.js';
 import { createRailNetworkService } from './server/rail-network.js';
 import { withNationalRail, prewarmNationalRail } from './server/rail-live.js';
@@ -400,6 +403,25 @@ app.get('/api/departures', apiRateLimit, async (req, res) => {
     res.json(board);
   } catch (err) {
     res.status(503).json({ error: 'avganger utilgjengelig', estimatedCalls: [] });
+  }
+});
+
+// Kjøretøyet som kjører en avgang fra tavla (?sj=serviceJourney.id), slått opp i data serveren alt har
+app.get('/api/journey-vehicle', apiRateLimit, async (req, res) => {
+  const sj = String(req.query.sj || '');
+  if (!SERVICE_JOURNEY_RE.test(sj)) return res.status(400).json({ error: 'ugyldig sj' });
+  try {
+    const [oslo, rail, etJourneys] = await Promise.all([
+      getCachedVehicles().catch(() => null),
+      getCachedRailVehicles().catch(() => null),
+      getEtJourneys().catch(() => []),
+    ]);
+    const vehicleId = findJourneyVehicle(sj, { gps: [oslo?.data?.vehicles, rail?.data?.vehicles], etJourneys });
+    res.set('Cache-Control', 'public, max-age=15');
+    if (!vehicleId) return res.status(404).json({ vehicleId: null });
+    res.json({ vehicleId });
+  } catch {
+    res.status(503).json({ vehicleId: null });
   }
 });
 

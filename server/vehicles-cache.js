@@ -21,6 +21,7 @@ const VEHICLES_QUERY = `{
     mode
     bearing
     destinationName
+    serviceJourney { id }
   }
 }`;
 

@@ -22,6 +22,7 @@ const RAIL_QUERY = `{
     mode
     bearing
     destinationName
+    serviceJourney { id }
   }
 }`;
 

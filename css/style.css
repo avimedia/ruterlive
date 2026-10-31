@@ -59,6 +59,8 @@ html {
   -webkit-tap-highlight-color: transparent;
   height: 100%;
   overflow: hidden;
+  /* Ingen knipe-zoom av siden (kartet har egen zoom via Leaflet) */
+  touch-action: pan-x pan-y;
 }
 
 body {
@@ -68,7 +70,7 @@ body {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  touch-action: manipulation;
+  touch-action: pan-x pan-y;
   /* iOS Safari utvider siden når noe stikker utenfor kanten (overflow på body holder ikke),
      så knappene til høyre havner utenfor skjermen. Låst body + klipping i #app hindrer det. */
   position: fixed;

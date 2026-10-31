@@ -2,6 +2,7 @@ import { runWhenVisible } from './visibility.js';
 import { initMap, getMap } from './map.js';
 import { initLocate } from './locate.js';
 import { initTheme } from './theme.js';
+import { initNoPageZoom } from './no-page-zoom.js';
 import { initStopSearch } from './search.js';
 import { initSiteMenu } from './site-menu.js';
 import { connectVehicles } from './api.js';
@@ -147,6 +148,7 @@ function mergeAndUpdate() {
   }
 }
 
+initNoPageZoom();
 initMap();
 initTheme();
 initStopSearch();

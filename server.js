@@ -248,8 +248,10 @@ async function getLiveEntries() {
 app.get('/api/vehicles-live', async (req, res) => {
   try {
     const { vehiclesEntry: e } = await getLiveEntries();
-    sendJson(req, res, e, { cacheControl: 'public, max-age=15' });
+    // s-maxage: Cloudflare holder svaret i 10 s, så Render svarer omtrent én gang per 10 s per Cloudflare-sted
+    sendJson(req, res, e, { cacheControl: 'public, max-age=15, s-maxage=10' });
   } catch (err) {
+    res.set('Cache-Control', 'no-store');
     res.status(503).json({ vehicles: [], shapesVersion: null });
   }
 });
@@ -263,6 +265,7 @@ app.get('/api/route-shapes-all', async (req, res) => {
       : 'public, max-age=30';
     sendJson(req, res, e, { cacheControl });
   } catch (err) {
+    res.set('Cache-Control', 'no-store');
     res.status(503).json([]);
   }
 });

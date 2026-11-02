@@ -10,7 +10,7 @@
 
 import { LruCache } from './stop-service.js';
 
-export const DEPARTURES_TTL_MS = 30_000;
+export const DEPARTURES_TTL_MS = 15_000; // + 15 s i Cloudflare = maks 30 s gammel tavle
 /** Samme grense som før: maks quays i ett JP-kall (og i ?quayId=). */
 export const MAX_QUAYS = 30;
 /** Maks avganger i svaret totalt. */

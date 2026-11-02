@@ -402,9 +402,11 @@ app.get('/api/departures', apiRateLimit, async (req, res) => {
   }
   try {
     const board = await departureBoard.get(ids, { expand: req.query.expand !== '0' });
-    res.set('Cache-Control', 'public, max-age=30');
+    // Cloudflare holder tavla i 15 s: mange ser på samme holdeplass, ett kall dekker alle
+    res.set('Cache-Control', 'public, max-age=15, s-maxage=15');
     res.json(board);
   } catch (err) {
+    res.set('Cache-Control', 'no-store');
     res.status(503).json({ error: 'avganger utilgjengelig', estimatedCalls: [] });
   }
 });

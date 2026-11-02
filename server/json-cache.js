@@ -16,14 +16,17 @@ export function hashString(str, len = 12) {
  * Lager entry fra et objekt (eller ferdig JSON-streng). Små payloads komprimeres ikke.
  * Med `prev`: gir `prev` tilbake uendret når innholdet er det samme (ingen ny komprimering).
  * Små, ofte hentede svar kan bruke høyere komprimering (brQuality 9 ≈ 10 ms for 350 kB).
+ * `brUpgrade`: komprimer i tillegg på nytt med denne kvaliteten i bakgrunnen (libuv-tråd, blokkerer
+ * ikke forespørsler) og bytt ut br når den er ferdig. Kvalitet 10 gir ~13 % mindre enn 9 (~140 ms
+ * for 600 kB); verdt det for svar som hentes av mange og caches i Cloudflare. 11 gir lite mer og tar 4× så lang tid.
  */
-export function makeJsonEntry(value, prev = null, { gzipLevel = 6, brQuality = 5 } = {}) {
+export function makeJsonEntry(value, prev = null, { gzipLevel = 6, brQuality = 5, brUpgrade = 0 } = {}) {
   const str = typeof value === 'string' ? value : JSON.stringify(value);
   const etag = `"${hashString(str, 16)}"`;
   if (prev && prev.etag === etag) return prev;
   const json = Buffer.from(str);
   if (json.length < COMPRESS_MIN_BYTES) return { json, gzip: null, br: null, etag };
-  return {
+  const entry = {
     json: null,
     gzip: zlib.gzipSync(json, { level: gzipLevel }),
     br: zlib.brotliCompressSync(json, {
@@ -34,6 +37,29 @@ export function makeJsonEntry(value, prev = null, { gzipLevel = 6, brQuality = 5
     }),
     etag,
   };
+  if (brUpgrade > brQuality) upgradeBr(entry, json, brUpgrade);
+  return entry;
+}
+
+// Én bakgrunnskomprimering om gangen: hver bruker 15–20 MB arbeidsminne (Render har 512 MB).
+// Er én i gang, hoppes oppgraderingen over; neste oppdatering av cachen får den.
+let upgrading = false;
+
+// Ikke de første minuttene: da lastes GTFS og alt bygges samtidig (minnetoppen)
+const UPGRADE_AFTER_UPTIME_S = 120;
+
+function upgradeBr(entry, json, quality) {
+  if (upgrading || process.uptime() < UPGRADE_AFTER_UPTIME_S) return;
+  upgrading = true;
+  zlib.brotliCompress(json, {
+    params: {
+      [zlib.constants.BROTLI_PARAM_QUALITY]: quality,
+      [zlib.constants.BROTLI_PARAM_SIZE_HINT]: json.length,
+    },
+  }, (err, br) => {
+    upgrading = false;
+    if (!err && br.length < entry.br.length) entry.br = br;
+  });
 }
 
 /**

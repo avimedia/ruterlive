@@ -206,7 +206,8 @@ const railNetwork = createRailNetworkService();
 const liveShapes = memoEntry((all, etShapes, geometry, railNet) =>
   sortShapes(applyLineGeometry(applyLineGeometry(mergeShapes(all, etShapes), geometry), railNet)));
 const liveShapesEntry = memoEntry((shapes) => {
-  lastShapesEntry = makeJsonEntry(shapes, lastShapesEntry); // samme innhold → samme entry
+  // samme innhold → samme entry; byttes sjelden, så sterkere komprimering i bakgrunnen
+  lastShapesEntry = makeJsonEntry(shapes, lastShapesEntry, { brUpgrade: 10 });
   return lastShapesEntry;
 });
 // ET-rutekart byttes høyst hver 30. min, ellers ny shapesVersion (og ~450 kB per klient) hvert 90. s
@@ -220,7 +221,7 @@ const liveVehiclesEntry = memoEntry((vehiclesData, etResult, shapes, shapesEntry
     shapesVersion: shapesVersionOf(shapesEntry),
   }),
   null,
-  { gzipLevel: 9, brQuality: 9 }
+  { gzipLevel: 9, brQuality: 9, brUpgrade: 10 }
 ));
 // Gamle klienter: hele formatet med path i ms. Bygges bare når noen ber om det.
 const legacyInitialEntry = memoEntry((vehiclesData, etResult, all) => makeJsonEntry({

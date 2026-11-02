@@ -3,6 +3,7 @@
  * (~1 m), tomme felt utelatt og ET-path med tider i sekunder relativt til `t0`.
  */
 
+import { shortVehicleId } from './vehicle-id.js';
 import { encodeVehiclePath } from '../shared/vehicle-path.js';
 import { roundDelay } from '../shared/vehicle-delay.js';
 
@@ -10,7 +11,7 @@ const round5 = (x) => Math.round(x * 1e5) / 1e5;
 const TEXT_FIELDS = ['destinationName', 'from', 'to', 'nextStop', 'via'];
 
 function compactVehicle(v, t0) {
-  const out = { vehicleId: v.vehicleId };
+  const out = { vehicleId: shortVehicleId(v.vehicleId) };
   if (v.mode) out.mode = v.mode;
   const lat = v.location?.latitude;
   const lon = v.location?.longitude;

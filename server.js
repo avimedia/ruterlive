@@ -40,6 +40,7 @@ import { createStopService } from './server/stop-service.js';
 import { renderStopPage, renderStopIndex } from './server/pages/stop-page.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
 import { findJourneyVehicle, SERVICE_JOURNEY_RE } from './server/journey-vehicle.js';
+import { shortVehicleId } from './server/vehicle-id.js';
 import { getCachedRailVehicles } from './server/rail-vehicles-cache.js';
 import { getEtJourneys } from './server/et-cache.js';
 import { securityHeaders, canonicalHost, createRateLimiter, createUpstreamBudget, budgetedFetch } from './server/security.js';
@@ -427,7 +428,7 @@ app.get('/api/journey-vehicle', apiRateLimit, async (req, res) => {
     const vehicleId = findJourneyVehicle(sj, { gps: [oslo?.data?.vehicles, rail?.data?.vehicles], etJourneys });
     res.set('Cache-Control', 'public, max-age=15');
     if (!vehicleId) return res.status(404).json({ vehicleId: null });
-    res.json({ vehicleId });
+    res.json({ vehicleId: shortVehicleId(vehicleId) }); // samme korte id som i /api/vehicles-live
   } catch {
     res.status(503).json({ vehicleId: null });
   }

@@ -51,6 +51,9 @@ const UPGRADE_AFTER_UPTIME_S = 120;
 function upgradeBr(entry, json, quality) {
   if (upgrading || process.uptime() < UPGRADE_AFTER_UPTIME_S) return;
   upgrading = true;
+  let done;
+  // entry.upgraded: løses når oppgraderingen er ferdig (se awaitUpgrade)
+  entry.upgraded = new Promise((r) => { done = r; });
   zlib.brotliCompress(json, {
     params: {
       [zlib.constants.BROTLI_PARAM_QUALITY]: quality,
@@ -59,7 +62,21 @@ function upgradeBr(entry, json, quality) {
   }, (err, br) => {
     upgrading = false;
     if (!err && br.length < entry.br.length) entry.br = br;
+    entry.upgraded = null;
+    done();
   });
+}
+
+/**
+ * Venter (høyst `maxMs`) på at sterkere komprimering blir ferdig. Første forespørsel etter en
+ * ny bygging er nesten alltid Cloudflare, som cacher svaret; uten venting ville den alltid fått
+ * den raske, større varianten.
+ */
+export async function awaitUpgrade(entry, maxMs = 1500) {
+  if (!entry?.upgraded) return;
+  let timer;
+  await Promise.race([entry.upgraded, new Promise((r) => { timer = setTimeout(r, maxMs); })]);
+  clearTimeout(timer);
 }
 
 /**

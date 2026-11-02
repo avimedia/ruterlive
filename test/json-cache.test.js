@@ -99,3 +99,18 @@ test('makeJsonEntry med brUpgrade bytter til mindre br i bakgrunnen', async () =
   assert.ok(e.br.length < before, `${e.br.length} < ${before}`);
   assert.deepEqual(JSON.parse(zlib.brotliDecompressSync(e.br).toString()), value);
 });
+
+test('awaitUpgrade venter på sterkere komprimering, men høyst maxMs', async () => {
+  const { makeJsonEntry, awaitUpgrade } = await import('../server/json-cache.js');
+  const value = Array.from({ length: 3000 }, (_, i) => ({ id: `x${(i * 7919).toString(16)}`, n: `Stopp ${i % 50}` }));
+  const uptime = process.uptime;
+  process.uptime = () => 1000;
+  const e = makeJsonEntry(value, null, { brQuality: 4, brUpgrade: 11 });
+  process.uptime = uptime;
+  const before = e.br.length;
+  await awaitUpgrade(e, 5000);
+  assert.ok(e.br.length < before);
+  assert.equal(e.upgraded, null);
+  await awaitUpgrade(e); // ingen ventende oppgradering: returnerer straks
+  await awaitUpgrade(null);
+});

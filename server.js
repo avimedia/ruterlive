@@ -19,7 +19,7 @@ import { getCachedVehicles } from './server/vehicles-cache.js';
 import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, getGtfsStopsMap } from './server/gtfs-stops-loader.js';
 import { getMergedVehicles, countVehiclesForLine, mergeShapes, mergeVehicles, withRouteInfo, withoutDelay } from './server/live-vehicles.js';
 import { getEtVehiclesAndShapes } from './server/et-vehicles-service.js';
-import { makeJsonEntry, sendJson, memoEntry } from './server/json-cache.js';
+import { makeJsonEntry, sendJson, memoEntry, awaitUpgrade } from './server/json-cache.js';
 import { buildVehiclesPayload } from './server/vehicles-payload.js';
 import { sortShapes, createThrottledSnapshot } from './server/shapes-version.js';
 import { createLineGeometryService, applyLineGeometry } from './server/line-geometry.js';
@@ -249,6 +249,7 @@ async function getLiveEntries() {
 app.get('/api/vehicles-live', async (req, res) => {
   try {
     const { vehiclesEntry: e } = await getLiveEntries();
+    await awaitUpgrade(e);
     // s-maxage: Cloudflare holder svaret i 10 s, så Render svarer omtrent én gang per 10 s per Cloudflare-sted
     sendJson(req, res, e, { cacheControl: 'public, max-age=15, s-maxage=10' });
   } catch (err) {
@@ -261,6 +262,7 @@ app.get('/api/vehicles-live', async (req, res) => {
 app.get('/api/route-shapes-all', async (req, res) => {
   try {
     const { shapesEntry: e, shapesVersion: ver } = await getLiveEntries();
+    await awaitUpgrade(e);
     const cacheControl = req.query.v && req.query.v === ver
       ? 'public, max-age=86400, immutable'
       : 'public, max-age=30';

@@ -12,7 +12,8 @@ export function journeyVehicleId({ vehicleRef, datedVehicleJourneyRef, lineRef, 
   return `et-${lineRef}-${firstQuayId}-${firstTime}`;
 }
 
-function firstDeparture(j) {
+/** Første forventede avgang (brukes også av ET-parserens filter, se createJourneyKeeper). */
+export function firstDeparture(j) {
   const c = j.estimatedCalls[0];
   return c ? (c.depTime || c.arrTime) : Infinity;
 }

@@ -207,11 +207,17 @@ test('maxSize per region i URL-en, standard 3000', async () => {
   assert.ok(b.urls[0].includes('maxSize=3000'), b.urls[0]);
 });
 
-test('lagrer bare turer i gang eller som starter innen en time (falsk klokke)', async () => {
-  const at = (ms) => createEtCache({ datasetId: 'RUT', fetchFn: makeFetch(), now: () => ms, waitForFirst: true });
-  assert.equal((await at(FIXTURE_NOW).getJourneys()).length, 10, '10 av 17 relevante ved svartidspunktet');
-  assert.equal((await at(FIXTURE_NOW + 3 * 3_600_000).getJourneys()).length, 0, 'alle sluttet');
-  assert.equal((await at(FIXTURE_NOW - 3 * 3_600_000).getJourneys()).length, 0, 'alle starter om mer enn en time');
+test('filteret gir samme kjøretøy som alle turer, ved flere klokkeslett (falsk klokke)', async () => {
+  const { selectJourneysForVehicles } = await import('../shared/et-journeys.js');
+  const ids = (js, at) => selectJourneysForVehicles(js, at).map((j) => `${j.vehicleId}|${j.datedVehicleJourneyRef}`).sort();
+  for (const h of [-3, -1, 0, 1, 3]) {
+    const at = FIXTURE_NOW + h * 3_600_000;
+    const all = await createEtCache({ datasetId: 'RUT', fetchFn: makeFetch(), now: () => at, waitForFirst: true, parserOpts: { relevantWithinMs: null } }).getJourneys();
+    const kept = await createEtCache({ datasetId: 'RUT', fetchFn: makeFetch(), now: () => at, waitForFirst: true }).getJourneys();
+    assert.ok(kept.length <= all.length);
+    assert.deepEqual(ids(kept, at), ids(all, at), `${h} t`);
+    assert.deepEqual(ids(kept, at + 90_000), ids(all, at + 90_000), `${h} t + 90 s`);
+  }
 });
 
 test('like mange turer som maxSize: advarsel om avkutting (Entur sender ikke MoreData)', async () => {
@@ -222,6 +228,6 @@ test('like mange turer som maxSize: advarsel om avkutting (Entur sender ikke Mor
       datasetId: 'SKY', fetchFn: makeFetch(), maxSize: 17, waitForFirst: true, now: () => FIXTURE_NOW,
     }).getJourneys();
     assert.ok(warn.mock.calls.some((c) => /17 turer ≥ maxSize=17/.test(c.arguments[0])));
-    assert.ok(log.mock.calls.some((c) => /17 turer lest, 10 beholdt/.test(c.arguments[0])));
+    assert.ok(log.mock.calls.some((c) => /17 turer lest, 14 beholdt/.test(c.arguments[0])));
   } finally { warn.mock.restore(); log.mock.restore(); }
 });

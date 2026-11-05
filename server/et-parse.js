@@ -6,7 +6,7 @@
  * dekodet.
  */
 
-import { journeyVehicleId } from '../shared/et-journeys.js';
+import { journeyVehicleId, firstDeparture } from '../shared/et-journeys.js';
 import { callDelaySeconds } from '../shared/vehicle-delay.js';
 import { getModeFromLineNumFallback, mapJpTransportMode } from '../shared/line-mode.js';
 
@@ -155,9 +155,10 @@ const CLOSE_JOURNEY_MAX_LEN = 80; // lengste sluttagg vi venter (med prefiks)
  * push(tekst) kan kalles med vilkårlige biter; end() gir samme turer som parseEtJourneys(hele).
  */
 export function createEtStreamParser(opts = {}) {
-  const journeys = [];
   const intern = makeInterner();
-  const stats = { seen: 0 };
+  const keeper = opts.relevantWithinMs != null ? createJourneyKeeper(opts) : null;
+  const journeys = [];
+  const stats = { seen: 0, keep: keeper?.keep };
   let buf = '';
   let scanFrom = 0;
   return {
@@ -180,7 +181,52 @@ export function createEtStreamParser(opts = {}) {
       if (buf) parseInto(buf, journeys, intern, opts, stats);
       buf = '';
       /(?:)/.exec('');
-      return journeys;
+      return keeper ? keeper.end() : journeys;
+    },
+  };
+}
+
+const DEFAULT_ENDED_GRACE_MS = 2 * 60 * 1000;
+
+/**
+ * Hvilke turer som lagres, slik at et-vehicles-service viser nøyaktig de samme kjøretøyene som med alle
+ * turer. selectJourneysForVehicles har ingen øvre tidsgrense: et kjøretøy uten tur i gang vises på første
+ * stopp for sin tidligste fremtidige tur, uansett hvor langt frem den er (turer uten VehicleRef er hver sitt
+ * kjøretøy). Derfor beholdes:
+ * - alle turer med gjenstående kall som er i gang eller starter innen relevantWithinMs (dekker alt som kan
+ *   bli «i gang» før neste ET-henting, og gir rutekart og avgangsoppslag for den nærmeste tiden),
+ * - for hvert kjøretøy uten slik tur: den tidligste turen lenger frem (samme valg som firstDeparture),
+ * - turer uten gjenstående kall (vises aldri som kjøretøy) bare hvis de sluttet for under endedGraceMs siden.
+ * Rekkefølgen fra XML-en beholdes, så likhetsvalgene i selectJourneysForVehicles blir de samme.
+ */
+function createJourneyKeeper(opts) {
+  const now = (opts.now ?? Date.now)();
+  const aheadLimit = now + opts.relevantWithinMs;
+  const endedLimit = now - (opts.endedGraceMs ?? DEFAULT_ENDED_GRACE_MS);
+  const near = []; // [seq, tur]
+  const nearIds = new Set();
+  const far = new Map(); // vehicleId → [seq, tur], tidligste første avgang
+  let seq = 0;
+  return {
+    keep(j) {
+      const i = seq++;
+      if (j.estimatedCalls.length === 0) {
+        if (j.recordedCalls[j.recordedCalls.length - 1].time >= endedLimit) near.push([i, j]);
+        return;
+      }
+      if (j.recordedCalls.length > 0 || firstDeparture(j) <= aheadLimit) {
+        near.push([i, j]);
+        nearIds.add(j.vehicleId);
+        return;
+      }
+      const cur = far.get(j.vehicleId);
+      if (!cur || firstDeparture(j) < firstDeparture(cur[1])) far.set(j.vehicleId, [i, j]);
+    },
+    end() {
+      const out = near;
+      for (const [id, entry] of far) if (!nearIds.has(id)) out.push(entry);
+      out.sort((a, b) => a[0] - b[0]);
+      return out.map((e) => e[1]);
     },
   };
 }
@@ -208,23 +254,8 @@ const isCallCancelled = (cel) => {
  *   dropper turer som fortsatt mangler den. For regioner uten linjenummer-fallback (Bergen).
  * opts.mode: fast modus for alle turer (f.eks. 'rail' for BNR, der linjekoder som R70 ikke er tall).
  * opts.skipCancelled: hopper over innstilte turer og innstilte kall.
- * opts.relevantWithinMs: lagrer bare turer som er i gang eller starter innen så mange ms; turer som
- *   sluttet for mer enn opts.endedGraceMs (standard 2 min) siden droppes også. Klokke: opts.now.
- *   SKY har turer for flere døgn fremover (~95 % av svaret); de trengs verken til posisjoner eller rutekart.
+ * opts.relevantWithinMs (bare createEtStreamParser): se createJourneyKeeper.
  */
-const DEFAULT_ENDED_GRACE_MS = 2 * 60 * 1000;
-
-/** Første og siste tid for turen (faktisk for passerte kall, forventet for resten). */
-function isRelevant(recordedCalls, estimatedCalls, opts) {
-  const now = (opts.now ?? Date.now)();
-  const firstEst = estimatedCalls[0];
-  const lastEst = estimatedCalls[estimatedCalls.length - 1];
-  const first = recordedCalls[0]?.time ?? (firstEst ? firstEst.depTime || firstEst.arrTime : null);
-  const last = lastEst ? lastEst.arrTime || lastEst.depTime : recordedCalls[recordedCalls.length - 1]?.time;
-  if (first != null && first > now + opts.relevantWithinMs) return false;
-  if (last != null && last < now - (opts.endedGraceMs ?? DEFAULT_ENDED_GRACE_MS)) return false;
-  return true;
-}
 
 function parseInto(xmlText, journeys, intern, opts = {}, stats = null) {
   const text = (src, name) => firstText(src, name, intern);
@@ -267,9 +298,8 @@ function parseInto(xmlText, journeys, intern, opts = {}, stats = null) {
     }
 
     if (recordedCalls.length === 0 && estimatedCalls.length === 0) continue;
-    if (opts.relevantWithinMs != null && !isRelevant(recordedCalls, estimatedCalls, opts)) continue;
 
-    journeys.push({
+    const journey = {
       vehicleId: journeyVehicleId({
         vehicleRef,
         datedVehicleJourneyRef,
@@ -283,7 +313,9 @@ function parseInto(xmlText, journeys, intern, opts = {}, stats = null) {
       datedVehicleJourneyRef,
       recordedCalls,
       estimatedCalls,
-    });
+    };
+    if (stats?.keep) stats.keep(journey);
+    else journeys.push(journey);
   }
   // V8 husker siste regex-input (RegExp.input) globalt. Den er en delstreng av XML-en
   // og ville holdt hele den gamle XML-en i live til neste regex-kall et annet sted.

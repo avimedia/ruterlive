@@ -189,32 +189,38 @@ test('strømparser: samme turer uansett hvordan XML-en deles opp', async () => {
 // Én tur med gitte tider (ms): passerte kall med faktisk tid, resten forventet
 function etXml(journeys) {
   const iso = (ms) => new Date(ms).toISOString();
-  const body = journeys.map(({ id, rec = [], est = [] }) => `<EstimatedVehicleJourney><LineRef>RUT:Line:31</LineRef>`
+  const body = journeys.map(({ id, ref, rec = [], est = [] }) => `<EstimatedVehicleJourney><LineRef>RUT:Line:31</LineRef>`
     + `<FramedVehicleJourneyRef><DatedVehicleJourneyRef>${id}</DatedVehicleJourneyRef></FramedVehicleJourneyRef>`
+    + (ref ? `<VehicleRef>${ref}</VehicleRef>` : '')
     + `<RecordedCalls>${rec.map((t, i) => `<RecordedCall><StopPointRef>NSR:Quay:${i}</StopPointRef><ActualDepartureTime>${iso(t)}</ActualDepartureTime></RecordedCall>`).join('')}</RecordedCalls>`
     + `<EstimatedCalls>${est.map((t, i) => `<EstimatedCall><StopPointRef>NSR:Quay:${50 + i}</StopPointRef><ExpectedArrivalTime>${iso(t)}</ExpectedArrivalTime><ExpectedDepartureTime>${iso(t)}</ExpectedDepartureTime></EstimatedCall>`).join('')}</EstimatedCalls>`
     + `</EstimatedVehicleJourney>`).join('');
   return `<Siri><ServiceDelivery><EstimatedTimetableDelivery><EstimatedJourneyVersionFrame>${body}</EstimatedJourneyVersionFrame></EstimatedTimetableDelivery></ServiceDelivery></Siri>`;
 }
 
-test('relevantWithinMs: dropper sluttede (> 2 min) og turer som starter om mer enn en time', () => {
+test('relevantWithinMs: samme kjøretøy som uten filter; senere turer for samme VehicleRef og sluttede turer droppes', async () => {
+  const { selectJourneysForVehicles } = await import('../shared/et-journeys.js');
   const now = Date.parse('2026-11-05T12:00:00Z');
   const min = 60_000;
   const xml = etXml([
-    { id: 'underveis', rec: [now - 5 * min], est: [now + 5 * min] },
+    { id: 'underveis', ref: 'BUSS-A', rec: [now - 5 * min], est: [now + 5 * min] },
+    { id: 'a-neste', ref: 'BUSS-A', est: [now + 30 * min, now + 50 * min] }, // innen vinduet: beholdes
+    { id: 'a-i-kveld', ref: 'BUSS-A', est: [now + 6 * 60 * min] }, // senere tur for kjøretøy i gang: droppes
+    { id: 'venter-3-t', ref: 'BUSS-B', est: [now + 3 * 60 * min, now + 200 * min] }, // vises på første stopp
+    { id: 'venter-5-t', ref: 'BUSS-B', est: [now + 5 * 60 * min] }, // senere enn den over: droppes
+    { id: 'uten-ref-i-morgen', est: [now + 24 * 60 * min] }, // eget kjøretøy: beholdes
     { id: 'sluttet-1-min', rec: [now - 20 * min, now - 1 * min] },
-    { id: 'sluttet-5-min', rec: [now - 30 * min, now - 5 * min] },
-    { id: 'sluttet-est-5-min', est: [now - 20 * min, now - 5 * min] },
-    { id: 'om-59-min', est: [now + 59 * min, now + 80 * min] },
-    { id: 'om-61-min', est: [now + 61 * min, now + 90 * min] },
-    { id: 'i-morgen', est: [now + 24 * 60 * min] },
+    { id: 'sluttet-5-min', rec: [now - 30 * min, now - 5 * min] }, // vises aldri: droppes
+    { id: 'forsinket-forbi', ref: 'BUSS-C', est: [now - 20 * min, now - 5 * min] }, // vises (ikke registrert)
   ]);
-  const p = createEtStreamParser({ relevantWithinMs: 60 * min, now: () => now });
-  p.push(xml);
-  const ids = p.end().map((j) => j.datedVehicleJourneyRef);
-  assert.deepEqual(ids, ['underveis', 'sluttet-1-min', 'om-59-min']);
-  assert.equal(p.seen, 7, 'seen teller alle turer i XML-en');
-  const alle = createEtStreamParser({ now: () => now });
-  alle.push(xml);
-  assert.equal(alle.end().length, 7, 'uten relevantWithinMs: ingen filtrering');
+  const parse = (o) => { const p = createEtStreamParser({ ...o, now: () => now }); p.push(xml); return p; };
+  const p = parse({ relevantWithinMs: 60 * min });
+  const kept = p.end();
+  assert.deepEqual(kept.map((j) => j.datedVehicleJourneyRef),
+    ['underveis', 'a-neste', 'venter-3-t', 'uten-ref-i-morgen', 'sluttet-1-min', 'forsinket-forbi']);
+  assert.equal(p.seen, 9, 'seen teller alle turer i XML-en');
+  const all = parse({}).end();
+  assert.equal(all.length, 9, 'uten relevantWithinMs: ingen filtrering');
+  const ids = (js, at) => selectJourneysForVehicles(js, at).map((j) => j.datedVehicleJourneyRef).sort();
+  for (const at of [now, now + 90_000, now + 40 * min]) assert.deepEqual(ids(kept, at), ids(all, at));
 });

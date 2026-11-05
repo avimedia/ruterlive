@@ -112,6 +112,12 @@ ${stopsResult.stops.map((s) => `      <li>${stopItem(s, region)}</li>`).join('\n
   const guide = !isOslo
     ? REGION_MODE_GUIDE[region.id]?.[line.mode] ?? null
     : (line.region && !OSLO_RAIL_REGIONS.has(line.region)) ? null : MODE_GUIDE[line.mode];
+  // Sanntidsguiden handler om Ruter/Oslo; andre regioner får bare sin egen guide (eller ingen Les mer)
+  const readMore = [
+    guide && `      <li><a href="${escapeHtml(regionPath(region, `/guider/${guide.slug}`))}">${escapeHtml(guide.label)}</a></li>`,
+    isOslo && '      <li><a href="/guider/sanntidsposisjoner">Slik fungerer sanntidsposisjonene</a></li>',
+  ].filter(Boolean);
+  const readMoreHtml = readMore.length ? `\n    <h2>Les mer</h2>\n    <ul class="link-list">\n${readMore.join('\n')}\n    </ul>` : '';
   const body = `    <div class="line-hero">
       <p class="eyebrow">${isOslo ? '' : `<a href="${escapeHtml(region.path)}">${escapeHtml(region.shortName)}</a> / `}<a href="/guider">Linjer</a> / ${escapeHtml(MODE_LABEL[line.mode] ?? '')}</p>
       <h1 class="line-title">${lineBadge(line, { size: 'lg' })} <span>${escapeHtml(line.title)}</span></h1>
@@ -122,11 +128,7 @@ ${stopsResult.stops.map((s) => `      <li>${stopItem(s, region)}</li>`).join('\n
       </div>
     </div>
 ${text ? `    <div class="prose line-text">\n${text.trim()}\n    </div>\n` : ''}    ${stopsHtml}
-    ${othersHtml}
-    <h2>Les mer</h2>
-    <ul class="link-list">
-${guide ? `      <li><a href="${escapeHtml(regionPath(region, `/guider/${guide.slug}`))}">${escapeHtml(guide.label)}</a></li>\n` : ''}      <li><a href="/guider/sanntidsposisjoner">Slik fungerer sanntidsposisjonene</a></li>
-    </ul>`;
+    ${othersHtml}${readMoreHtml}`;
 
   return renderPage({
     title: lineTitle(line, stopsResult),

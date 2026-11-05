@@ -43,6 +43,10 @@ export function renderGuideIndex(guides, lines, extraRegions = []) {
 
   const oslo = getRegion();
   const extra = extraRegions.filter((e) => e.guides.length > 0 || e.lines.some((l) => l.indexed !== false));
+  // Flere regioner med guider: nøytral ingress og beskrivelse (Oslo-teksten er uendret ellers)
+  const guideRegions = extra.filter((e) => e.guides.length > 0).map((e) => e.region.shortName);
+  const multi = guideRegions.length > 0;
+  const regionNames = ['Oslo', ...guideRegions].join(' og ');
   const regionHtml = extra.map((e) => {
     const g = e.guides.length ? `\n    <ul class="card-list">\n      ${guideItems(e.guides, e.region)}\n    </ul>` : '';
     const l = groupsFor(e.lines);
@@ -52,7 +56,7 @@ export function renderGuideIndex(guides, lines, extraRegions = []) {
   }).join('\n');
 
   const body = `    <h1>Guider og linjer</h1>
-    <p class="lead">Bakgrunn om kollektivtrafikken i Oslo, og en side per linje med stoppliste og hvor mange kjøretøy som er ute nå. Toglinjene dekker hele landet.</p>
+    <p class="lead">Bakgrunn om kollektivtrafikken i ${escapeHtml(regionNames)}, og en side per linje med stoppliste og hvor mange kjøretøy som er ute nå. Toglinjene dekker hele landet.</p>
     <p class="lang-switch"><a href="/en" hreflang="en" lang="en">English</a>: <span lang="en">guides for visitors to Oslo</span></p>
     <h2>Guider</h2>
     <ul class="card-list">
@@ -68,7 +72,9 @@ ${regionHtml}`;
 
   return renderPage({
     title: 'Guider og linjer | livetrafikk.no',
-    description: 'Guider om kollektivtrafikken i Oslo og oversikt over T-bane-, trikk-, Flytoget-, flybuss- og busslinjer, og toglinjene i hele Norge.',
+    description: multi
+      ? `Guider om kollektivtrafikken i ${regionNames}, med linjesider for T-bane, trikk, Bybanen, buss, båt og tog i hele Norge.`
+      : 'Guider om kollektivtrafikken i Oslo og oversikt over T-bane-, trikk-, Flytoget-, flybuss- og busslinjer, og toglinjene i hele Norge.',
     path: '/guider',
     body,
   });

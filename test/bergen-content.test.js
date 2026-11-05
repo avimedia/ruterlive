@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { REGION_LINES, getLineBySlug, getLineText } from '../server/line-catalog.js';
+const getLineBySlugOslo = (slug) => getLineBySlug(slug, 'oslo');
 import { GUIDES, loadGuideBody } from '../server/guide-catalog.js';
 import { featuredStopsFor } from '../server/stop-catalog.js';
 import { buildSitemap } from '../server/pages/sitemap.js';
@@ -116,4 +117,26 @@ test('sitemap med Bergen synlig: alle linjer med tekst og guidene, ingen linjer 
     regions: hidden,
   });
   assert.doesNotMatch(xmlHidden, /\/bergen/);
+});
+
+test('Les mer: Bergen-buss uten seksjon, Bergen-bane med egen guide, Oslo uendret', async () => {
+  const stops = { stops: ['A', 'B', 'C'], from: 'A', to: 'C', fetchedAt: null };
+  const bus = renderLinePage(getLineBySlug('buss-3', 'bergen'), stops, null, await getLineText('buss-3', 'bergen'));
+  assert.doesNotMatch(bus, /sanntidsposisjoner/);
+  assert.doesNotMatch(bus, /<h2>Les mer<\/h2>/);
+  const tram = renderLinePage(getLineBySlug('bybanen-1', 'bergen'), stops, null, '<p>x</p>');
+  assert.match(tram, /<h2>Les mer<\/h2>/);
+  assert.doesNotMatch(tram, /sanntidsposisjoner/);
+  const oslo = renderLinePage(getLineBySlugOslo('t-bane-5'), stops, null, '<p>x</p>');
+  assert.match(oslo, /<h2>Les mer<\/h2>\n    <ul class="link-list">\n      <li><a href="\/guider\/t-banen-i-oslo">T-banen i Oslo<\/a><\/li>\n      <li><a href="\/guider\/sanntidsposisjoner">Slik fungerer sanntidsposisjonene<\/a><\/li>\n    <\/ul>/);
+});
+
+test('guideoversikt: Oslo-ingress uendret uten andre regioners guider, nøytral med Bergen-guider', () => {
+  const bergen = visibleRegions(['bergen']).find((r) => r.id === 'bergen');
+  const osloOnly = renderGuideIndex(GUIDES.filter((g) => g.region === 'oslo'), REGION_LINES.oslo);
+  assert.match(osloOnly, /<p class="lead">Bakgrunn om kollektivtrafikken i Oslo, og en side per linje/);
+  assert.match(osloOnly, /content="Guider om kollektivtrafikken i Oslo og oversikt over T-bane-/);
+  const both = renderGuideIndex(GUIDES.filter((g) => g.region === 'oslo'), REGION_LINES.oslo, [{ region: bergen, guides: bergenGuides, lines: REGION_LINES.bergen }]);
+  assert.match(both, /<p class="lead">Bakgrunn om kollektivtrafikken i Oslo og Bergen, /);
+  assert.match(both, /content="Guider om kollektivtrafikken i Oslo og Bergen, /);
 });

@@ -237,6 +237,7 @@ body {
 
 .panel-toggle {
   flex-shrink: 0;
+  margin-left: auto; /* til høyre også når overskriften er skjult */
   min-width: 2rem;
   min-height: 2rem;
   width: 2rem;

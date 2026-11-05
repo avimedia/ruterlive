@@ -13,6 +13,17 @@ export function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
+/**
+ * Lenke til holdeplassiden fra tavla, ellers null. `pagePath` (full sti fra serveren) vinner;
+ * `page` (bare slug) sendes bare for Oslo-stopp og gir /holdeplass/<slug>. Regionen kartet står i
+ * brukes aldri, så et Bergen-stopp kan ikke gi en Oslo-URL.
+ */
+export function placePageHref(place) {
+  if (/^\/(?:[a-z]+\/)?holdeplass\/[a-z0-9-]+$/.test(place?.pagePath ?? '')) return place.pagePath;
+  if (/^[a-z0-9-]+$/.test(place?.page ?? '')) return `/holdeplass/${place.page}`;
+  return null;
+}
+
 /** «850 m», «1,2 km», «24 km». */
 export function formatDistance(km) {
   if (!Number.isFinite(km)) return '';

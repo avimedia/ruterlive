@@ -262,3 +262,14 @@ test('stoppestedets linjer fra alle quays: samme overskrift fra én quay som fra
   const [place] = groupPlaces(findCandidates(gtfs, 'bjerke').filter((c) => m.has(c.id)), m);
   assert.deepEqual(place.lines, h.lines);
 });
+
+test('placePageHref: full sti fra serveren, ellers Oslo-slug, aldri kartets region', async () => {
+  const { placePageHref } = await import('../js/stop-place-format.js');
+  assert.equal(placePageHref({ pagePath: '/bergen/holdeplass/byparken' }), '/bergen/holdeplass/byparken');
+  assert.equal(placePageHref({ page: 'aker-brygge', pagePath: '/holdeplass/aker-brygge' }), '/holdeplass/aker-brygge');
+  assert.equal(placePageHref({ page: 'aker-brygge' }), '/holdeplass/aker-brygge');
+  assert.equal(placePageHref({ pagePath: 'https://evil.example/holdeplass/x' }), null);
+  assert.equal(placePageHref({ pagePath: '/bergen/holdeplass/<x>' }), null);
+  assert.equal(placePageHref({}), null);
+  assert.equal(placePageHref(null), null);
+});

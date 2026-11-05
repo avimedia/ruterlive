@@ -4,9 +4,9 @@ import { REGION_LINES } from '../line-catalog.js';
 import { FEATURED_STOPS, featuredStopsFor, nearestStops } from '../stop-catalog.js';
 import { findRegion, getRegion, regionPath } from '../../shared/regions.js';
 import { escapeHtml, renderPage } from './layout.js';
+import { MODE_LABEL, baseMode } from '../stop-modes.js';
 
 const BASE_URL = 'https://livetrafikk.no';
-const MODE_LABEL = { metro: 'T-bane', tram: 'Trikk', rail: 'Tog', bus: 'Buss', water: 'Båt' };
 const MODE_LINE = {
   metro: ['T-banelinje', 'T-banelinjene'],
   tram: ['trikkelinje', 'trikkelinjene'],
@@ -33,11 +33,6 @@ export function joinNb(items) {
 
 const naturalCompare = (a, b) => String(a).localeCompare(String(b), 'nb', { numeric: true });
 
-/** Grunnmodus for en JP-linje (bus/coach → bus). */
-function baseMode(transportMode) {
-  if (transportMode === 'coach') return 'bus';
-  return MODE_LABEL[transportMode] ? transportMode : '';
-}
 
 /** Modus for fargebrikke: Flytoget og flybuss har egne farger. */
 function badgeMode(line) {
@@ -109,7 +104,9 @@ export function buildIntro(stop, info, { listLines = true } = {}) {
   }
   // Sonenavn er bare kjent for Ruter; andre regioner utelater sonen heller enn å gjette
   const zone = info?.zones?.length && (stop.region ?? 'oslo') === 'oslo' ? `ligger i Ruters sone ${joinNb(info.zones)}` : '';
-  const quays = info?.quayCount > 1 ? `har ${info.quayCount} stoppesteder (plattformer og holdeplasser)` : '';
+  // Oslo teller alle quayer (uendret); andre regioner bare quayer med linjer siden viser
+  const quayCount = (stop.region ?? 'oslo') === 'oslo' ? info?.quayCount : (info?.servedQuayCount ?? info?.quayCount);
+  const quays = quayCount > 1 ? `har ${quayCount} stoppesteder (plattformer og holdeplasser)` : '';
   if (zone || quays) parts.push(`${isStation ? 'Stasjonen' : 'Holdeplassen'} ${joinNb([zone, quays].filter(Boolean))}.`);
   return parts.join(' ');
 }
@@ -190,7 +187,9 @@ function formatDistance(m) {
 export function renderStopPage(stop, info, departures, { now = Date.now(), text = '' } = {}) {
   const region = findRegion(stop.region) ?? getRegion();
   const mapHref = `${region.path || '/'}?lat=${stop.lat}&lng=${stop.lon}&z=16`;
-  const lineGroups = info?.lines?.length ? linesByMode(info.lines) : [];
+  // Bare linjer i stoppets egne moduser: togbuss-quayer gir ellers «Tog» (F4/R40 på Bergen busstasjon, R31 på Nydalen og Sinsen)
+  const shownLines = (info?.lines ?? []).filter((l) => stop.modes.includes(baseMode(l.transportMode)));
+  const lineGroups = shownLines.length ? linesByMode(shownLines) : [];
   const linesHtml = lineGroups.length
     ? `<h2>Linjer</h2>
     <dl class="stop-lines">
@@ -206,7 +205,7 @@ ${lineGroups.map(([mode, lines]) => `      <dt>${escapeHtml(MODE_LABEL[mode])}</
       <p class="eyebrow">${region.path ? `<a href="${escapeHtml(region.path)}">${escapeHtml(region.shortName)}</a> / ` : ''}<a href="/holdeplasser">Holdeplasser</a></p>
       <h1>${escapeHtml(stop.name)}</h1>
       <p class="mode-badges">${modeBadges(stop.modes)}</p>
-      <p class="lead">${escapeHtml(buildIntro(stop, info, { listLines: !text }))}</p>
+      <p class="lead">${escapeHtml(buildIntro(stop, info && { ...info, lines: shownLines }, { listLines: !text }))}</p>
       <div class="line-actions">
         <a class="button button--primary" href="${escapeHtml(mapHref)}">Se på kartet</a>
       </div>

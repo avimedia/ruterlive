@@ -1,13 +1,12 @@
 import L from 'leaflet';
 import { getMap } from './map.js';
-import { currentRegion, withRegion } from './region.js';
-import { regionPath } from '../shared/regions.js';
+import { withRegion } from './region.js';
 import { isFlytogLineCode } from '../config.js';
 import { splitRouteAt, chooseClosestShape } from './route-split.js';
 import { groupStops } from './stop-groups.js';
 import { prefersDepartureSheet, showDepartures } from './departure-sheet.js';
 import { groupDepartures } from './departure-groups.js';
-import { lineBadgesHtml, escapeHtml } from './stop-place-format.js';
+import { lineBadgesHtml, escapeHtml, placePageHref } from './stop-place-format.js';
 
 const MODE_COLORS = {
   bus: '#e63946',
@@ -518,7 +517,7 @@ async function showDepartureBoard(popup, quayIds) {
           ${body}
         </table>
         ${groups.length === 0 ? '<p class="departure-empty">Ingen avganger de neste timene.</p>' : '<p class="departure-hint">Trykk på en avgang for å se hvor den er nå.</p>'}
-        ${/^[a-z0-9-]+$/.test(data?.place?.page ?? '') ? `<a class="departure-place-link" href="${regionPath(currentRegion(), `/holdeplass/${data.place.page}`)}">Om ${escapeHtml(name)} →</a>` : ''}
+        ${placePageHref(data?.place) ? `<a class="departure-place-link" href="${escapeHtml(placePageHref(data.place))}">Om ${escapeHtml(name)} →</a>` : ''}
       </div>`;
     popup.setContent(html);
   } catch (err) {

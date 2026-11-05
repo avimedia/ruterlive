@@ -342,3 +342,56 @@ test('findStopForPlace: ID, ellers samme navn og nær nok', () => {
   assert.equal(findStopForPlace({ stopPlaceId: 'X', name: 'Aker brygge' }, []), undefined);
   assert.equal(findStopForPlace({ name: 'Ukjent' }, near), undefined);
 });
+
+test('stoppside: linjer utenfor stoppets moduser (togbuss) vises ikke', () => {
+  const s = getStopBySlug('bergen-busstasjon', 'bergen');
+  const lines = [
+    { id: 'SKY:Line:1', publicCode: '1', transportMode: 'tram' },
+    { id: 'SKY:Line:14', publicCode: '14', transportMode: 'bus' },
+    { id: 'VYX:Line:36', publicCode: 'VY430', transportMode: 'coach' },
+    { id: 'VYG:Line:F4', publicCode: 'F4', transportMode: 'rail' },
+  ];
+  const html = renderStopPage(s, { lines, zones: [], quayCount: 3, servedQuayCount: 3 }, null, { now: NOW });
+  assert.doesNotMatch(html, /<dt>Tog<\/dt>/);
+  assert.doesNotMatch(html, />F4</);
+  assert.match(html, />VY430</, 'coach regnes som buss');
+  assert.match(html, /Her stopper trikkelinje 1, samt busslinjene 14 og VY430\./);
+});
+
+test('parseStopInfo: servedQuayCount teller bare quayer med viste moduser; Oslo bruker quayCount', () => {
+  const parsed = parseStopInfo({
+    quays: [
+      { lines: [{ id: 'SKY:Line:1', publicCode: '1', transportMode: 'tram' }] },
+      { lines: [{ id: 'NWY:Line:x', publicCode: 'NW400', transportMode: 'coach' }] },
+      { lines: [{ id: 'AVI:Line:a', publicCode: null, transportMode: 'air' }] },
+      { lines: [] },
+    ],
+  });
+  assert.equal(parsed.quayCount, 4);
+  assert.equal(parsed.servedQuayCount, 2);
+  assert.match(buildIntro(getStopBySlug('bergen-lufthavn', 'bergen'), parsed), /har 2 stoppesteder/);
+  assert.match(buildIntro({ ...stop, region: 'oslo' }, parsed), /har 4 stoppesteder/, 'Oslo uendret');
+});
+
+test('avgangsspørringen tar bare moduser siden kan vise', async () => {
+  const { DEP_QUERY } = await import('../server/stop-service.js');
+  const { MODE_LABEL, SHOWN_JP_MODES } = await import('../server/stop-modes.js');
+  assert.deepEqual([...SHOWN_JP_MODES].sort(), [...Object.keys(MODE_LABEL), 'coach'].sort());
+  assert.ok(DEP_QUERY.includes('whiteListedModes: [metro, tram, rail, bus, water, coach]'));
+  assert.ok(!DEP_QUERY.includes('air'));
+});
+
+test('findStopForPlace på tvers av regioner og placePageFields', async () => {
+  const { placePageFields } = await import('../server/stop-catalog.js');
+  const both = ['oslo', 'bergen'];
+  // Bergen: ID-treff bare når Bergen er synlig
+  assert.equal(findStopForPlace({ stopPlaceId: 'NSR:StopPlace:30859' }, [], both)?.slug, 'byparken');
+  assert.equal(findStopForPlace({ stopPlaceId: 'NSR:StopPlace:30859' }), undefined, 'skjult Bergen gir ingen lenke');
+  // Navn + nærhet i riktig by
+  assert.equal(findStopForPlace({ stopPlaceId: 'X', name: 'Byparken' }, [{ lat: 60.3925, lon: 5.3245 }], both)?.region, 'bergen');
+  assert.equal(findStopForPlace({ stopPlaceId: 'X', name: 'Byparken' }, [{ lat: 59.91, lon: 10.73 }], both), undefined);
+  assert.equal(findStopForPlace({ stopPlaceId: 'NSR:StopPlace:58382' }, [], both)?.slug, 'aker-brygge');
+  assert.deepEqual(placePageFields(getStopBySlug('aker-brygge')), { page: 'aker-brygge', pagePath: '/holdeplass/aker-brygge' });
+  assert.deepEqual(placePageFields(getStopBySlug('byparken', 'bergen')), { pagePath: '/bergen/holdeplass/byparken' });
+  assert.deepEqual(placePageFields(undefined), {});
+});

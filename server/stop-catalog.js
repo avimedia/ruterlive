@@ -7,7 +7,7 @@
 
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { REGIONS } from '../shared/regions.js';
+import { REGIONS, regionPath } from '../shared/regions.js';
 
 /** Lager URL-slug: små bokstaver, æ→ae, ø→o, å→a, alt annet enn a–z/0–9 blir bindestrek. */
 export function slugify(name) {
@@ -84,28 +84,46 @@ const byNameByRegion = Object.fromEntries(Object.entries(FEATURED).map(([id, lis
   }
   return [id, m];
 }));
-const byName = byNameByRegion.oslo;
 
 /** Stopp med egen side i regionen, ellers undefined (også for stopp som bare ligger i katalogen). */
 export function getStopBySlug(slug, regionId = 'oslo') {
   return bySlugByRegion[Object.hasOwn(bySlugByRegion, regionId) ? regionId : '']?.get(slug);
 }
 
-const byId = new Map(FEATURED_STOPS.map((s) => [s.id, s]));
+// Alle regioners stopp med egen side etter stoppested-ID (ID-er er unike i NSR, så oppslaget er regionnøytralt)
+const byId = new Map(Object.values(FEATURED).flat().map((s) => [s.id, s]));
 const NEAR_M = 800;
 
 /**
  * Stopp med egen side for tavla: samme stoppested-ID, ellers samme navn og under 800 m unna
  * (tavla kjenner ofte bare under-stoppestedet, katalogen har hovedstoppestedet).
+ * Bare stopp i `regionIds` (synlige regioner) godtas, så en skjult region aldri gir lenke.
+ * Navneoppslaget går gjennom regionene; avstandskravet hindrer treff i feil by.
  * @param {{ stopPlaceId?: string, name?: string }} place
  * @param {{ lat?: number|null, lon?: number|null }[]} quays
+ * @param {string[]} regionIds
  */
-export function findStopForPlace(place, quays = []) {
+export function findStopForPlace(place, quays = [], regionIds = ['oslo']) {
   const direct = byId.get(place?.stopPlaceId);
-  if (direct) return direct;
-  const s = place?.name ? byName.get(normalizeStopName(place.name)) : undefined;
-  if (!s) return undefined;
-  return quays.some((q) => Number.isFinite(q?.lat) && Number.isFinite(q?.lon) && distanceM(q, s) < NEAR_M) ? s : undefined;
+  if (direct) return regionIds.includes(direct.region) ? direct : undefined;
+  if (!place?.name) return undefined;
+  const key = normalizeStopName(place.name);
+  for (const id of regionIds) {
+    const s = byNameByRegion[Object.hasOwn(byNameByRegion, id) ? id : '']?.get(key);
+    if (s && quays.some((q) => Number.isFinite(q?.lat) && Number.isFinite(q?.lon) && distanceM(q, s) < NEAR_M)) return s;
+  }
+  return undefined;
+}
+
+/**
+ * Felter til `place` i /api/departures for et stopp med egen side: `pagePath` er full sti
+ * (/holdeplass/x eller /bergen/holdeplass/x). `page` (bare slug) gis bare for Oslo, fordi eldre
+ * klienter bygger stien fra regionen de står i og ellers kunne lage en Oslo-URL for et Bergen-stopp.
+ */
+export function placePageFields(stop) {
+  if (!stop) return {};
+  const pagePath = regionPath(REGIONS[stop.region] ?? REGIONS.oslo, `/holdeplass/${stop.slug}`);
+  return stop.region === 'oslo' ? { page: stop.slug, pagePath } : { pagePath };
 }
 
 /** Stopp med egen side og samme (normaliserte) navn, ellers undefined. */

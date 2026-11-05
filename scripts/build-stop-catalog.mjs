@@ -2,8 +2,8 @@
 //   node scripts/build-stop-catalog.mjs [--region bergen]
 // Oslo: alle T-banestasjoner og sentrale trikkestopp fra linjenes journey patterns i Entur JP,
 // pluss en kort liste knutepunkter for tog og buss (oppslag i Entur Geocoder).
-// Bergen: alle Bybanen-stopp fra JP pluss knutepunkter (Geocoder). Ingen stopp får `featured` her;
-// de velges senere sammen med egen tekst i content/bergen/holdeplass/.
+// Bergen: alle Bybanen-stopp fra JP pluss knutepunkter (Geocoder). `featured` settes for hånd i den
+// genererte filen (stopp med egen tekst i content/bergen/holdeplass/) og beholdes ved ny kjøring.
 // Rundt 25 kall mot Entur totalt, med pause mellom hvert.
 import { writeFileSync } from 'node:fs';
 import { loadStops, stopSlug } from '../server/stop-catalog.js';

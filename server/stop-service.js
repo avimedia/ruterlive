@@ -6,6 +6,7 @@
  */
 
 import { jpQuery } from './line-catalog.js';
+import { SHOWN_JP_MODES, baseMode } from './stop-modes.js';
 
 const INFO_TTL_MS = 24 * 60 * 60 * 1000;
 const INFO_FAIL_TTL_MS = 60 * 1000;
@@ -26,9 +27,9 @@ const INFO_QUERY = `query($id: String!) {
 }`;
 
 // Bare moduser siden viser: Bergen lufthavn er ett stoppested med flyavganger (air) i Entur.
-const DEP_QUERY = `query($id: String!, $n: Int!, $range: Int!) {
+export const DEP_QUERY = `query($id: String!, $n: Int!, $range: Int!) {
   stopPlace(id: $id) {
-    estimatedCalls(numberOfDepartures: $n, timeRange: $range, whiteListedModes: [bus, coach, tram, metro, rail, water]) {
+    estimatedCalls(numberOfDepartures: $n, timeRange: $range, whiteListedModes: [${SHOWN_JP_MODES.join(', ')}]) {
       realtime
       cancellation
       aimedDepartureTime
@@ -81,7 +82,10 @@ export function parseStopInfo(sp) {
   const zones = [...new Set((sp.tariffZones ?? [])
     .filter((z) => String(z?.id).startsWith('RUT:TariffZone:'))
     .map((z) => z.name))];
-  return { lines: [...lines.values()], zones, quayCount: (sp.quays ?? []).length };
+  // servedQuayCount: bare quayer med minst én linje i en modus siden viser (Bergen lufthavn har ~30 flyquayer/gater).
+  // quayCount (alle) beholdes for Oslo, der sidene skal være uendret.
+  const servedQuayCount = (sp.quays ?? []).filter((q) => (q?.lines ?? []).some((l) => baseMode(l?.transportMode))).length;
+  return { lines: [...lines.values()], zones, quayCount: (sp.quays ?? []).length, servedQuayCount };
 }
 
 export function parseDepartures(sp) {

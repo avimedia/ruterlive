@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createVehiclesCache, buildVehiclesQuery } from '../server/vehicles-cache.js';
+import { STALE_REGION_MS, createVehiclesCache, buildVehiclesQuery } from '../server/vehicles-cache.js';
 import { parsePreview } from '../server/region-preview.js';
 import { REGIONS, visibleRegions } from '../shared/regions.js';
 
@@ -114,4 +114,20 @@ test('GraphQL-feil uten data for noen region kaster', async () => {
     fetchFn: async () => ({ json: async () => ({ data: null, errors: [{ message: 'nede' }] }) }),
   });
   await assert.rejects(get(), /nede/);
+});
+
+test('region som feiler over tid: forrige liste slippes etter STALE_REGION_MS', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  let payload = { data: { oslo: [gps('A')], bergen: [gps('B')] } };
+  const get = createVehiclesCache({ getRegions: begge, fetchFn: async () => ({ json: async () => payload }) });
+  await get('bergen');
+  payload = { data: { oslo: [gps('A2')], bergen: null }, errors: [{ message: 'Timeout', path: ['bergen'] }] };
+  const realNow = Date.now;
+  try {
+    Date.now = () => realNow() + STALE_REGION_MS + 60000;
+    await get(); // stale: revalidering
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual((await get('bergen')).data.vehicles, [], 'Bergen: tom etter lang feil');
+    assert.deepEqual((await get()).data.vehicles.map((v) => v.vehicleId), ['A2']);
+  } finally { Date.now = realNow; }
 });

@@ -29,10 +29,10 @@ const ET_SHAPES_MIN_INTERVAL_MS = 30 * 60 * 1000;
 const ET_WAIT_MS = 1500;
 const SHAPES_REFRESH_MS = 60 * 60 * 1000;
 const TICK_MS = 60_000;
-// Oppstart: Oslo (RUT) henter straks og BNR etter 20 s. Andre regioner henter første ET etter 90 s, og et
-// besøk tidligst etter 60 s, så oppstarten ikke gir flere enn ~2 ET-kall i minuttet (Entur-kvoten er 4/min,
+// Oppstart: Oslo (RUT) henter straks og BNR etter 20 s. Andre regioner henter første ET etter 150 s (ikke samtidig
+// med RUT ved 90 s), og et besøk tidligst etter 60 s, så oppstarten ikke gir flere enn ~2 ET-kall i minuttet (Entur-kvoten er 4/min,
 // og den gamle instansen henter fortsatt under en Render-deploy).
-const ET_START_DELAY_MS = 90_000;
+const ET_START_DELAY_MS = 150_000;
 const ET_MIN_START_DELAY_MS = 60_000;
 
 export const shapesVersionOf = (entry) => entry.etag.slice(1, 13);

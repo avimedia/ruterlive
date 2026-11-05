@@ -9,6 +9,8 @@ import { serverVisibleRegions } from './region-preview.js';
 
 const GRAPHQL_URL = 'https://api.entur.io/realtime/v2/vehicles/graphql';
 const CACHE_MS = 20000; // 20 sekund
+/** Hvor lenge en region som feiler beholder forrige liste før den blir tom (ellers står gamle kjøretøy stille på kartet). */
+export const STALE_REGION_MS = 3 * 60 * 1000;
 
 const FIELDS = `
     vehicleId
@@ -41,6 +43,7 @@ export function createVehiclesCache({ getRegions = serverVisibleRegions, fetchFn
   let cachedData = null; // { [regionId]: { data: { vehicles } } } – bygges én gang per henting (stabil identitet for memo-cacher)
   let lastFetch = 0;
   let fetchPromise = null;
+  const okAt = {}; // regionId → tid for siste vellykkede liste
 
   async function doFetch() {
     const regions = getRegions();
@@ -62,9 +65,11 @@ export function createVehiclesCache({ getRegions = serverVisibleRegions, fetchFn
     for (const r of regions) {
       if (ok.includes(r)) {
         byRegion[r.id] = { data: { vehicles: normalizeGpsVehicles(data.data[r.id]) } };
+        okAt[r.id] = Date.now();
       } else {
         failed.push(r.id);
-        byRegion[r.id] = cachedData?.[r.id] || EMPTY; // forrige liste (samme objekt), ellers tom
+        const fresh = okAt[r.id] != null && Date.now() - okAt[r.id] <= STALE_REGION_MS;
+        byRegion[r.id] = (fresh && cachedData?.[r.id]) || EMPTY; // forrige liste (samme objekt) en stund, så tom
       }
     }
     if (failed.length && data?.errors) {

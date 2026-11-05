@@ -277,7 +277,7 @@ test('avlastet Bergen: linjesidens kjøretøyoppslag starter ingen ET-henting, o
   assert.equal(s.etCache.getAge(), null, 'avlastet på nytt');
 });
 
-test('registry.start(): Oslo-ET straks, Bergen etter 90 s, én henting per region (start + første rutekart deler hentingen)', async (t) => {
+test('registry.start(): Oslo-ET straks, Bergen etter 150 s, én henting per region (start + første rutekart deler hentingen)', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: 0 });
   const regions = [oslo, bergen];
   const runtime = createRegionRuntime({ regions });
@@ -300,6 +300,9 @@ test('registry.start(): Oslo-ET straks, Bergen etter 90 s, én henting per regio
   t.mock.timers.tick(60_000);
   for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
   assert.deepEqual(calls, ['RUT'], 'Bergen venter fortsatt');
+  t.mock.timers.tick(60_000);
+  for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+  assert.ok(!calls.includes('SKY'), 'Bergen venter fortsatt ved 120 s');
   t.mock.timers.tick(30_000);
   for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
   assert.equal(calls.filter((d) => d === 'SKY').length, 1, 'én SKY-henting');

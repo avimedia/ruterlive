@@ -1324,6 +1324,14 @@ path.leaflet-interactive:focus {
   color: #2a9d8f;
 }
 
+.departure-next {
+  color: var(--text-dim);
+}
+.departure-realtime + .departure-next::before,
+.departure-delayed + .departure-next::before {
+  content: '· ';
+}
+
 .departure-delayed {
   color: #ff6b35;
 }
@@ -1713,6 +1721,8 @@ path.leaflet-interactive:focus {
   grid-area: status;
   font-size: 0.78rem;
   min-height: 1em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .departure-sheet .departure-mins {
   grid-area: mins;

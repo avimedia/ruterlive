@@ -451,6 +451,13 @@ const MODE_COLORS_DEP = {
 // Lite kartnål-ikon: avgangen kan vises på kartet
 const PIN_ICON = '<svg class="departure-pin" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg>';
 
+/** «11 min» under 15 minutter, ellers klokkeslett (som Ruter-appen). */
+function nextTimeText(c, now) {
+  const t = new Date(c.expectedDepartureTime || c.aimedDepartureTime).getTime();
+  const mins = Math.round((t - now) / 60000);
+  return mins < 15 ? `${Math.max(1, mins)} min` : new Date(t).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
+}
+
 function departureRowHtml(c, now) {
   const time = c.expectedDepartureTime || c.aimedDepartureTime;
   const dep = new Date(time).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
@@ -468,10 +475,11 @@ function departureRowHtml(c, now) {
     new Date(c.expectedDepartureTime).getTime() > new Date(c.aimedDepartureTime).getTime() + 60000;
   const delayBadge = isDelayed ? ' <span class="departure-delayed">Forsinket</span>' : '';
   const realtime = c.realtime && !isDelayed ? ' <span class="departure-realtime">Sanntid</span>' : '';
+  const next = c.next?.length ? ` <span class="departure-next">Neste ${c.next.map((n) => nextTimeText(n, now)).join(', ')}</span>` : '';
   // Trykk på raden viser kjøretøyet på kartet (js/departure-focus.js)
   const sj = c.serviceJourney?.id;
   const rowAttrs = sj ? ` class="departure-row--tap" data-sj="${escapeHtml(sj)}" tabindex="0" title="Vis på kartet"` : '';
-  return `<tr${rowAttrs}><td class="departure-line" style="color:${lineColor}">${escapeHtml(line)}</td><td class="departure-dest">${escapeHtml(dest)}${sj ? PIN_ICON : ''}</td><td class="departure-time">${dep}</td><td class="departure-mins">${minsText}</td><td class="departure-badges">${realtime}${delayBadge}</td></tr>`;
+  return `<tr${rowAttrs}><td class="departure-line" style="color:${lineColor}">${escapeHtml(line)}</td><td class="departure-dest">${escapeHtml(dest)}${sj ? PIN_ICON : ''}</td><td class="departure-time">${dep}</td><td class="departure-mins">${minsText}</td><td class="departure-badges">${realtime}${delayBadge}${next}</td></tr>`;
 }
 
 /**

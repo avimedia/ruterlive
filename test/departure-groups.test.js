@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupDepartures, quayHeader } from '../js/departure-groups.js';
+import { collapseByLine, groupDepartures, quayHeader } from '../js/departure-groups.js';
 
 const T0 = Date.parse('2026-10-26T12:00:00Z');
 const call = (quayId, min, line = '31', mode = 'bus', dest = '') => ({
@@ -28,7 +28,9 @@ test('groupDepartures: én gruppe per retning, sortert, uten tomme grupper', () 
   ];
   const groups = groupDepartures([call('q1', 5), call('q2', 2), call('q1', 1), call('q3', 3), call('q2', 9)], quays);
   assert.deepEqual(groups.map((g) => g.header), [null, 'Mot sentrum', 'Mot Grorud']);
-  assert.deepEqual(groups[1].calls.map((c) => c.expectedDepartureTime), [call('q1', 1), call('q1', 5)].map((c) => c.expectedDepartureTime));
+  // Samme linje og destinasjon: én rad, neste avgang i `next`
+  assert.deepEqual(groups[1].calls.map((c) => c.expectedDepartureTime), [call('q1', 1).expectedDepartureTime]);
+  assert.deepEqual(groups[1].calls[0].next.map((c) => c.expectedDepartureTime), [call('q1', 5).expectedDepartureTime]);
   // Quay uten avganger gir ingen gruppe
   assert.equal(groupDepartures([call('q1', 1), call('q2', 2)], [...quays, { id: 'q4', description: 'X' }]).length, 2);
 });
@@ -49,12 +51,12 @@ test('groupDepartures: quays med samme overskrift slås sammen, og antall per gr
     { id: 'b', description: 'Mot sentrum' },
     { id: 'c', publicCode: 'C' },
   ];
-  const calls = [1, 2, 3, 4, 5, 6, 7].map((m) => call(m % 2 ? 'a' : 'b', m)).concat([call('c', 1)]);
+  const calls = [1, 2, 3, 4, 5, 6, 7].map((m) => call(m % 2 ? 'a' : 'b', m, String(m))).concat([call('c', 1)]);
   const groups = groupDepartures(calls, quays);
   assert.deepEqual(groups.map((g) => g.header), ['Mot sentrum', 'Plattform C']);
   assert.equal(groups[0].calls.length, 5);
   const many = groupDepartures(
-    'abcdef'.split('').flatMap((id) => [call(id, 1), call(id, 2), call(id, 3)]),
+    'abcdef'.split('').flatMap((id) => [call(id, 1, '1'), call(id, 2, '2'), call(id, 3, '3')]),
     'abcdef'.split('').map((id) => ({ id, publicCode: id.toUpperCase() }))
   );
   assert.equal(many.length, 6);
@@ -63,11 +65,37 @@ test('groupDepartures: quays med samme overskrift slås sammen, og antall per gr
 });
 
 test('groupDepartures: uten grupper maks 3 per modus og 10 totalt (som før)', () => {
-  const calls = Array.from({ length: 8 }, (_, i) => call('q', i + 1, '31', 'bus')).concat(
-    Array.from({ length: 8 }, (_, i) => call('q', i + 1, '5', 'metro'))
+  const calls = Array.from({ length: 8 }, (_, i) => call('q', i + 1, String(20 + i), 'bus')).concat(
+    Array.from({ length: 8 }, (_, i) => call('q', i + 1, String(i + 1), 'metro'))
   );
   const [g] = groupDepartures(calls, [{ id: 'q' }]);
   assert.equal(g.calls.length, 6);
+});
+
+test('collapseByLine: én rad per linje + destinasjon, maks tre neste, rekkefølge etter første avgang', () => {
+  const calls = [
+    call('q', 1, '26', 'bus', 'Bislett'),
+    call('q', 2, '31', 'bus', 'Grorud T'),
+    call('q', 3, '31', 'bus', 'Tonsenhagen'),
+    call('q', 5, '26', 'bus', 'Bislett'),
+    call('q', 6, '31', 'bus', 'Grorud T'),
+    call('q', 7, '26', 'bus', 'Bislett'),
+    call('q', 8, '26', 'bus', 'Bislett'),
+    call('q', 9, '26', 'bus', 'Bislett'),
+    call('q', 10, '26', 'tram', 'Bislett'),
+  ];
+  const rows = collapseByLine(calls);
+  const t = (m) => call('q', m).expectedDepartureTime;
+  assert.deepEqual(rows.map((r) => [r.serviceJourney.journeyPattern.line.publicCode, r.destinationDisplay.frontText]), [
+    ['26', 'Bislett'],
+    ['31', 'Grorud T'],
+    ['31', 'Tonsenhagen'],
+    ['26', 'Bislett'],
+  ]);
+  assert.deepEqual(rows[0].next.map((c) => c.expectedDepartureTime), [t(5), t(7), t(8)]);
+  assert.deepEqual(rows[1].next.map((c) => c.expectedDepartureTime), [t(6)]);
+  assert.deepEqual(rows[2].next, []);
+  assert.equal(rows[3].serviceJourney.journeyPattern.line.transportMode, 'tram');
 });
 
 test('groupDepartures: to quays uten retning blir to grupper med destinasjoner, mot sentrum først', () => {

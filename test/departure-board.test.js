@@ -23,14 +23,14 @@ const bjerkeInfo = (id) =>
     lines: [],
   });
 
-test('perQuayCount: 24 fordelt, minst 3', () => {
-  assert.equal(perQuayCount(1), 24);
-  assert.equal(perQuayCount(2), 12);
-  assert.equal(perQuayCount(4), 6);
-  assert.equal(perQuayCount(7), 4);
-  assert.equal(perQuayCount(13), 3);
-  assert.equal(perQuayCount(30), 3);
-  assert.equal(perQuayCount(0), 24);
+test('perQuayCount: 36 fordelt, minst 4', () => {
+  assert.equal(perQuayCount(1), 36);
+  assert.equal(perQuayCount(2), 18);
+  assert.equal(perQuayCount(4), 9);
+  assert.equal(perQuayCount(7), 6);
+  assert.equal(perQuayCount(13), 4);
+  assert.equal(perQuayCount(30), 4);
+  assert.equal(perQuayCount(0), 36);
 });
 
 test('expandQuayIds: én quay gir hele stoppestedet, den forespurte først', () => {
@@ -59,7 +59,8 @@ test('trimCalls: sortert per quay og runde for runde under taket', () => {
   const total = [...out.values()].reduce((s, l) => s + l.length, 0);
   assert.equal(total, TOTAL_CAP);
   assert.ok([...out.values()].every((l) => l.length >= 1), 'alle quays er med');
-  assert.deepEqual(out.get('q0').map((c) => c.expectedDepartureTime), [at(1), at(3)]);
+  assert.deepEqual(out.get('q0').map((c) => c.expectedDepartureTime), [at(1), at(3), at(5)]);
+  assert.equal(out.get('q19').length, 2);
   assert.equal(trimCalls([{ id: 'a', calls: [] }]).get('a').length, 0);
 });
 
@@ -93,7 +94,7 @@ test('board: én rampe gir alle fire quays i ett kall, med per-quay-antall', asy
   const res = await board.get(['NSR:Quay:10985']);
   assert.equal(calls.departures.length, 1);
   assert.deepEqual([...calls.departures[0].ids].sort(), [...BJERKE].sort());
-  assert.equal(calls.departures[0].n, 6);
+  assert.equal(calls.departures[0].n, 9);
   assert.equal(res.id, 'NSR:Quay:10985');
   assert.equal(res.place.name, 'Bjerke');
   assert.equal(res.quays.length, 4);
@@ -107,7 +108,7 @@ test('board: expand=0 gir bare de gitte quayene', async () => {
   const { board, calls } = fakeBoard();
   const res = await board.get(['NSR:Quay:10985'], { expand: false });
   assert.deepEqual(calls.departures[0].ids, ['NSR:Quay:10985']);
-  assert.equal(calls.departures[0].n, 24);
+  assert.equal(calls.departures[0].n, 36);
   assert.equal(res.quays.length, 1);
 });
 

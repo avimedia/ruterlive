@@ -14,13 +14,16 @@ export const DEPARTURES_TTL_MS = 15_000; // + 15 s i Cloudflare = maks 30 s gamm
 /** Samme grense som før: maks quays i ett JP-kall (og i ?quayId=). */
 export const MAX_QUAYS = 30;
 /** Maks avganger i svaret totalt. */
-export const TOTAL_CAP = 36;
+export const TOTAL_CAP = 48;
 const TIME_RANGE_S = 21600; // 6 t fram
 const TIMEOUT_MS = 8000;
 
-/** Avganger per quay: 24 fordelt på quayene, minst 3 (knutepunkter med mange quays får 3 hver). */
+/**
+ * Avganger per quay: 36 fordelt på quayene, minst 4 (knutepunkter med mange quays får 4 hver), så
+ * tavla har nok til «Neste»-tidene per linje.
+ */
 export function perQuayCount(n) {
-  return Math.max(3, Math.ceil(24 / Math.max(1, n)));
+  return Math.max(4, Math.ceil(36 / Math.max(1, n)));
 }
 
 /**

@@ -26,10 +26,28 @@ function depTime(c) {
   return t ? new Date(t).getTime() : 0;
 }
 
-/** Uten grupper: som før, maks 3 per modus og 10 totalt. */
+/** Neste avganger som vises på samme rad som den første (som i Ruter-appen). */
+export const MAX_NEXT = 3;
+
+/**
+ * Slår sammen avganger med samme linje, modus og destinasjon til én rad: den første avgangen,
+ * med de neste (maks MAX_NEXT) i `next`. Rekkefølgen følger første avgang. Forventer sortert liste.
+ */
+export function collapseByLine(calls, maxNext = MAX_NEXT) {
+  const rows = new Map();
+  for (const c of calls) {
+    const key = `${callMode(c)}|${c?.serviceJourney?.journeyPattern?.line?.publicCode ?? ''}|${frontText(c)}`;
+    const row = rows.get(key);
+    if (!row) rows.set(key, { ...c, next: [] });
+    else if (row.next.length < maxNext) row.next.push(c);
+  }
+  return [...rows.values()];
+}
+
+/** Uten grupper: maks 3 rader per modus og 10 totalt. */
 function flatSelection(calls) {
   const byMode = new Map();
-  for (const c of calls) {
+  for (const c of collapseByLine(calls)) {
     const list = byMode.get(callMode(c)) ?? [];
     if (list.length < 3) list.push(c);
     byMode.set(callMode(c), list);
@@ -64,7 +82,7 @@ export function destinationsOf(calls, max = 2) {
  * Fast rekkefølge: mot sentrum først (når det kan sees), så plattform/spor, så retningsnavn, så quay-ID.
  * @param {object[]} calls estimatedCalls (med quayId)
  * @param {{ id, publicCode?, description? }[]} quays
- * @returns {{ header: string|null, calls: object[] }[]}
+ * @returns {{ header: string|null, calls: object[] }[]} én rad per linje + destinasjon, neste avganger i `next`
  */
 export function groupDepartures(calls, quays = []) {
   const sorted = (calls ?? []).filter((c) => depTime(c) > 0).sort((a, b) => depTime(a) - depTime(b));
@@ -104,5 +122,5 @@ export function groupDepartures(calls, quays = []) {
         (a.explicit && b.explicit ? natural(a.header, b.header) : 0) ||
         natural(a.quayId, b.quayId)
     )
-    .map((g) => ({ header: g.header || null, calls: g.calls.sort((x, y) => depTime(x) - depTime(y)).slice(0, perGroup) }));
+    .map((g) => ({ header: g.header || null, calls: collapseByLine(g.calls.sort((x, y) => depTime(x) - depTime(y))).slice(0, perGroup) }));
 }

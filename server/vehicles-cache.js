@@ -54,9 +54,22 @@ export function createVehiclesCache({ getRegions = serverVisibleRegions, fetchFn
       { timeout: 15000, retries: 2 }
     );
     const data = await res.json();
-    if (data.errors) throw new Error(data.errors[0]?.message || 'GraphQL-feil');
+    // Delvis feil (f.eks. tidsavbrudd for ett alias): de andre regionene beholder sine kjøretøy
+    const ok = regions.filter((r) => Array.isArray(data?.data?.[r.id]));
+    if (data?.errors && ok.length === 0) throw new Error(data.errors[0]?.message || 'GraphQL-feil');
     const byRegion = {};
-    for (const r of regions) byRegion[r.id] = { data: { vehicles: normalizeGpsVehicles(data?.data?.[r.id]) } };
+    const failed = [];
+    for (const r of regions) {
+      if (ok.includes(r)) {
+        byRegion[r.id] = { data: { vehicles: normalizeGpsVehicles(data.data[r.id]) } };
+      } else {
+        failed.push(r.id);
+        byRegion[r.id] = cachedData?.[r.id] || EMPTY; // forrige liste (samme objekt), ellers tom
+      }
+    }
+    if (failed.length && data?.errors) {
+      console.warn(`[RuterLive] Kjøretøy: GraphQL-feil for ${failed.join(', ')} (${data.errors[0]?.message || 'ukjent'}), bruker forrige liste`);
+    }
     return byRegion;
   }
 

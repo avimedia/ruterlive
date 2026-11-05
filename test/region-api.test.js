@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
+import { readFileSync } from 'node:fs';
 import { REGIONS } from '../shared/regions.js';
 import { parseRegionParam, createRegionRegistry, defaultRegionServices } from '../server/region-services.js';
 import { registerLiveRoutes } from '../server/live-routes.js';
@@ -240,4 +241,38 @@ test('avlasting slipper forrige ET-resultat og ferdige live-svar', async () => {
   assert.deepEqual(et.vehicles, [], 'forrige ET-resultat er sluppet');
   assert.ok(vehiclesData);
   clearTimeout(keepAlive);
+});
+
+test('avlastet Bergen: linjesidens kjøretøyoppslag starter ingen ET-henting, og data lastet etter avlasting slippes igjen', async () => {
+  const regions = [oslo, bergen];
+  let t = 0;
+  const runtime = createRegionRuntime({ regions, now: () => t });
+  let etCalls = 0;
+  const xml = readFileSync(new URL('./fixtures/et-sample.xml', import.meta.url), 'utf8');
+  const etFetchFn = async () => { etCalls++; return new Response(xml, { status: 200 }); };
+  const deps = {
+    ensureGtfsStopsLoaded: async () => {},
+    getGtfsQuayCache: () => new Map([['NSR:Quay:1', [60.39, 5.32]]]),
+    ensureLineModes: async () => {},
+    getLineMode: () => null,
+    fetchJpRoutes: async () => [],
+  };
+  const registry = makeRegistry({
+    regions,
+    runtime,
+    createServices: (region, ctx) => defaultRegionServices(region, { ...ctx, etFetchFn, deps, lines: [] }),
+  });
+  registry.watchUnload();
+  t = 2 * 3_600_000;
+  runtime.tick();
+  assert.equal(runtime.stateOf('bergen'), 'unloaded');
+  const s = registry.get('bergen');
+  await s.live.getLiveSources(); // som getMergedVehicles fra /bergen/linje/…
+  await new Promise((r) => setImmediate(r));
+  assert.equal(etCalls, 0, 'ingen ET-henting for en avlastet region');
+  // Data lastet uten besøk (f.eks. en henting som var i gang): neste tick slipper den igjen
+  await s.etCache.refreshNow();
+  assert.notEqual(s.etCache.getAge(), null);
+  runtime.tick();
+  assert.equal(s.etCache.getAge(), null, 'avlastet på nytt');
 });

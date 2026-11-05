@@ -66,6 +66,7 @@ async function readBody(body, idleMs, onChunk, totalMs = BODY_TOTAL_MS) {
  * @param {boolean} [o.waitForFirst] true: getJourneys() venter på første henting (alwaysActive-regioner)
  * @param {number} [o.bodyIdleMs] maks tid mellom to biter av body før nedlastingen avbrytes
  * @param {number} [o.bodyTotalMs] maks tid for hele body
+ * @param {() => void} [o.onLoad] kalles etter hver vellykkede henting (region-runtime kan da avlaste på nytt)
  */
 export function createEtCache({
   datasetId,
@@ -79,6 +80,7 @@ export function createEtCache({
   bodyIdleMs = BODY_IDLE_MS,
   bodyTotalMs = BODY_TOTAL_MS,
   maxSize = DEFAULT_MAX_SIZE,
+  onLoad = () => {},
 }) {
   const url = `https://api.entur.io/realtime/v1/rest/et?datasetId=${datasetId}&maxSize=${maxSize}`;
   // Bare turer i gang eller som kan vises før neste henting lagres
@@ -111,6 +113,7 @@ export function createEtCache({
       throw new Error(`ET ${res.status}`);
     }
     const headersMs = now() - fetchedAt;
+    let loaded = false;
     await runExclusive(async () => {
       const startedAt = now();
       const parser = createEtStreamParser(parseOpts);
@@ -148,8 +151,10 @@ export function createEtCache({
       journeys = parsed;
       version++;
       lastFetch = now();
+      loaded = true;
     });
     lastFailAt = 0;
+    if (loaded) onLoad();
   }
 
   /** Én henting om gangen. Avviser bare når vi ikke har noen tidligere turer. */
@@ -182,17 +187,18 @@ export function createEtCache({
   return {
     /**
      * Parsede ET-turer (se parseEtJourneys), delt av alle tjenester. Turene er frosset.
-     * Utløpt cache: forrige turer returneres straks og revalideres i bakgrunnen (også i hvilende region).
-     * Uten data: venter på første henting bare med waitForFirst, ellers [] og henting i bakgrunnen.
+     * Utløpt cache: forrige turer returneres straks og revalideres i bakgrunnen, men bare mens regionen
+     * er aktiv. Hvilende/avlastet region henter ikke (linjesider og robotene vekker den ikke), bare besøk.
+     * Uten data: venter på første henting bare med waitForFirst, ellers [] og henting i bakgrunnen (aktiv).
      */
     async getJourneys() {
       if (journeys && now() - lastFetch <= refreshMs) return journeys;
       if (journeys) {
-        refreshInBackground();
+        if (isActive()) refreshInBackground();
         return journeys;
       }
       if (!waitForFirst) {
-        refreshInBackground();
+        if (isActive()) refreshInBackground();
         return [];
       }
       await refreshNow();

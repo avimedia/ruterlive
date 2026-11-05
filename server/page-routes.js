@@ -12,8 +12,17 @@ import { renderLinePage } from './pages/line-page.js';
 import { renderStopPage } from './pages/stop-page.js';
 import { renderGuidePage } from './pages/guide-page.js';
 import { regionMapHtml } from './pages/region-map.js';
+import { getRegionServices } from './region-services.js';
 
 const VEHICLE_WAIT_MS = 1500;
+// ET-turer hentet så nylig regnes som lastet; en aktiv region henter hvert 90. s
+const ET_FRESH_MS = 10 * 60 * 1000;
+
+/** Har regionen ferske ET-turer? Hvilende/avlastet region uten nye turer gir false. */
+export function regionEtLoaded(regionId) {
+  const age = getRegionServices(regionId)?.etCache?.getAge?.();
+  return age != null && age <= ET_FRESH_MS;
+}
 
 /**
  * @param {import('express').Express} app
@@ -35,6 +44,7 @@ export function registerPageRoutes(app, {
   guides = GUIDES,
   getStop = getStopBySlug,
   getStopText: stopText = getStopText,
+  etLoaded = regionEtLoaded,
 }) {
   const unavailable = (res, what, err) => {
     console.warn(`[RuterLive] ${what}:`, err.message);
@@ -65,17 +75,19 @@ export function registerPageRoutes(app, {
       const line = getLineBySlug(req.params.slug, region.id);
       if (!line) return sendNotFound(res);
       try {
+        // Ikke-Oslo-regioner: telling bare med ferske ET-turer. Tog og GPS er alltid i lista, så den sier
+        // ingenting om ET. Uten ET slås kjøretøy ikke opp, så linjesider (og robotene) ikke vekker regionen.
+        const countable = region.alwaysActive || etLoaded(region.id);
         const [stops, vehicles, text] = await Promise.all([
           lineStops(line),
           // Kald start: ikke vent på kjøretøy (GTFS/ET) lenger enn 1,5 s; da rendres siden uten telling.
-          Promise.race([
+          countable ? Promise.race([
             Promise.resolve(mergedVehicles(region.id)).catch(() => null),
             new Promise((resolve) => setTimeout(() => resolve(null), VEHICLE_WAIT_MS).unref?.()),
-          ]),
+          ]) : null,
           getLineText(line.slug, region.id),
         ]);
-        // Ikke-Oslo-regioner kan være hvilende/avlastet uten ET-turer: tom liste regnes som «ikke lastet ennå»
-        const loaded = vehicles && (region.alwaysActive || vehicles.length > 0);
+        const loaded = countable && vehicles;
         res.set('Cache-Control', stops && loaded ? 'public, max-age=300' : 'no-store');
         res.type('html').send(renderLinePage(line, stops, loaded ? countVehiclesForLine(vehicles, line) : null, text));
       } catch (err) {

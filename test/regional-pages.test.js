@@ -44,6 +44,7 @@ function startApp(deps = {}) {
     loadGuideBody: async () => '<p>Brødtekst</p>',
     getStop: (slug, regionId) => (regionId === 'bergen' && slug === stubStop.slug ? stubStop : undefined),
     getStopText: async () => '',
+    etLoaded: () => true,
     ...deps,
   });
   return new Promise((resolve) => {
@@ -284,8 +285,44 @@ test('getLineStops: to JP-linjer med samme kode, modus avgjør', async () => {
   assert.ok(queries.at(-1).includes('SKY:Line:bestilling'));
 });
 
-test('tom kjøretøyliste i ikke-Oslo-region: ingen telling og kort cache', async () => {
-  const r = await fetch(`${base}/bergen/linje/bybanen-1`);
-  assert.equal(r.headers.get('cache-control'), 'no-store');
-  assert.doesNotMatch(await r.text(), /Ute akkurat nå/);
+async function pageApp(deps, fn) {
+  const app = express();
+  registerPageRoutes(app, {
+    visible,
+    indexPath,
+    sendNotFound: (res) => res.status(404).send('404'),
+    getLineStops: async () => ({ stops: ['A', 'B', 'C'], from: 'A', to: 'C', name: 'x', fetchedAt: '2026-11-05T10:00:00Z' }),
+    stopService: { getInfo: async () => null, getDepartures: async () => null },
+    ...deps,
+  });
+  const srv = app.listen(0);
+  await new Promise((r) => srv.once('listening', r));
+  try { await fn(`http://127.0.0.1:${srv.address().port}`); } finally { await new Promise((r) => srv.close(r)); }
+}
+
+test('Bergen uten lastet ET: kjøretøy slås ikke opp (vekker ikke regionen), ingen telling og kort cache', async () => {
+  const asked = [];
+  await pageApp({
+    getMergedVehicles: async (id) => { asked.push(id); return [{ mode: 'rail', line: { publicCode: 'R1' } }]; },
+    etLoaded: () => false,
+  }, async (b) => {
+    const r = await fetch(`${b}/bergen/linje/bybanen-1`);
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('cache-control'), 'no-store');
+    assert.doesNotMatch(await r.text(), /Ute akkurat nå/);
+    assert.deepEqual(asked, [], 'ingen oppslag for Bergen');
+    await fetch(`${b}/linje/buss-20`);
+    assert.deepEqual(asked, ['oslo'], 'Oslo slår alltid opp, som før');
+  });
+});
+
+test('Bergen med lastet ET: telling vises også når den er 0, og siden caches (tog/GPS i lista avgjør ikke)', async () => {
+  await pageApp({
+    getMergedVehicles: async () => [{ mode: 'rail', line: { publicCode: 'R1' } }],
+    etLoaded: (id) => id === 'bergen',
+  }, async (b) => {
+    const r = await fetch(`${b}/bergen/linje/bybanen-1`);
+    assert.equal(r.headers.get('cache-control'), 'public, max-age=300');
+    assert.match(await r.text(), /Ute akkurat nå: <strong>0<\/strong>/);
+  });
 });

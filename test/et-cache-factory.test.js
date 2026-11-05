@@ -53,16 +53,43 @@ test('start() henter én gang uansett aktiv, intervallet henter bare når aktiv'
   } finally { mock.timers.reset(); }
 });
 
-test('hvilende region: siste kopi returneres og én henting startes', async () => {
-  const { cache, fetchFn, clock } = make({ isActive: () => false });
+test('hvilende region: siste kopi returneres uten ny henting (linjesider vekker ikke regionen)', async () => {
+  let active = true;
+  const { cache, fetchFn, clock } = make({ isActive: () => active });
   const a = await cache.getJourneys();
+  active = false;
   clock.advance(200_000);
   const b = await cache.getJourneys();
   const c = await cache.getJourneys();
   assert.equal(a, b);
   assert.equal(b, c);
   await tickIO(); await tickIO();
-  assert.equal(fetchFn.calls, 2, 'bare én ekstra henting');
+  assert.equal(fetchFn.calls, 1, 'ingen ny henting mens regionen ikke er aktiv');
+  active = true;
+  await cache.getJourneys();
+  await tickIO(); await tickIO();
+  assert.equal(fetchFn.calls, 2, 'aktiv igjen: én henting i bakgrunnen');
+});
+
+test('avlastet region uten turer: [] og ingen henting før regionen er aktiv', async () => {
+  let active = false;
+  const { cache, fetchFn } = make({ isActive: () => active, waitForFirst: false });
+  assert.deepEqual(await cache.getJourneys(), []);
+  await tickIO(); await tickIO();
+  assert.equal(fetchFn.calls, 0);
+  active = true;
+  assert.deepEqual(await cache.getJourneys(), []);
+  await tickIO(); await tickIO();
+  assert.equal(fetchFn.calls, 1);
+});
+
+test('onLoad kalles etter hver vellykkede henting, ikke etter forkastet', async () => {
+  let loads = 0;
+  const { cache } = make({ onLoad: () => { loads++; } });
+  await cache.getJourneys();
+  assert.equal(loads, 1);
+  await cache.refreshNow();
+  assert.equal(loads, 2);
 });
 
 test('drop() uten venting: [] med en gang, deretter turer', async () => {

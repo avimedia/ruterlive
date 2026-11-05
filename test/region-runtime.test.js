@@ -109,3 +109,18 @@ test('runExclusive: avvist oppgave blokkerer ikke køen og avvisningen når kall
   assert.equal(await b, 'ok');
   assert.deepEqual(log, ['a', 'b']);
 });
+
+test('loaded(id) etter avlasting: neste tick avlaster på nytt (data lastet uten besøk slippes igjen)', () => {
+  const { rt, adv } = lag();
+  const unloaded = [];
+  rt.onUnload((id) => unloaded.push(id));
+  adv(61 * MIN);
+  rt.tick();
+  assert.deepEqual(unloaded, ['bergen']);
+  rt.tick();
+  assert.deepEqual(unloaded, ['bergen'], 'ikke på nytt uten ny data');
+  rt.loaded('bergen');
+  rt.tick();
+  assert.deepEqual(unloaded, ['bergen', 'bergen']);
+  rt.loaded('ukjent'); // kaster ikke
+});

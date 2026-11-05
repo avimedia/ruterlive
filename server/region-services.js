@@ -71,6 +71,8 @@ export function defaultRegionServices(region, { runtime, etFetchFn, deps = {}, l
     maxSize: region.etMaxSize, // SKY har ~6800 turer; 3000 kuttet over halvparten av turene som går
     isActive: () => runtime.stateOf(region.id) === 'active',
     runExclusive: runtime.runExclusive, // to ET-parsinger kjører aldri samtidig
+    // Ny data etter avlasting (f.eks. en henting som var i gang) slippes igjen ved neste tick
+    onLoad: () => runtime.loaded?.(region.id),
     waitForFirst: region.alwaysActive === true,
     // Uten Ruter-fallback for linjenummer: behold turer uten modus, modus settes fra JP (Ruling 8)
     parserOpts: region.lineNumberFallback === 'ruter' ? {} : { keepUnknownMode: true, useVehicleMode: true },

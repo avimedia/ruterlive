@@ -29,6 +29,11 @@ export function createRegionRuntime({
     notified.delete(id);
   }
 
+  /** Regionen har fått ny data (ET-henting): kan avlastes på nytt ved neste tick. */
+  function loaded(id) {
+    notified.delete(id);
+  }
+
   function onUnload(fn) {
     listeners.push(fn);
   }
@@ -54,5 +59,5 @@ export function createRegionRuntime({
     return result;
   }
 
-  return { touch, stateOf, onUnload, tick, runExclusive };
+  return { touch, stateOf, onUnload, tick, runExclusive, loaded };
 }

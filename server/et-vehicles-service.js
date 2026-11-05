@@ -193,8 +193,10 @@ export function createEtVehiclesService({ region, etCache, deps = {} }) {
   let cached = null;
   let lastCompute = 0;
   let shapesKey = { etVersion: -1, gtfs: null };
+  let generation = 0; // Øker ved drop(); en beregning som startet før, lagres ikke
 
   const computeDeduped = dedupeInFlight(async () => {
+    const gen = generation;
     try {
       await ensureGtfs();
       const gtfs = getGtfs();
@@ -228,6 +230,8 @@ export function createEtVehiclesService({ region, etCache, deps = {} }) {
 
       const sameShapes = cached && shapesKey.etVersion === etVersion && shapesKey.gtfs === gtfs;
       const result = buildVehiclesAndShapes(journeys, quayCoordCache, region, sameShapes ? cached.shapes : null);
+      // Ingen turer ennå (kald start eller rett etter avlasting): ikke cache, neste kall ser ET når den er hentet
+      if (gen !== generation || parsed.length === 0) return result;
       shapesKey = { etVersion, gtfs };
       cached = result;
       lastCompute = Date.now();
@@ -252,6 +256,7 @@ export function createEtVehiclesService({ region, etCache, deps = {} }) {
 
   /** Avlastet region: slipp siste beregning (kjøretøy og ET-rutekart). */
   function drop() {
+    generation++;
     cached = null;
     lastCompute = 0;
     shapesKey = { etVersion: -1, gtfs: null };

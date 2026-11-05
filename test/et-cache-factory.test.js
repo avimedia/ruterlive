@@ -228,6 +228,59 @@ test('like mange turer som maxSize: advarsel om avkutting (Entur sender ikke Mor
       datasetId: 'SKY', fetchFn: makeFetch(), maxSize: 17, waitForFirst: true, now: () => FIXTURE_NOW,
     }).getJourneys();
     assert.ok(warn.mock.calls.some((c) => /17 turer ≥ maxSize=17/.test(c.arguments[0])));
-    assert.ok(log.mock.calls.some((c) => /17 turer lest, 8 beholdt/.test(c.arguments[0])));
+    assert.ok(log.mock.calls.some((c) => /17 turer lest, 9 beholdt/.test(c.arguments[0])));
   } finally { warn.mock.restore(); log.mock.restore(); }
+});
+
+test('body som drypper: totalfrist avbryter selv om bitene kommer innen idle-tiden', async () => {
+  let timer;
+  const dripping = async () => new Response(new ReadableStream({
+    start(c) { timer = setInterval(() => c.enqueue(new TextEncoder().encode(' ')), 10); },
+    cancel() { clearInterval(timer); },
+  }), { status: 200 });
+  const cache = createEtCache({ datasetId: 'SKY', fetchFn: dripping, bodyIdleMs: 50, bodyTotalMs: 120, waitForFirst: true });
+  const t0 = Date.now();
+  await assert.rejects(cache.refreshNow(), /for treg/);
+  assert.ok(Date.now() - t0 < 1000);
+  clearInterval(timer);
+});
+
+test('429 og gammel cache: samme kjøretøy med og uten filter ved +7,5 og +15 min', async () => {
+  const { selectJourneysForVehicles } = await import('../shared/et-journeys.js');
+  const t0 = Date.parse('2026-11-05T12:00:00Z');
+  const min = 60_000;
+  const iso = (ms) => new Date(ms).toISOString();
+  // Turer uten passerte kall som starter hvert 2. min de neste 60 min, hver med eget kjøretøy
+  const body = Array.from({ length: 30 }, (_, i) => {
+    const dep = t0 + (i * 2 + 1) * min;
+    return `<EstimatedVehicleJourney><LineRef>RUT:Line:31</LineRef><FramedVehicleJourneyRef><DatedVehicleJourneyRef>T${i}</DatedVehicleJourneyRef></FramedVehicleJourneyRef>`
+      + `<EstimatedCalls><EstimatedCall><StopPointRef>NSR:Quay:1</StopPointRef><ExpectedDepartureTime>${iso(dep)}</ExpectedDepartureTime></EstimatedCall>`
+      + `<EstimatedCall><StopPointRef>NSR:Quay:2</StopPointRef><ExpectedArrivalTime>${iso(dep + 10 * min)}</ExpectedArrivalTime></EstimatedCall></EstimatedCalls></EstimatedVehicleJourney>`;
+  }).join('');
+  const xml = `<Siri><ServiceDelivery><EstimatedTimetableDelivery><EstimatedJourneyVersionFrame>${body}</EstimatedJourneyVersionFrame></EstimatedTimetableDelivery></ServiceDelivery></Siri>`;
+  const make429After1 = () => {
+    let n = 0;
+    return async () => (n++ === 0 ? new Response(xml, { status: 200 }) : new Response('', { status: 429 }));
+  };
+  const warn = mock.method(console, 'warn', () => {});
+  try {
+    let t = t0;
+    const mk = (parserOpts) => createEtCache({ datasetId: 'RUT', fetchFn: make429After1(), now: () => t, waitForFirst: true, ...(parserOpts ? { parserOpts } : {}) });
+    const filtered = mk();
+    const all = mk({ relevantWithinMs: null });
+    await filtered.getJourneys();
+    await all.getJourneys();
+    t = t0 + 91_000; // utløpt: bakgrunnshenting gir 429
+    await filtered.getJourneys(); await all.getJourneys();
+    await tickIO(); await tickIO();
+    const ids = (js) => selectJourneysForVehicles(js, t).map((j) => j.datedVehicleJourneyRef).sort();
+    for (const age of [7.5, 15]) {
+      t = t0 + age * min;
+      const a = await filtered.getJourneys();
+      const b = await all.getJourneys();
+      assert.equal(filtered.getVersion(), 1, 'fortsatt første henting');
+      assert.ok(ids(b).length > 0);
+      assert.deepEqual(ids(a), ids(b), `+${age} min`);
+    }
+  } finally { warn.mock.restore(); }
 });

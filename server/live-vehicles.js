@@ -7,22 +7,8 @@ import { matchRouteForVehicle } from '../shared/route-match.js';
 // Syklisk import (region-services bruker hjelperne her); trygt, bare funksjonsdeklarasjoner brukes på tvers
 import { getRegionServices } from './region-services.js';
 
-function shapeKey(s) {
-  return `${(s.mode || '').toLowerCase()}|${(s.line || '').toString()}|${s.from || ''}|${s.to || ''}`;
-}
-
-export function mergeShapes(a, b) {
-  const byKey = new Map();
-  for (const s of a || []) byKey.set(shapeKey(s), s);
-  for (const s of b || []) {
-    const k = shapeKey(s);
-    const ex = byKey.get(k);
-    const ptsNew = s.points?.length ?? 0;
-    const ptsOld = ex?.points?.length ?? 0;
-    if (!ex || ptsNew >= ptsOld) byKey.set(k, s);
-  }
-  return [...byKey.values()];
-}
+// Flyttet til shape-merge.js (brukes også av shape-service uten syklisk import); eksporteres videre herfra
+export { mergeShapes } from './shape-merge.js';
 
 /**
  * GPS-kjøretøy (GraphQL) beriket med fra/til/via fra ET, pluss ET-kjøretøy uten GPS.

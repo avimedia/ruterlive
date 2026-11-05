@@ -181,3 +181,61 @@ test('drop() slipper 15 s-cachen, neste kall beregner på nytt', async () => {
   svc.drop();
   assert.equal((await svc.getVehiclesAndShapes()).vehicles.length, 0);
 });
+
+test('shape-service: hver time slås nye rutekart sammen med forrige; full ombygging etter 24 t', async () => {
+  let t = 1_000_000;
+  let journeys = [journey('SKY:Line:2', 'bus', 'a')];
+  let jpCalls = 0;
+  const svc = createShapeService({
+    region: getRegion('oslo'),
+    etCache: { getJourneys: async () => journeys },
+    deps: {
+      ...deps({ 'SKY:Line:2': 'bus', 'SKY:Line:3': 'bus' }),
+      now: () => t,
+      fetchJpRoutes: async () => { jpCalls++; return [{ mode: 'rail', line: 'R', from: 'a', to: 'b', points: [[0, 0], [1, 1]] }]; },
+    },
+  });
+  const lines = (shapes) => shapes.filter((x) => x.mode !== 'rail').map((x) => x.line).sort();
+  assert.deepEqual(lines(await svc.refresh()), ['2']);
+  journeys = [journey('SKY:Line:3', 'bus', 'b')];
+  t += 10 * 60_000;
+  assert.deepEqual(lines(await svc.refresh()), ['2'], 'innen TTL: uendret');
+  t += 50 * 60_000;
+  const second = await svc.refresh();
+  assert.deepEqual(lines(second), ['2', '3'], 'rutekart fra første oppdatering overlever');
+  t += 60 * 60_000;
+  assert.equal(await svc.refresh(), second, 'samme sett: samme array (ingen ny shapesVersion)');
+  t += 24 * 60 * 60_000;
+  assert.deepEqual(lines(await svc.refresh()), ['3'], 'etter 24 t: bygget helt på nytt');
+  assert.equal(jpCalls, 2, 'JP-togruter bare ved start og etter 24 t');
+});
+
+test('tom ET caches ikke: turer som kommer sekunder senere vises med en gang', async () => {
+  let journeys = [];
+  const svc = createEtVehiclesService({
+    region: getRegion('bergen'),
+    etCache: { getJourneys: async () => journeys, getVersion: () => (journeys.length ? 1 : 0) },
+    deps: deps({ 'SKY:Line:2': 'tram' }),
+  });
+  assert.equal((await svc.getVehiclesAndShapes()).vehicles.length, 0);
+  journeys = [journey('SKY:Line:2', 'bus')];
+  assert.equal((await svc.getVehiclesAndShapes()).vehicles.length, 1);
+});
+
+test('drop() under pågående beregning: resultatet lagres ikke', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let calls = 0;
+  const svc = createEtVehiclesService({
+    region: getRegion('bergen'),
+    etCache: { getJourneys: async () => { calls++; if (calls === 1) await gate; return [journey('SKY:Line:2', 'bus')]; }, getVersion: () => 1 },
+    deps: deps({ 'SKY:Line:2': 'tram' }),
+  });
+  const first = svc.getVehiclesAndShapes();
+  await new Promise((r) => setImmediate(r));
+  svc.drop();
+  release();
+  await first;
+  await svc.getVehiclesAndShapes();
+  assert.equal(calls, 2, 'ny beregning etter drop(), ikke den gamle fra cachen');
+});

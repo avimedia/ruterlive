@@ -158,7 +158,8 @@ export function createEtStreamParser(opts = {}) {
   const intern = makeInterner();
   const keeper = opts.relevantWithinMs != null ? createJourneyKeeper(opts) : null;
   const journeys = [];
-  const stats = { seen: 0, keep: keeper?.keep };
+  const stats = { seen: 0 };
+  const keep = keeper?.keep ?? null;
   let buf = '';
   let scanFrom = 0;
   return {
@@ -172,13 +173,13 @@ export function createEtStreamParser(opts = {}) {
       let cut = -1;
       for (let m; (m = CLOSE_JOURNEY_RE.exec(buf));) cut = m.index + m[0].length;
       if (cut > 0) {
-        parseInto(buf.slice(0, cut), journeys, intern, opts, stats);
+        parseInto(buf.slice(0, cut), journeys, intern, opts, stats, keep);
         buf = buf.slice(cut);
       }
       scanFrom = Math.max(0, buf.length - CLOSE_JOURNEY_MAX_LEN);
     },
     end() {
-      if (buf) parseInto(buf, journeys, intern, opts, stats);
+      if (buf) parseInto(buf, journeys, intern, opts, stats, keep);
       buf = '';
       /(?:)/.exec('');
       return keeper ? keeper.end() : journeys;
@@ -237,9 +238,9 @@ const isCallCancelled = (cel) => {
  * opts.mode: fast modus for alle turer (f.eks. 'rail' for BNR, der linjekoder som R70 ikke er tall).
  * opts.skipCancelled: hopper over innstilte turer og innstilte kall.
  * opts.relevantWithinMs (bare createEtStreamParser): se createJourneyKeeper.
+ * keep(tur): mottar hver tur i stedet for journeys.push (filteret i createJourneyKeeper).
  */
-
-function parseInto(xmlText, journeys, intern, opts = {}, stats = null) {
+function parseInto(xmlText, journeys, intern, opts = {}, stats = null, keep = null) {
   const text = (src, name) => firstText(src, name, intern);
 
   for (const jel of eachElement(xmlText, 'EstimatedVehicleJourney')) {
@@ -296,7 +297,7 @@ function parseInto(xmlText, journeys, intern, opts = {}, stats = null) {
       recordedCalls,
       estimatedCalls,
     };
-    if (stats?.keep) stats.keep(journey);
+    if (keep) keep(journey);
     else journeys.push(journey);
   }
   // V8 husker siste regex-input (RegExp.input) globalt. Den er en delstreng av XML-en

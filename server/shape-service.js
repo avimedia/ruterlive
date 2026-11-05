@@ -10,6 +10,7 @@ import { fetchJpRoutes } from './jp-route-fetcher.js';
 import { ensureLineModes, getLineMode } from './line-modes.js';
 import { getRegion } from '../shared/regions.js';
 import { CLIENT_NAME } from './entur-client.js';
+import { mergeShapes, shapeKey } from './shape-merge.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 
@@ -156,7 +157,19 @@ function buildRouteShapes(journeys, quayCoordCache, region) {
   return shapes;
 }
 
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 1 døgn
+// ET-turene dekker bare det som går nå (filteret i et-cache.js), så rutekartene bygges hver time og slås
+// sammen med forrige sett; hvert døgn bygges de helt på nytt, så nedlagte varianter forsvinner.
+// TTL litt under intervallet i region-services.js (60 min), så hvert tikk faktisk oppdaterer.
+const REFRESH_TTL_MS = 50 * 60 * 1000;
+const FULL_REBUILD_MS = 24 * 60 * 60 * 1000;
+const JP_TTL_MS = 24 * 60 * 60 * 1000; // JP-togruter fra Oslo S: én gang i døgnet, som før
+
+/** Samme nøkler og punktantall: settet er uendret (behold forrige array, så memo-cacher ikke bygger på nytt). */
+function sameShapeSet(a, b) {
+  if (a.length !== b.length) return false;
+  const counts = new Map(a.map((x) => [shapeKey(x), x.points?.length ?? 0]));
+  return b.every((x) => counts.get(shapeKey(x)) === (x.points?.length ?? 0));
+}
 
 /**
  * Rutekarttjeneste for én region. JP-togruter fra Oslo S hentes bare når region.jpRailFallback.
@@ -174,19 +187,24 @@ export function createShapeService({ region, etCache, deps = {} }) {
   } = {};
   const quayCoordCache = new Map();
   let cachedShapes = [];
+  let etShapes = []; // ET-rutekart samlet siden siste fulle bygging
+  let jpShapes = [];
   let lastFetch = 0;
+  let lastFullBuild = 0;
+  let lastJpFetch = 0;
 
-  const isCacheFresh = () => cachedShapes.length > 0 && now() - lastFetch < CACHE_TTL_MS;
+  const isCacheFresh = () => cachedShapes.length > 0 && now() - lastFetch < REFRESH_TTL_MS;
 
   async function refresh() {
     if (isCacheFresh()) return cachedShapes;
     let shapes = [];
-    const jpPromise = region.jpRailFallback === true
+    const jpDue = region.jpRailFallback === true && (jpShapes.length === 0 || now() - lastJpFetch >= JP_TTL_MS);
+    const jpPromise = jpDue
       ? fetchJp(quayCoordCache).catch((err) => {
           console.warn('[RuterLive] JP routes fetch:', err.message);
-          return [];
+          return null;
         })
-      : Promise.resolve([]);
+      : Promise.resolve(null);
 
     await ensureGtfs();
 
@@ -224,11 +242,20 @@ export function createShapeService({ region, etCache, deps = {} }) {
       console.warn('[RuterLive] shape-service ET:', err.message);
     }
 
-    const jpShapes = await jpPromise;
-    shapes = [...shapes, ...jpShapes];
+    const jp = await jpPromise;
+    if (jp?.length) {
+      jpShapes = jp;
+      lastJpFetch = now();
+    }
 
     if (shapes.length > 0) {
-      cachedShapes = shapes;
+      const full = lastFullBuild === 0 || now() - lastFullBuild >= FULL_REBUILD_MS;
+      etShapes = full ? shapes : mergeShapes(etShapes, shapes);
+      if (full) lastFullBuild = now();
+    }
+    const next = [...etShapes, ...jpShapes];
+    if (next.length > 0) {
+      if (!sameShapeSet(cachedShapes, next)) cachedShapes = next;
       lastFetch = now();
     }
     return cachedShapes;

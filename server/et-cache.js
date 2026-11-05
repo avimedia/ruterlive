@@ -18,19 +18,32 @@ const MORE_DATA_TAG = '<MoreData>true</MoreData>';
 // (undici venter ellers opptil 300 s, og den andre regionens oppdatering står i kø imens)
 const BODY_IDLE_MS = 20000;
 const DEFAULT_MAX_SIZE = 3000; // overstyres per region med etMaxSize
-// Turer som ikke er i gang lagres bare når de starter innen visningsvinduet (10 min) + 5 min margin for
-// cachens alder (90 s mellom hentinger, opptil 5 min pause etter 429)
-const RELEVANT_WITHIN_MS = WAITING_WINDOW_MS + 5 * 60 * 1000;
+// Turer som ikke er i gang lagres når de starter innen visningsvinduet (10 min) + 30 min margin for
+// cachens alder: én 429 gir ~7,5 min (5 min pause + neste 90 s-tikk + henting), flere 429 eller
+// tidsavbrudd på rad mer. Med 30 min forsvinner ingen tur som kan vises før neste vellykkede henting.
+const STALE_MARGIN_MS = 30 * 60 * 1000;
+const RELEVANT_WITHIN_MS = WAITING_WINDOW_MS + STALE_MARGIN_MS;
 const ENDED_GRACE_MS = 2 * 60 * 1000; // turer som sluttet for mer enn 2 min siden lagres ikke
 
-/** Leser body bit for bit; avviser og avbryter hvis det går mer enn idleMs mellom bitene. */
-async function readBody(body, idleMs, onChunk) {
+const BODY_TOTAL_MS = 120000; // hele body innen 2 min, selv om biter kommer dryppende
+
+/**
+ * Leser body bit for bit; avviser og avbryter hvis det går mer enn idleMs mellom bitene
+ * eller mer enn totalMs til sammen.
+ */
+async function readBody(body, idleMs, onChunk, totalMs = BODY_TOTAL_MS) {
   const reader = body.getReader();
+  const deadline = Date.now() + totalMs;
   let timer;
   try {
     for (;;) {
+      const left = deadline - Date.now();
+      const idle = left > idleMs;
+      const wait = Math.max(0, idle ? idleMs : left);
       const stalled = new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`ET-body stoppet (ingen data på ${idleMs / 1000} s)`)), idleMs);
+        timer = setTimeout(() => reject(new Error(idle
+          ? `ET-body stoppet (ingen data på ${idleMs / 1000} s)`
+          : `ET-body for treg (over ${totalMs / 1000} s)`)), wait);
       });
       const { done, value } = await Promise.race([reader.read(), stalled]);
       clearTimeout(timer);
@@ -52,6 +65,7 @@ async function readBody(body, idleMs, onChunk) {
  * @param {object} [o.parserOpts] valg til createEtStreamParser (Bergen: { keepUnknownMode: true, useVehicleMode: true })
  * @param {boolean} [o.waitForFirst] true: getJourneys() venter på første henting (alwaysActive-regioner)
  * @param {number} [o.bodyIdleMs] maks tid mellom to biter av body før nedlastingen avbrytes
+ * @param {number} [o.bodyTotalMs] maks tid for hele body
  */
 export function createEtCache({
   datasetId,
@@ -63,6 +77,7 @@ export function createEtCache({
   waitForFirst = false,
   parserOpts = {},
   bodyIdleMs = BODY_IDLE_MS,
+  bodyTotalMs = BODY_TOTAL_MS,
   maxSize = DEFAULT_MAX_SIZE,
 }) {
   const url = `https://api.entur.io/realtime/v1/rest/et?datasetId=${datasetId}&maxSize=${maxSize}`;
@@ -111,7 +126,7 @@ export function createEtCache({
         parser.push(text);
       };
       if (res.body) {
-        await readBody(res.body, bodyIdleMs, (chunk) => push(decoder.decode(chunk, { stream: true })));
+        await readBody(res.body, bodyIdleMs, (chunk) => push(decoder.decode(chunk, { stream: true })), bodyTotalMs);
       }
       push(decoder.decode());
       const parsed = parser.end();

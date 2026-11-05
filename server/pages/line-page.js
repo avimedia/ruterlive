@@ -3,6 +3,7 @@
 import { REGION_LINES } from '../line-catalog.js';
 import { findRegion, getRegion, regionPath } from '../../shared/regions.js';
 import { findStopByName } from '../stop-catalog.js';
+import { renderSituationBox } from './situations-page.js';
 import { breadcrumbLd, escapeHtml, lineBadge, renderPage } from './layout.js';
 
 const MAP_ZOOM = { metro: 12, tram: 12, rail: 10, flytog: 10, flybuss: 10, bus: 11 };
@@ -70,10 +71,11 @@ function formatDate(iso) {
 }
 
 /**
+ * @param {object[]} [situations] avvik for linjen (vises som «Avvik nå» etter intro/knapper)
  * @param {string} [text] håndskrevet HTML-fragment fra getLineText (vises mellom hero og stopplisten)
  * @returns {string} komplett HTML-dokument
  */
-export function renderLinePage(line, stopsResult, vehicleCount, text) {
+export function renderLinePage(line, stopsResult, vehicleCount, text, situations = []) {
   const hasStops = Boolean(stopsResult?.stops?.length);
   const indexed = line.indexed !== false;
   const region = findRegion(line.regionId) ?? getRegion();
@@ -118,6 +120,8 @@ ${stopsResult.stops.map((s) => `      <li>${stopItem(s, region)}</li>`).join('\n
     isOslo && '      <li><a href="/guider/sanntidsposisjoner">Slik fungerer sanntidsposisjonene</a></li>',
   ].filter(Boolean);
   const readMoreHtml = readMore.length ? `\n    <h2>Les mer</h2>\n    <ul class="link-list">\n${readMore.join('\n')}\n    </ul>` : '';
+  const situationBox = renderSituationBox(situations);
+  const box = situationBox ? `${situationBox}\n` : '';
   const body = `    <div class="line-hero">
       <p class="eyebrow">${isOslo ? '' : `<a href="${escapeHtml(region.path)}">${escapeHtml(region.shortName)}</a> / `}<a href="/guider">Linjer</a> / ${escapeHtml(MODE_LABEL[line.mode] ?? '')}</p>
       <h1 class="line-title">${lineBadge(line, { size: 'lg' })} <span>${escapeHtml(line.title)}</span></h1>
@@ -127,7 +131,7 @@ ${stopsResult.stops.map((s) => `      <li>${stopItem(s, region)}</li>`).join('\n
         ${vehicles}
       </div>
     </div>
-${text ? `    <div class="prose line-text">\n${text.trim()}\n    </div>\n` : ''}    ${stopsHtml}
+${box}${text ? `    <div class="prose line-text">\n${text.trim()}\n    </div>\n` : ''}    ${stopsHtml}
     ${othersHtml}${readMoreHtml}`;
 
   return renderPage({

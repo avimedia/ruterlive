@@ -124,6 +124,21 @@ export function listableSituations(index) {
 }
 
 /** Union av avvik for flere quay-/stopPlace-ID-er, uten duplikater. */
+/**
+ * Avvik for en katalogelinje: lineRef = katalogens `ref` eller `<authority>:Line:<kode>` (også aliaser),
+ * og som reserve kodeområde + publicCode (lineRef-en kan ha en annen intern ID enn koden).
+ */
+export function situationsForLine(index, line) {
+  const codes = [line.code, ...(line.aliases || [])].map((c) => String(c ?? '').toUpperCase()).filter(Boolean);
+  const refs = new Set([line.ref, ...codes.map((c) => `${line.authority}:Line:${c}`)].filter(Boolean));
+  const seen = new Map();
+  for (const ref of refs) for (const s of index.byLine.get(ref) || []) seen.set(s.id, s);
+  for (const s of index.byCodespace.get(line.authority) || []) {
+    if (!seen.has(s.id) && s.lines.some((l) => codes.includes(String(l.code ?? '').toUpperCase()))) seen.set(s.id, s);
+  }
+  return [...seen.values()].sort(compareSituations);
+}
+
 export function situationsForStop(index, ids) {
   const seen = new Set();
   const out = [];

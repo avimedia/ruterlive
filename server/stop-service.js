@@ -85,7 +85,8 @@ export function parseStopInfo(sp) {
   // servedQuayCount: bare quayer med minst én linje i en modus siden viser (Bergen lufthavn har ~30 flyquayer/gater).
   // quayCount (alle) beholdes for Oslo, der sidene skal være uendret.
   const servedQuayCount = (sp.quays ?? []).filter((q) => (q?.lines ?? []).some((l) => baseMode(l?.transportMode))).length;
-  return { lines: [...lines.values()], zones, quayCount: (sp.quays ?? []).length, servedQuayCount };
+  const quayIds = (sp.quays ?? []).map((q) => q?.id).filter(Boolean);
+  return { lines: [...lines.values()], zones, quayIds, quayCount: (sp.quays ?? []).length, servedQuayCount };
 }
 
 export function parseDepartures(sp) {

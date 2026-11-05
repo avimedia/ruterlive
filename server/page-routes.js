@@ -8,6 +8,8 @@ import { getLineBySlug, getLineStops, getLineText } from './line-catalog.js';
 import { getMergedVehicles, countVehiclesForLine } from './live-vehicles.js';
 import { getGuideBySlug, loadGuideBody, GUIDES } from './guide-catalog.js';
 import { getStopBySlug, getStopText } from './stop-catalog.js';
+import { getSituationService } from './situations.js';
+import { situationsForLine, situationsForStop } from './situations-model.js';
 import { renderLinePage } from './pages/line-page.js';
 import { renderStopPage } from './pages/stop-page.js';
 import { renderGuidePage } from './pages/guide-page.js';
@@ -45,7 +47,11 @@ export function registerPageRoutes(app, {
   getStop = getStopBySlug,
   getStopText: stopText = getStopText,
   etLoaded = regionEtLoaded,
+  getSituationIndex = () => getSituationService().getIndex(),
 }) {
+  const indexOrNull = () => { try { return getSituationIndex(); } catch { return null; } };
+  const situationsFor = (line) => { const i = indexOrNull(); return i ? situationsForLine(i, line) : []; };
+  const stopSituations = (stop, info) => { const i = indexOrNull(); return i ? situationsForStop(i, [stop.id, ...(info?.quayIds ?? [])]) : []; };
   const unavailable = (res, what, err) => {
     console.warn(`[RuterLive] ${what}:`, err.message);
     res.set('Cache-Control', 'no-store');
@@ -89,7 +95,7 @@ export function registerPageRoutes(app, {
         ]);
         const loaded = countable && vehicles;
         res.set('Cache-Control', stops && loaded ? 'public, max-age=300' : 'no-store');
-        res.type('html').send(renderLinePage(line, stops, loaded ? countVehiclesForLine(vehicles, line) : null, text));
+        res.type('html').send(renderLinePage(line, stops, loaded ? countVehiclesForLine(vehicles, line) : null, text, situationsFor(line)));
       } catch (err) {
         unavailable(res, 'Linjeside', err);
       }
@@ -102,7 +108,7 @@ export function registerPageRoutes(app, {
       try {
         const [info, departures, text] = await Promise.all([stopService.getInfo(stop), stopService.getDepartures(stop), stopText(stop.slug, region.id)]);
         res.set('Cache-Control', departures ? 'public, max-age=30' : 'no-store');
-        res.type('html').send(renderStopPage(stop, info, departures, { text }));
+        res.type('html').send(renderStopPage(stop, info, departures, { text, situations: stopSituations(stop, info) }));
       } catch (err) {
         unavailable(res, 'Holdeplasside', err);
       }

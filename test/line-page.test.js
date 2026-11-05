@@ -89,3 +89,40 @@ test('tog utenfor Oslo: kartlenke midt på linjen, tittel uten dobbel strekning'
   assert.ok(html.includes('/guider/lokaltog-og-regiontog'));
   assert.ok(!renderLinePage(getLineBySlug('tog-l4'), result, 1).includes('/guider/lokaltog-og-regiontog'));
 });
+
+import { buildSituationIndex, situationsForLine } from '../server/situations-model.js';
+import { renderSituationBox } from '../server/pages/situations-page.js';
+
+const NOW_S = Date.parse('2026-11-05T12:00:00Z');
+const mk = (over) => ({ id: 'RUT:1', codespace: 'RUT', severity: 'normal', planned: false, validity: [], summary: 'Omkjøring <b>x</b>', description: '', advice: '', links: [], lines: [], stops: [], ...over });
+
+test('linjeside med avvik viser «Avvik nå» med escapet oppsummering etter intro', () => {
+  const line = getLineBySlug('t-bane-5');
+  const html = renderLinePage(line, stops, 3, '', [mk({})]);
+  assert.ok(html.includes('Avvik nå'));
+  assert.ok(html.includes('Omkjøring &lt;b&gt;x&lt;/b&gt;'));
+  assert.ok(!html.includes('<b>x</b>'));
+  assert.ok(html.includes('href="/avvik"'));
+  assert.ok(html.indexOf('line-hero') < html.indexOf('Avvik nå'));
+});
+
+test('linjeside uten avvik er byte-lik render uten argument', () => {
+  const line = getLineBySlug('t-bane-5');
+  assert.equal(renderLinePage(line, stops, 3, 'tekst', []), renderLinePage(line, stops, 3, 'tekst'));
+  assert.equal(renderLinePage(line, stops, 3), renderLinePage(line, stops, 3, undefined, undefined));
+});
+
+test('renderSituationBox: tom uten relevante avvik, utløpte skjules', () => {
+  assert.equal(renderSituationBox([]), '');
+  const old = mk({ validity: [{ start: 1, end: 2 }] });
+  assert.equal(renderSituationBox([old], { now: NOW_S }), '');
+});
+
+test('situationsForLine: katalog-ref, authority:Line:kode og kodeområde+publicCode', () => {
+  const line = getLineBySlug('t-bane-5');
+  const a = mk({ id: 'a', lines: [{ ref: `${line.authority}:Line:${line.code}`, code: line.code }] });
+  const b = mk({ id: 'b', lines: [{ ref: `${line.authority}:Line:INTERN-1`, code: line.code }] });
+  const c = mk({ id: 'c', lines: [{ ref: `${line.authority}:Line:9999`, code: '9999' }] });
+  const ids = situationsForLine(buildSituationIndex([a, b, c]), line).map((s) => s.id).sort();
+  assert.deepEqual(ids, ['a', 'b']);
+});

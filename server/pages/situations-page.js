@@ -114,6 +114,21 @@ function cardHtml(s, { now, lineLink, stopLink, showCodespace }) {
       </article>`;
 }
 
+/**
+ * Boks «Avvik nå» på linje- og holdeplassider: samme kort som /avvik, bare relevante avvik.
+ * Tom streng uten avvik, så sidene er uendret da.
+ */
+export function renderSituationBox(situations, { now = Date.now(), lineLink = () => null, stopLink = () => null } = {}) {
+  const list = (situations || []).filter((s) => isRelevant(s, now));
+  if (!list.length) return '';
+  const cards = list.map((s) => cardHtml(s, { now, lineLink, stopLink, showCodespace: false })).join('\n');
+  return `    <section class="situation-box" aria-labelledby="avvik-na">
+      <h2 id="avvik-na">Avvik nå</h2>
+${cards}
+      <p><a href="${PATH}">Alle avvik</a></p>
+    </section>`;
+}
+
 const areaAnchor = (area) => `avvik-${area.id.toLowerCase()}`;
 
 /** Én generert linje under områdets overskrift: antall, antall alvorlige og linjer med egen side. */

@@ -395,3 +395,17 @@ test('findStopForPlace på tvers av regioner og placePageFields', async () => {
   assert.deepEqual(placePageFields(getStopBySlug('byparken', 'bergen')), { pagePath: '/bergen/holdeplass/byparken' });
   assert.deepEqual(placePageFields(undefined), {});
 });
+
+test('renderStopPage viser avvik; uten avvik byte-lik; quayIds fra parseStopInfo', async () => {
+  const { situationsForStop, buildSituationIndex } = await import('../server/situations-model.js');
+  const s = (id, stopId) => ({ id, codespace: 'RUT', severity: 'normal', planned: false, validity: [], summary: `Avvik <i>${id}</i>`, description: '', advice: '', links: [], lines: [], stops: [{ id: stopId, name: 'Majorstuen' }] });
+  const idx = buildSituationIndex([s('q', 'NSR:Quay:1'), s('p', 'NSR:StopPlace:58381')]);
+  const found = situationsForStop(idx, [stop.id, 'NSR:Quay:1']);
+  assert.equal(found.length, 2);
+  const html = renderStopPage(stop, info, departures, { now: NOW, situations: found });
+  assert.ok(html.includes('Avvik nå'));
+  assert.ok(html.includes('Avvik &lt;i&gt;q&lt;/i&gt;') && html.includes('Avvik &lt;i&gt;p&lt;/i&gt;'));
+  assert.equal(renderStopPage(stop, info, departures, { now: NOW, situations: [] }), renderStopPage(stop, info, departures, { now: NOW }));
+  const { parseStopInfo } = await import('../server/stop-service.js');
+  assert.deepEqual(parseStopInfo({ quays: [{ id: 'NSR:Quay:1', lines: [] }, { id: 'NSR:Quay:2', lines: [] }] }).quayIds, ['NSR:Quay:1', 'NSR:Quay:2']);
+});

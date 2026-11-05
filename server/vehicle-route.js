@@ -10,6 +10,7 @@
 import { jpQuery } from './line-catalog.js';
 import { decodePolyline, simplifyLine } from './polyline.js';
 import { makeJsonEntry } from './json-cache.js';
+import { getRegion } from '../shared/regions.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FAILURE_TTL_MS = 10 * 60 * 1000;
@@ -156,10 +157,12 @@ function compactPattern(p) {
 
 /**
  * @param {{ fetchFn?: Function, now?: () => number, ttlMs?: number, failureTtlMs?: number,
- *   maxLines?: number, maxEntries?: number, timeoutMs?: number }} opts
+ *   maxLines?: number, maxEntries?: number, timeoutMs?: number, region?: object }} opts
+ *   region: uten ref og authority foretrekkes regionens første operatør (Oslo: RUT).
  */
 export function createVehicleRouteService({
   fetchFn = (...a) => fetch(...a),
+  region = getRegion(),
   now = () => Date.now(),
   ttlMs = DAY_MS,
   failureTtlMs = FAILURE_TTL_MS,
@@ -195,7 +198,8 @@ export function createVehicleRouteService({
     const cands = c.lines.filter((l) => l.code.toUpperCase() === line.toUpperCase() && ok.includes(l.mode));
     const auth = (l) => l.id.split(':')[0];
     if (authority) return cands.find((l) => auth(l) === authority)?.id ?? null;
-    return (cands.find((l) => auth(l) === 'RUT') ?? cands[0])?.id ?? null;
+    const preferred = region.authorities?.[0];
+    return (cands.find((l) => auth(l) === preferred) ?? cands[0])?.id ?? null;
   }
 
   async function fetchLine(params) {

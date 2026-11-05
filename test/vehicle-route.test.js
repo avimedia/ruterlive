@@ -237,3 +237,12 @@ test('hengende JP-kall gir null innen tidsgrensen', async () => {
   assert.equal(await svc.getRoute({ line: '30', mode: 'bus', dest: '', authority: 'RUT', ref: 'RUT:Line:30' }), null);
   assert.ok(Date.now() - t < 1000);
 });
+
+test('tjenesten foretrekker regionens første operatør uten ref og authority', async () => {
+  const { fetchFn, calls } = makeFetch();
+  const region = { id: 'test', authorities: ['VKT'] };
+  const svc = createVehicleRouteService({ fetchFn, region });
+  const r = await svc.getRoute({ line: '30', mode: 'bus', dest: 'Nydalen', authority: null, ref: null });
+  assert.ok(r);
+  assert.equal(calls[1].variables.id, 'VKT:Line:30');
+});

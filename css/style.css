@@ -1239,7 +1239,7 @@ path.leaflet-interactive:focus {
   padding: 0;
   border-radius: 8px;
   min-width: 380px;
-  max-width: min(460px, calc(100vw - 2rem));
+  max-width: min(560px, calc(100vw - 2rem));
 }
 
 .departure-board {
@@ -2109,3 +2109,6 @@ a,
   font-size: 0.75em;
   white-space: nowrap;
 }
+
+/* Tavla i popup: merkene brytes over flere linjer i stedet for vannrett rulling */
+.departure-board-popup .departure-badges { white-space: normal; min-width: 8rem; }

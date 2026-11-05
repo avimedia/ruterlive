@@ -8,7 +8,7 @@ Viser buss, T-bane, trikk, båt, regiontog og Flytoget basert på Entur API. I B
 
 - **Kjøretøy på kart** – posisjoner oppdateres løpende
 - **Rutelinjer** – T-bane, trikk og jernbane vises alltid; buss og båt ved valgt kjøretøy
-- **Holdeplasser** – vises ved zoom 15+, klikk for avgangstavle
+- **Holdeplasser** – vises ved zoom 14+, klikk for avgangstavle
 - **Søk** – finn holdeplass etter navn
 - **Regioner** – Oslo på `/`, Bergen på `/bergen`; velger i lagpanelet. Nye regioner legges til i `shared/regions.js`; skjul dem med `public: false` og prøv lokalt med `REGIONS_PREVIEW=<id>` (server) og `VITE_REGIONS_PREVIEW=<id>` (bygg)
 - **Avvik** – driftsmeldinger fra Entur (Vehicles-API `situations`) for hele landet: knapp og panel i kartet, `/avvik`, og på linje- og holdeplassider. Virker bare med `npm run build && npm run start`, ikke i Vite dev
@@ -60,7 +60,7 @@ Se [DEPLOY.md](DEPLOY.md) for oppsett på Render, Railway m.m. Produksjonsvisnin
 | Data            | Hvor lastes det? | Oppdatering                                      |
 |-----------------|------------------|--------------------------------------------------|
 | **Rutelinjer**  | Server           | Ved oppstart; cache 24t, sjekk hvert time (ET + Journey Planner) |
-| **Holdeplasser**| Server           | GTFS stops + bbox-forespørsler (zoom 15+)        |
+| **Holdeplasser**| Server           | GTFS stops + bbox-forespørsler (zoom 14+)        |
 | **Kjøretøy**    | Klient           | Nettleseren poller via proxy hvert 20–30 sek     |
 
 **Rutelinjer** (T-bane, trikk, jernbane, buss, båt) caches på serveren i 24 timer. Kartet vises umiddelbart når brukeren åpner siden. **Kjøretøyposisjoner** hentes av nettleseren hvert 30. sekund fra serveren, som cacher dem kort (20 s GraphQL, 15 s ET) og deler cachen mellom alle brukere.

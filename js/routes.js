@@ -58,7 +58,7 @@ let stopsBounds = null;
 let bboxFetchId = 0;
 
 /** Zoom-nivå før holdeplasser vises (med navn). */
-const ZOOM_STOPS_VISIBLE = 15;
+const ZOOM_STOPS_VISIBLE = 14;
 /** Holdeplasser tegnes for utsnittet + denne margen; små panoreringer tegner ikke på nytt. */
 const STOPS_PAD = 0.5;
 
@@ -343,7 +343,7 @@ function createStopMarker(lat, lon, quayIds, name, color, stopsLayer) {
   });
   marker._quayId = ids[0];
   // Luft oppe til venstre for logo, søk og meny, så tavla ikke havner bak dem
-  const popup = L.popup({ className: 'departure-board-popup', maxWidth: 460, autoPanPaddingTopLeft: [16, 120], autoPanPaddingBottomRight: [70, 20] });
+  const popup = L.popup({ className: 'departure-board-popup', maxWidth: 560, autoPanPaddingTopLeft: [16, 120], autoPanPaddingBottomRight: [70, 20] });
   // Mobil: bunnark i stedet for popup (gjelder både klikk og openPopup() fra søk)
   marker.openPopup = function (...args) {
     if (!prefersDepartureSheet()) return L.Marker.prototype.openPopup.apply(this, args);
@@ -477,7 +477,7 @@ function departureRowHtml(c, now) {
     c.aimedDepartureTime &&
     new Date(c.expectedDepartureTime).getTime() > new Date(c.aimedDepartureTime).getTime() + 60000;
   const hasSit = situationsForLine(lineKeyFromCall(c)).length > 0;
-  const sitBadge = hasSit ? ' <span class="departure-sit" title="Avvik på linja">⚠ Avvik</span>' : '';
+  const sitBadge = hasSit ? ' <span class="departure-sit" title="Avvik på linja" aria-label="Avvik på linja">⚠</span>' : '';
   const delayBadge = isDelayed ? ' <span class="departure-delayed">Forsinket</span>' : '';
   const realtime = c.realtime && !isDelayed ? ' <span class="departure-realtime">Sanntid</span>' : '';
   const next = c.next?.length ? ` <span class="departure-next">Neste ${c.next.map((n) => nextTimeText(n, now)).join(', ')}</span>` : '';

@@ -114,3 +114,15 @@ test('awaitUpgrade venter på sterkere komprimering, men høyst maxMs', async ()
   await awaitUpgrade(e); // ingen ventende oppgradering: returnerer straks
   await awaitUpgrade(null);
 });
+
+test('memoEntry.clear() slipper entry og nøkler', async () => {
+  const { memoEntry } = await import('../server/json-cache.js');
+  let builds = 0;
+  const get = memoEntry((a) => { builds++; return { a }; });
+  const k = [1];
+  const e1 = get(k);
+  get.clear();
+  const e2 = get(k);
+  assert.equal(builds, 2);
+  assert.notEqual(e1, e2);
+});

@@ -168,3 +168,16 @@ test('parser: Oslo (uten keepUnknownMode) dropper SKY-turer uten modus', () => {
   p.push(SKY_XML('2'));
   assert.equal(p.end().length, 0);
 });
+
+test('drop() slipper 15 s-cachen, neste kall beregner på nytt', async () => {
+  let journeys = [journey('SKY:Line:2', 'bus')];
+  const svc = createEtVehiclesService({
+    region: getRegion('bergen'),
+    etCache: { getJourneys: async () => journeys, getVersion: () => 1 },
+    deps: deps({ 'SKY:Line:2': 'tram' }),
+  });
+  assert.equal((await svc.getVehiclesAndShapes()).vehicles.length, 1);
+  journeys = [];
+  svc.drop();
+  assert.equal((await svc.getVehiclesAndShapes()).vehicles.length, 0);
+});

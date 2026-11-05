@@ -250,5 +250,12 @@ export function createEtVehiclesService({ region, etCache, deps = {} }) {
     });
   }
 
-  return { getVehiclesAndShapes };
+  /** Avlastet region: slipp siste beregning (kjøretøy og ET-rutekart). */
+  function drop() {
+    cached = null;
+    lastCompute = 0;
+    shapesKey = { etVersion: -1, gtfs: null };
+  }
+
+  return { getVehiclesAndShapes, drop };
 }

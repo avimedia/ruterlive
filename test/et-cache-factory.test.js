@@ -169,3 +169,24 @@ test('MoreData-tagg delt over to biter gir advarsel', async () => {
     assert.ok(warn.mock.calls.some((c) => /MoreData/.test(c.arguments.join(' '))));
   } finally { warn.mock.restore(); }
 });
+
+test('stoppet body: idle-timeout avbryter, frigjør køen for neste region', async () => {
+  const { createRegionRuntime } = await import('../server/region-runtime.js');
+  const runtime = createRegionRuntime({ regions: [] });
+  let cancelled = false;
+  const stalled = async () => new Response(new ReadableStream({
+    start(c) { c.enqueue(new TextEncoder().encode('<Siri>')); }, // ingen flere biter
+    cancel() { cancelled = true; },
+  }), { status: 200 });
+  const a = createEtCache({ datasetId: 'RUT', runExclusive: runtime.runExclusive, fetchFn: stalled, bodyIdleMs: 50 });
+  const b = createEtCache({ datasetId: 'SKY', runExclusive: runtime.runExclusive, fetchFn: makeFetch(), bodyIdleMs: 50 });
+  const t0 = Date.now();
+  const ra = a.refreshNow();
+  const rb = b.refreshNow();
+  await assert.rejects(ra, /stoppet/);
+  await rb;
+  assert.ok(Date.now() - t0 < 2000, `${Date.now() - t0} ms`);
+  assert.ok(cancelled, 'body avbrutt');
+  assert.equal(b.getVersion(), 1);
+  assert.ok((await b.getJourneys()).length >= 2);
+});

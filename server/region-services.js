@@ -157,7 +157,14 @@ function createLive(region, s, { getGps, withRail, railNetwork, staticShapesFor,
     return legacyInitialEntry(vehiclesData, etResult, getAllShapes());
   }
 
-  return { getLiveSources, getLiveEntries, getLegacyEntry, getStaticEntry: () => staticEntry(getAllShapes()), getAllShapes };
+  /** Avlastet region: slipp forrige ET-resultat og live-svarene bygget av det. Rutekartene beholdes. */
+  function drop() {
+    lastEt = null;
+    liveVehiclesEntry.clear();
+    legacyInitialEntry.clear();
+  }
+
+  return { getLiveSources, getLiveEntries, getLegacyEntry, getStaticEntry: () => staticEntry(getAllShapes()), getAllShapes, drop };
 }
 
 /**
@@ -188,12 +195,15 @@ export function createRegionRegistry({
   }
 
   let watching = false;
-  /** Avlastet region slipper ET-turene (synkron lytter, se region-runtime.js). */
+  /** Avlastet region slipper ET-turene, ET-beregningen og live-svarene (synkron lytter, se region-runtime.js). */
   function watchUnload() {
     if (watching) return;
     watching = true;
     runtime.onUnload((id) => {
-      byId.get(id)?.etCache?.drop?.();
+      const s = byId.get(id);
+      s?.etCache?.drop?.();
+      s?.etVehicles?.drop?.();
+      s?.live?.drop?.();
     });
   }
 

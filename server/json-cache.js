@@ -86,13 +86,19 @@ export async function awaitUpgrade(entry, maxMs = 1500) {
 export function memoEntry(build) {
   let keys = null;
   let entry = null;
-  return (...args) => {
+  const get = (...args) => {
     if (!keys || args.length !== keys.length || args.some((a, i) => a !== keys[i])) {
       entry = build(...args);
       keys = args;
     }
     return entry;
   };
+  /** Slipper entry og nøkler (avlastet region), neste kall bygger på nytt. */
+  get.clear = () => {
+    keys = null;
+    entry = null;
+  };
+  return get;
 }
 
 /** Sann når Accept-Encoding godtar `enc` (q > 0). */

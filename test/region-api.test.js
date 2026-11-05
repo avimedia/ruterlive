@@ -200,3 +200,42 @@ test('defaultRegionServices: Bergen-ET beholder ukjent modus, Oslo venter pÃ¥ fÃ
   assert.equal(b.etCacheOptions.datasetId, 'SKY');
   assert.equal(o.etCacheOptions.runExclusive, runtime.runExclusive);
 });
+
+test('avlasting slipper forrige ET-resultat og ferdige live-svar', async () => {
+  let t = 0;
+  const regions = [oslo, bergen];
+  const runtime = createRegionRuntime({ regions, now: () => t });
+  const etResult = Object.freeze({ vehicles: [{ vehicleId: 'SKY:ET:1', mode: 'tram', location: { latitude: 60.38, longitude: 5.33 }, line: { publicCode: '1' } }], shapes: [] });
+  let hang = false;
+  const etDropped = [];
+  const registry = createRegionRegistry({
+    regions,
+    runtime,
+    getGps: async (id) => GPS[id] ?? EMPTY_GPS,
+    createRail: () => async (v) => v,
+    railNetwork: { getShapes: () => [], refresh: async () => ({ failed: 0 }) },
+    staticShapesFor: () => [],
+    etWaitMs: 20,
+    createServices: (region) => ({
+      ...stubServices()(region),
+      etVehicles: {
+        getVehiclesAndShapes: () => (hang ? new Promise(() => {}) : Promise.resolve(etResult)),
+        drop: () => etDropped.push(region.id),
+      },
+    }),
+  });
+  registry.watchUnload();
+  const live = registry.get('bergen').live;
+  const before = await live.getLiveEntries();
+  hang = true;
+  const keepAlive = setTimeout(() => {}, 5000); // ventetimeren i registeret er unref
+  t = 2 * 3_600_000;
+  runtime.tick();
+  assert.deepEqual(etDropped, ['bergen']);
+  const after = await live.getLiveEntries();
+  assert.notEqual(after.vehiclesEntry, before.vehiclesEntry, 'ny entry etter avlasting');
+  const { vehiclesData, etResult: et } = await live.getLiveSources();
+  assert.deepEqual(et.vehicles, [], 'forrige ET-resultat er sluppet');
+  assert.ok(vehiclesData);
+  clearTimeout(keepAlive);
+});

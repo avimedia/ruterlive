@@ -13,6 +13,30 @@ const REFRESH_MS = 90000; // 90 sek – færre kall mot Entur
 const BACKOFF_AFTER_429_MS = 300000; // 5 min venting ved 429
 const FAILURE_BACKOFF_MS = 60000; // 1 min venting etter andre feil når vi ikke har turer
 const MORE_DATA_TAG = '<MoreData>true</MoreData>';
+// Ingen nye biter så lenge: nedlastingen avbrytes, så en stoppet body ikke holder den delte køen
+// (undici venter ellers opptil 300 s, og den andre regionens oppdatering står i kø imens)
+const BODY_IDLE_MS = 20000;
+
+/** Leser body bit for bit; avviser og avbryter hvis det går mer enn idleMs mellom bitene. */
+async function readBody(body, idleMs, onChunk) {
+  const reader = body.getReader();
+  let timer;
+  try {
+    for (;;) {
+      const stalled = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`ET-body stoppet (ingen data på ${idleMs / 1000} s)`)), idleMs);
+      });
+      const { done, value } = await Promise.race([reader.read(), stalled]);
+      clearTimeout(timer);
+      if (done) return;
+      onChunk(value);
+    }
+  } catch (err) {
+    clearTimeout(timer);
+    reader.cancel().catch(() => {});
+    throw err;
+  }
+}
 
 /**
  * @param {object} o
@@ -21,6 +45,7 @@ const MORE_DATA_TAG = '<MoreData>true</MoreData>';
  * @param {(fn: () => Promise<any>) => Promise<any>} o.runExclusive global kø for nedlasting + parsing
  * @param {object} [o.parserOpts] valg til createEtStreamParser (Bergen: { keepUnknownMode: true, useVehicleMode: true })
  * @param {boolean} [o.waitForFirst] true: getJourneys() venter på første henting (alwaysActive-regioner)
+ * @param {number} [o.bodyIdleMs] maks tid mellom to biter av body før nedlastingen avbrytes
  */
 export function createEtCache({
   datasetId,
@@ -31,6 +56,7 @@ export function createEtCache({
   refreshMs = REFRESH_MS,
   waitForFirst = false,
   parserOpts = {},
+  bodyIdleMs = BODY_IDLE_MS,
 }) {
   const url = `https://api.entur.io/realtime/v1/rest/et?datasetId=${datasetId}&maxSize=3000`;
   /** Frosne turer fra siste vellykkede henting, eller null før første / etter drop(). */
@@ -73,7 +99,7 @@ export function createEtCache({
         parser.push(text);
       };
       if (res.body) {
-        for await (const chunk of res.body) push(decoder.decode(chunk, { stream: true }));
+        await readBody(res.body, bodyIdleMs, (chunk) => push(decoder.decode(chunk, { stream: true })));
       }
       push(decoder.decode());
       const parsed = parser.end();

@@ -6,7 +6,7 @@
 // de velges senere sammen med egen tekst i content/bergen/holdeplass/.
 // Rundt 25 kall mot Entur totalt, med pause mellom hvert.
 import { writeFileSync } from 'node:fs';
-import { loadStops, slugify, stripStopSuffix } from '../server/stop-catalog.js';
+import { loadStops, stopSlug } from '../server/stop-catalog.js';
 import { findRegion } from '../shared/regions.js';
 import { jpQuery } from '../server/line-catalog.js';
 
@@ -38,6 +38,7 @@ const HUBS_BY_REGION = {
   bergen: [
     'Bergen busstasjon', 'Bergen stasjon', 'Festplassen', 'Strandkaien', 'Olav Kyrres gate', 'Danmarksplass',
     'Bergen lufthavn Flesland', 'Knarvik terminal', 'Voss stasjon', 'Straume terminal', 'Nesttun terminal',
+    'Åsane terminal', 'Strandkaiterminalen',
   ],
 };
 const HUBS = HUBS_BY_REGION[regionId] ?? [];
@@ -80,7 +81,7 @@ async function details(ids) {
   for (let i = 0; i < ids.length; i += 40) {
     const chunk = ids.slice(i, i + 40);
     const data = await jp(
-      'query($ids:[String]!){ stopPlaces(ids:$ids){ id name latitude longitude parent { id } quays { lines { transportMode } } } }',
+      'query($ids:[String]!){ stopPlaces(ids:$ids){ id name latitude longitude transportMode parent { id } quays { lines { transportMode } } } }',
       { ids: chunk }
     );
     out.push(...(data?.stopPlaces ?? []).filter(Boolean));
@@ -126,12 +127,16 @@ const catalog = info
   .map((sp) => {
     const modes = new Set();
     for (const q of sp.quays ?? []) for (const l of q.lines ?? []) if (MODE_MAP[l.transportMode]) modes.add(MODE_MAP[l.transportMode]);
+    // Stoppestedets egne moduser (NSR) vinner over linjene: togbuss-quayer gir ellers «tog» på
+    // en busstasjon (Bergen busstasjon har F4/R40 på quay P). Tom liste (f.eks. foreldre) = ingen filtrering.
+    const own = new Set((sp.transportMode ?? []).map((m) => MODE_MAP[m]).filter(Boolean));
+    if (own.size) for (const m of [...modes]) if (!own.has(m)) modes.delete(m);
     return { id: sp.id, name: sp.name, lat: +sp.latitude.toFixed(5), lon: +sp.longitude.toFixed(5), modes: MODE_ORDER.filter((m) => modes.has(m)) };
   })
   .filter((s) => s.modes.length > 0)
   .sort((a, b) => a.name.localeCompare(b.name, 'nb'))
   .map((s) => {
-    const base = slugify(stripStopSuffix(s.name));
+    const base = stopSlug(s.name);
     let slug = base;
     for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
     used.add(slug);

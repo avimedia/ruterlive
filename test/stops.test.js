@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { STOPS, FEATURED_STOPS, slugify, getStopBySlug, findStopByName, findStopForPlace, nearestStops, getStopText } from '../server/stop-catalog.js';
+import { STOPS, FEATURED_STOPS, slugify, stopSlug, featuredStopsFor, getStopBySlug, findStopByName, findStopForPlace, nearestStops, getStopText } from '../server/stop-catalog.js';
 import { createStopService, LruCache, parseStopInfo } from '../server/stop-service.js';
 import { renderStopPage, renderStopIndex, buildIntro, schemaType, catalogLineFor } from '../server/pages/stop-page.js';
 import { renderLinePage } from '../server/pages/line-page.js';
@@ -82,6 +82,39 @@ test('hver utvalgt holdeplass har håndskrevet tekst på 120–250 ord', async (
   }
   assert.equal(await getStopText('vestli'), undefined);
   assert.equal(await getStopText('../om'), undefined);
+});
+
+test('stopSlug: aldri lik en region-id', () => {
+  assert.equal(stopSlug('Bergen stasjon'), 'bergen-stasjon');
+  assert.equal(stopSlug('Voss stasjon'), 'voss');
+  assert.equal(stopSlug('Linderud T'), 'linderud');
+  assert.equal(stopSlug('Oslo S'), 'oslo-s');
+});
+
+test('hver utvalgt Bergen-holdeplass har håndskrevet tekst på 120–250 ord', async () => {
+  const featured = featuredStopsFor('bergen');
+  assert.ok(featured.length >= 8 && featured.length <= 12, `${featured.length} utvalgte`);
+  for (const s of featured) {
+    const file = new URL(`../content/bergen/holdeplass/${s.slug}.html`, import.meta.url);
+    assert.ok(existsSync(file), `mangler content/bergen/holdeplass/${s.slug}.html`);
+    const html = readFileSync(file, 'utf8');
+    const words = html.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length;
+    assert.ok(words >= 120 && words <= 250, `${s.slug}: ${words} ord`);
+    for (const re of [...BANNED, /velkommen til/i, /her finner du/i]) assert.doesNotMatch(html, re, s.slug);
+    assert.doesNotMatch(html, /<script|<h1/i, s.slug);
+    // Lenker bare til Bergen-holdeplasser med egen side (Bergen-linjesider har ikke tekst ennå)
+    for (const [, href] of html.matchAll(/href="([^"]*)"/g)) {
+      const m = href.match(/^\/bergen\/holdeplass\/([a-z0-9-]+)$/);
+      assert.ok(m && getStopBySlug(m[1], 'bergen'), `${s.slug}: ugyldig lenke ${href}`);
+    }
+    assert.equal(await getStopText(s.slug, 'bergen'), html);
+  }
+  const slugs = new Set(featured.map((s) => s.slug));
+  for (const f of readdirSync(new URL('../content/bergen/holdeplass/', import.meta.url))) {
+    assert.ok(slugs.has(f.replace(/\.html$/, '')), `${f} hører ikke til et utvalgt Bergen-stopp`);
+  }
+  assert.ok(!getStopBySlug('bergen', 'bergen'));
+  assert.equal(getStopBySlug('bergen-stasjon', 'bergen')?.name, 'Bergen stasjon');
 });
 
 const stop = { slug: 'majorstuen', id: 'NSR:StopPlace:58381', name: 'Majorstuen', lat: 59.92963, lon: 10.71494, modes: ['metro', 'tram', 'bus'] };

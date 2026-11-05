@@ -25,9 +25,10 @@ const INFO_QUERY = `query($id: String!) {
   }
 }`;
 
+// Bare moduser siden viser: Bergen lufthavn er ett stoppested med flyavganger (air) i Entur.
 const DEP_QUERY = `query($id: String!, $n: Int!, $range: Int!) {
   stopPlace(id: $id) {
-    estimatedCalls(numberOfDepartures: $n, timeRange: $range) {
+    estimatedCalls(numberOfDepartures: $n, timeRange: $range, whiteListedModes: [bus, coach, tram, metro, rail, water]) {
       realtime
       cancellation
       aimedDepartureTime

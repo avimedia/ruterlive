@@ -150,6 +150,10 @@ test('sitemap: Bergen-linjer bare når indexed, regionkart, holdeplasser og guid
   assert.ok(xml.includes('<loc>https://livetrafikk.no/bergen/guider/bybanen</loc>'));
   assert.ok(xml.includes('<loc>https://livetrafikk.no/bergen/holdeplass/byparken</loc>'));
   assert.ok(xml.includes('<loc>https://livetrafikk.no/linje/t-bane-5</loc>'));
+  // Ekte utvalgte Bergen-stopp, slik server.js bygger sitemap for synlige regioner
+  const real = buildSitemap({ lines: REGION_LINES.oslo, guides: [], stops: visible.flatMap((r) => featuredStopsFor(r.id)), regions: visible });
+  for (const s of featuredStopsFor('bergen')) assert.ok(real.includes(`<loc>https://livetrafikk.no/bergen/holdeplass/${s.slug}</loc>`), s.slug);
+  assert.ok(!real.includes('<loc>https://livetrafikk.no/holdeplass/byparken</loc>'));
   const noRegions = buildSitemap({ lines: REGION_LINES.oslo, guides: [] });
   assert.ok(!noRegions.includes('/bergen'));
 });
@@ -158,7 +162,8 @@ test('stopp: getStopBySlug per region, region-felt, katalogfil mangler gir tom l
   assert.equal(getStopBySlug('majorstuen').region, 'oslo');
   assert.equal(getStopBySlug('majorstuen', 'bergen'), undefined);
   assert.deepEqual(loadStops('finnes-ikke'), []);
-  assert.deepEqual(featuredStopsFor('bergen'), []); // ingen utvalgte før Task 12
+  assert.ok(featuredStopsFor('bergen').every((s) => s.region === 'bergen' && s.featured));
+  assert.equal(getStopBySlug('byparken', 'bergen')?.id, 'NSR:StopPlace:30859');
 });
 
 test('stoppside og stoppoversikt for Bergen: region-sti, ingen Ruter-sone', () => {

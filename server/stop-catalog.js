@@ -7,6 +7,7 @@
 
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { REGIONS } from '../shared/regions.js';
 
 /** Lager URL-slug: små bokstaver, æ→ae, ø→o, å→a, alt annet enn a–z/0–9 blir bindestrek. */
 export function slugify(name) {
@@ -24,6 +25,15 @@ export function slugify(name) {
 /** Fjerner « stasjon» og T-banens « T» på slutten av navnet («Linderud T» → «Linderud»). */
 export function stripStopSuffix(name) {
   return String(name ?? '').replace(/\s+(stasjon|st\.)$/i, '').replace(/\s+T$/, '');
+}
+
+/**
+ * Slug for en holdeplass: navnet uten « stasjon»/« T». Blir det likt en region-id («Bergen stasjon» → «bergen»),
+ * brukes hele navnet («bergen-stasjon»), så /bergen/holdeplass/bergen ikke oppstår.
+ */
+export function stopSlug(name) {
+  const base = slugify(stripStopSuffix(name));
+  return Object.hasOwn(REGIONS, base) ? slugify(name) : base;
 }
 
 /** Normaliserer stoppnavn for sammenligning (linjesidenes stopplister mot katalogen). */

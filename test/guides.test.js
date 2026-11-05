@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { GUIDES, getGuideBySlug, loadGuideBody } from '../server/guide-catalog.js';
 import { renderGuidePage } from '../server/pages/guide-page.js';
 import { renderGuideIndex, renderAboutPage } from '../server/pages/guide-index.js';
@@ -55,4 +56,16 @@ test('renderAboutPage', async () => {
   const html = renderAboutPage('<p>Hei</p>');
   assert.match(html, /<h1>Om livetrafikk\.no<\/h1>/);
   assert.match(html, /<p>Hei<\/p>/);
+  const d = html.match(/<meta name="description" content="([^"]*)"/)[1];
+  assert.match(d, /Bergen/);
+  assert.match(d, /avvik/i);
+  assert.ok(d.length <= 155);
+});
+
+test('om-siden nevner Bergen og /avvik og beholder lisensdelen', () => {
+  const om = readFileSync(new URL('../content/om.html', import.meta.url), 'utf8');
+  assert.match(om, /Bergen/);
+  assert.match(om, /href="\/avvik"/);
+  assert.match(om, /<h2 id="lisenser">Lisenser<\/h2>/);
+  assert.match(om, /NLOD/);
 });

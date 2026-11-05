@@ -34,6 +34,27 @@ test('kartsiden: tittel, beskrivelse, canonical, og/twitter og JSON-LD', () => {
   assert.deepEqual(types.sort(), ['Organization', 'WebSite']);
 });
 
+test('kartsiden og manifest dekker hele nettstedet, ikke bare Oslo', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const t = 'Sanntidskart for kollektivtrafikken i Oslo og Bergen | livetrafikk.no';
+  assert.equal(title(html), t);
+  assert.doesNotMatch(title(html), /hele Norge/i);
+  for (const re of [/<meta property="og:title" content="([^"]*)"/, /<meta name="twitter:title" content="([^"]*)"/]) assert.equal(meta(html, re), t);
+  const d = desc(html);
+  assert.match(d, /Bergen/);
+  assert.ok(d.length <= 155, `description ${d.length} tegn`);
+  for (const re of [/<meta property="og:description" content="([^"]*)"/, /<meta name="twitter:description" content="([^"]*)"/]) assert.equal(meta(html, re), d);
+  assert.doesNotMatch(html, /Stor-Oslo/);
+  const noscript = html.match(/<noscript>([\s\S]*?)<\/noscript>/)[1];
+  assert.match(noscript, /Bergen/);
+  assert.match(html.match(/<p class="map-menu-intro">([\s\S]*?)<\/p>/)[1], /Bergen/);
+  const site = ldBlocks(html)[0]['@graph'].find((n) => n['@type'] === 'WebSite');
+  assert.match(site.description, /Bergen/);
+  const manifest = JSON.parse(readFileSync(new URL('../public/manifest.json', import.meta.url), 'utf8'));
+  assert.match(manifest.description, /Bergen/);
+  assert.doesNotMatch(manifest.description, /Stor-Oslo/);
+});
+
 test('jsonLd escaper </script', () => {
   const out = jsonLd({ a: '</script><script>alert(1)</script>' });
   assert.ok(!out.slice(1, -9).includes('</script'));

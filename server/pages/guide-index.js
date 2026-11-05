@@ -84,7 +84,7 @@ ${regionHtml}`;
 export function renderAboutPage(body) {
   return renderPage({
     title: 'Om livetrafikk.no',
-    description: 'livetrafikk.no er et gratis, uavhengig kart over kollektivtrafikken i Oslo og omegn, bygget på åpne data fra Entur.',
+    description: 'livetrafikk.no er et gratis, uavhengig kart over kollektivtrafikken i Oslo og Bergen, med tog og avvik for hele Norge. Bygget på åpne data fra Entur.',
     path: '/om',
     body: `    <article class="prose">\n    <h1>Om livetrafikk.no</h1>\n${body}\n    </article>`,
   });

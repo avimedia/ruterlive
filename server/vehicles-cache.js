@@ -23,6 +23,7 @@ const FIELDS = `
 /** Ett GraphQL-kall med ett alias per region: `oslo: vehicles(boundingBox: …) { … }`. */
 export function buildVehiclesQuery(regions) {
   const parts = regions.map((r) => {
+    if (!/^[a-z_]\w*$/i.test(r.id)) throw new Error(`Ugyldig region-id for GraphQL-alias: ${r.id}`);
     const b = r.vehicleBounds;
     return `  ${r.id}: vehicles(boundingBox: { minLat: ${b.minLat}, maxLat: ${b.maxLat}, minLon: ${b.minLon}, maxLon: ${b.maxLon} }) {${FIELDS}
   }`;
@@ -34,8 +35,10 @@ export function buildVehiclesQuery(regions) {
  * Cache for GPS-kjøretøy. `getRegions` gir regionene som skal hentes (kan injiseres i tester).
  * getCachedVehicles(regionId) gir `{ data: { vehicles } }` for den regionen.
  */
+const EMPTY = Object.freeze({ data: Object.freeze({ vehicles: Object.freeze([]) }) });
+
 export function createVehiclesCache({ getRegions = serverVisibleRegions, fetchFn = fetchWithRetry } = {}) {
-  let cachedData = null; // { [regionId]: vehicles[] }
+  let cachedData = null; // { [regionId]: { data: { vehicles } } } – bygges én gang per henting (stabil identitet for memo-cacher)
   let lastFetch = 0;
   let fetchPromise = null;
 
@@ -53,7 +56,7 @@ export function createVehiclesCache({ getRegions = serverVisibleRegions, fetchFn
     const data = await res.json();
     if (data.errors) throw new Error(data.errors[0]?.message || 'GraphQL-feil');
     const byRegion = {};
-    for (const r of regions) byRegion[r.id] = normalizeGpsVehicles(data?.data?.[r.id]);
+    for (const r of regions) byRegion[r.id] = { data: { vehicles: normalizeGpsVehicles(data?.data?.[r.id]) } };
     return byRegion;
   }
 
@@ -67,7 +70,7 @@ export function createVehiclesCache({ getRegions = serverVisibleRegions, fetchFn
     }
   }
 
-  const answer = (regionId) => ({ data: { vehicles: cachedData?.[regionId] || [] } });
+  const answer = (regionId) => cachedData?.[regionId] || EMPTY;
 
   /** Ved utløpt cache: returnerer stale umiddelbart og revaliderer i bakgrunnen. */
   return async function getCachedVehicles(regionId = 'oslo') {

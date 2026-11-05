@@ -59,3 +59,24 @@ test('ukjent region gir tom liste', async () => {
   const get = createVehiclesCache({ getRegions: begge, fetchFn: fakeFetch({ oslo: [gps('A')], bergen: [] }, []) });
   assert.deepEqual(await get('trondheim'), { data: { vehicles: [] } });
 });
+
+test('samme objekt uten ny henting, nytt objekt etter ny henting', async () => {
+  let n = 0;
+  const get = createVehiclesCache({
+    getRegions: begge,
+    fetchFn: async () => ({ json: async () => ({ data: { oslo: [gps('A' + n++)], bergen: [] } }) }),
+  });
+  const a = await get();
+  assert.equal(await get(), a);
+  assert.equal(await get('trondheim'), await get('trondheim'));
+  const realNow = Date.now;
+  Date.now = () => realNow() + 60000;
+  try {
+    await get(); // stale: starter revalidering
+    await new Promise((r) => setTimeout(r, 10));
+    const b = await get();
+    assert.notEqual(b, a);
+  } finally {
+    Date.now = realNow;
+  }
+});

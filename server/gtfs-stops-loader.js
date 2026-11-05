@@ -96,6 +96,7 @@ function parseCsvLine(line) {
  * Laster GTFS basic zip, ekstraherer stops.txt og bygger quay-cache.
  * @returns {Promise<Map<string, [number, number]>|null>}
  */
+// Regionssettet er fast per prosess (env), så 23 t-cachen nøkles ikke på `regions`.
 export async function loadGtfsStops(fetchFn = fetchWithRetry, regions = serverVisibleRegions()) {
   if (gtfsQuayCache && Date.now() - lastLoadTime < CACHE_TTL_MS) {
     return gtfsQuayCache;

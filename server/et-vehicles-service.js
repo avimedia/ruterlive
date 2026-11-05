@@ -212,10 +212,12 @@ export function createEtVehiclesService({ region, etCache, deps = {} }) {
       // Delt cache (24 t, feil 10 min): JP-kall bare for nye linjer, ikke hvert 15. s
       const uniqueLineRefs = [...new Set(parsed.map((j) => j.lineRef).filter(Boolean))];
       await ensureModes(uniqueLineRefs);
-      const journeys = parsed.map((j) => {
+      const journeys = [];
+      for (const j of parsed) {
         const jpMode = lineMode(j.lineRef);
-        return jpMode && jpMode !== j.mode ? { ...j, mode: jpMode } : j;
-      });
+        const withMode = jpMode && jpMode !== j.mode ? { ...j, mode: jpMode } : j;
+        if (withMode.mode) journeys.push(withMode); // ukjent modus også etter JP: droppes
+      }
 
       const quayCoordCache = new Map();
       for (const j of journeys) {

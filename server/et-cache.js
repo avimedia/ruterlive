@@ -20,7 +20,7 @@ const MORE_DATA_TAG = '<MoreData>true</MoreData>';
  * @param {string} o.datasetId ET-datasett (f.eks. RUT, SKY)
  * @param {() => boolean} o.isActive henter i bakgrunnen bare mens regionen er aktiv
  * @param {(fn: () => Promise<any>) => Promise<any>} o.runExclusive global kø for nedlasting + parsing
- * @param {object} [o.parserOpts] valg til createEtStreamParser (f.eks. { useVehicleMode: true } for Bergen)
+ * @param {object} [o.parserOpts] valg til createEtStreamParser (Bergen: { keepUnknownMode: true, useVehicleMode: true })
  * @param {boolean} [o.waitForFirst] true: getJourneys() venter på første henting (alwaysActive-regioner)
  */
 export function createEtCache({

@@ -123,3 +123,48 @@ test('parser: Oslo (uten useVehicleMode) hopper over ikke-Ruter-turer som før',
   p.push(SIRI('SKY:Line:2', 'tram') + SIRI('RUT:Line:5', 'bus'));
   assert.deepEqual(p.end().map((j) => j.mode), ['metro']);
 });
+
+// Trimmet struktur fra ekte SKY-ET: LineRef + VehicleRef, ingen VehicleMode
+const nowIso = (ms) => new Date(NOW + ms).toISOString();
+const SKY_XML = (code) => `<EstimatedVehicleJourney><LineRef>SKY:Line:${code}</LineRef><VehicleRef>SKY:V:${code}</VehicleRef>
+<RecordedCalls><RecordedCall><StopPointRef>NSR:Quay:1</StopPointRef><StopPointName>Ett</StopPointName><ActualDepartureTime>${nowIso(-60000)}</ActualDepartureTime></RecordedCall></RecordedCalls>
+<EstimatedCalls><EstimatedCall><StopPointRef>NSR:Quay:2</StopPointRef><StopPointName>To</StopPointName><ExpectedArrivalTime>${nowIso(60000)}</ExpectedArrivalTime><ExpectedDepartureTime>${nowIso(70000)}</ExpectedDepartureTime></EstimatedCall>
+<EstimatedCall><StopPointRef>NSR:Quay:3</StopPointRef><StopPointName>Tre</StopPointName><ExpectedArrivalTime>${nowIso(160000)}</ExpectedArrivalTime><ExpectedDepartureTime>${nowIso(170000)}</ExpectedDepartureTime></EstimatedCall></EstimatedCalls>
+</EstimatedVehicleJourney>`;
+
+async function skyVehicles(modes, codes = ['2']) {
+  const p = createEtStreamParser({ keepUnknownMode: true, useVehicleMode: true });
+  p.push(codes.map(SKY_XML).join(''));
+  const parsed = p.end();
+  assert.equal(parsed.length, codes.length, 'parseren beholder turer uten modus');
+  assert.ok(parsed.every((j) => j.mode === null));
+  return (await make('bergen', parsed, modes).getVehiclesAndShapes()).vehicles;
+}
+
+test('SKY uten VehicleMode, JP-modus bus: blir buss', async () => {
+  const v = await skyVehicles({ 'SKY:Line:2': 'bus' });
+  assert.equal(v.length, 1);
+  assert.equal(v[0].mode, 'bus');
+});
+
+test('SKY uten VehicleMode og uten JP-modus: droppes', async () => {
+  assert.equal((await skyVehicles({})).length, 0);
+});
+
+test('SKY:Line:2 med JP-modus tram blir tram', async () => {
+  const v = await skyVehicles({ 'SKY:Line:2': 'tram', 'SKY:Line:9': 'bus' }, ['2', '9']);
+  assert.deepEqual(v.map((x) => x.mode).sort(), ['bus', 'tram']);
+});
+
+test('shape-service dropper turer uten modus etter JP', async () => {
+  const p = createEtStreamParser({ keepUnknownMode: true });
+  p.push(SKY_XML('2'));
+  const svc = createShapeService({ region: getRegion('bergen'), etCache: fakeCache(p.end()), deps: deps({}) });
+  assert.deepEqual(await svc.refresh(), []);
+});
+
+test('parser: Oslo (uten keepUnknownMode) dropper SKY-turer uten modus', () => {
+  const p = createEtStreamParser();
+  p.push(SKY_XML('2'));
+  assert.equal(p.end().length, 0);
+});

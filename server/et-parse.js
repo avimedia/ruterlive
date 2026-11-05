@@ -201,6 +201,8 @@ const isCallCancelled = (cel) => {
 /**
  * opts.useVehicleMode: modus fra ET-ens VehicleMode når linjenummer ikke gir noen (regioner uten
  *   linjenummer-fallback, f.eks. Bergen). Oslo bruker det ikke, så ikke-Ruter-turer hoppes over som før.
+ * opts.keepUnknownMode: behold turer uten kjent modus (mode null); tjenestene setter modus fra JP og
+ *   dropper turer som fortsatt mangler den. For regioner uten linjenummer-fallback (Bergen).
  * opts.mode: fast modus for alle turer (f.eks. 'rail' for BNR, der linjekoder som R70 ikke er tall).
  * opts.skipCancelled: hopper over innstilte turer og innstilte kall.
  */
@@ -211,7 +213,7 @@ function parseInto(xmlText, journeys, intern, opts = {}) {
     const lineRef = text(jel, 'LineRef');
     const mode = opts.mode || getModeFromLineNumFallback(lineRef)
       || (opts.useVehicleMode ? mapJpTransportMode(text(jel, 'VehicleMode')) : null);
-    if (!mode) continue;
+    if (!mode && !opts.keepUnknownMode) continue;
     if (opts.skipCancelled && isJourneyCancelled(jel)) continue;
 
     const vehicleRef = text(jel, 'VehicleRef') || '';
@@ -253,7 +255,7 @@ function parseInto(xmlText, journeys, intern, opts = {}) {
         firstQuayId: (recordedCalls[0] || estimatedCalls[0])?.quayId,
         firstTime: recordedCalls[0]?.time ?? (estimatedCalls[0]?.depTime || estimatedCalls[0]?.arrTime),
       }),
-      mode,
+      mode: mode || null,
       lineRef,
       destinationName,
       datedVehicleJourneyRef,

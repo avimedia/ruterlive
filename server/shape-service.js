@@ -198,10 +198,12 @@ export function createShapeService({ region, etCache, deps = {} }) {
       const uniqueLineRefs = [...new Set(parsed.map((j) => j.lineRef).filter(Boolean))];
       await ensureModes(uniqueLineRefs);
 
-      const journeys = parsed.map((j) => {
+      const journeys = [];
+      for (const j of parsed) {
         const jpMode = lineMode(j.lineRef);
-        return jpMode && jpMode !== j.mode ? { ...j, mode: jpMode } : j;
-      });
+        const withMode = jpMode && jpMode !== j.mode ? { ...j, mode: jpMode } : j;
+        if (withMode.mode) journeys.push(withMode); // ukjent modus også etter JP: droppes
+      }
 
       const quayToMode = new Map();
       for (const j of journeys) {

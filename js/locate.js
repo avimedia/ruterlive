@@ -46,7 +46,11 @@ function onPosition(pos) {
   if (!map) return;
   const ll = [pos.coords.latitude, pos.coords.longitude];
   const acc = pos.coords.accuracy || 0;
-  if (!centered && switchRegionForPosition(ll[0], ll[1])) return;
+  if (!centered) {
+    const btn = document.getElementById('locate-btn');
+    const target = switchRegionForPosition(ll[0], ll[1], () => btn && stop(btn));
+    if (target) return;
+  }
   if (!dot) {
     circle = L.circle(ll, { radius: acc, interactive: false, color: '#2b7fff', weight: 1, fillColor: '#2b7fff', fillOpacity: 0.12 }).addTo(map);
     dot = L.circleMarker(ll, { radius: 7, interactive: false, color: '#fff', weight: 2.5, fillColor: '#2b7fff', fillOpacity: 1 }).addTo(map);

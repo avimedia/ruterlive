@@ -57,6 +57,12 @@ export function switchRegion(region) {
   globalThis.location.assign(regionPath(region));
 }
 
+/** Regionen posisjonen ligger i hvis den er en annen synlig region enn den nåværende, ellers null. */
+export function regionForPosition(lat, lon, current, visible = VISIBLE) {
+  const target = regionAt(lat, lon, visible);
+  return target && target.id !== current.id ? target : null;
+}
+
 /**
  * Hvilken sti kartet skal flyttes til ved oppstart, eller null (bli der du er).
  * Ren funksjon: Permissions API og posisjon hentes av kalleren.

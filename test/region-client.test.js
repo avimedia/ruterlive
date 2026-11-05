@@ -81,3 +81,14 @@ test('chooseStartRegion: posisjon bare med tillatelse granted', () => {
 test('chooseStartRegion: lagret valg vinner over posisjon', () => {
   assert.equal(choose({ stored: 'oslo', permission: 'granted', position: bergenPos }), null);
 });
+
+import { regionForPosition } from '../js/region.js';
+
+test('regionForPosition: annen synlig region gir målet, ellers null', () => {
+  assert.equal(regionForPosition(osloPos.lat, osloPos.lon, REGIONS.bergen, withBergen), REGIONS.oslo);
+  assert.equal(regionForPosition(bergenPos.lat, bergenPos.lon, REGIONS.oslo, withBergen), REGIONS.bergen);
+  assert.equal(regionForPosition(bergenPos.lat, bergenPos.lon, REGIONS.bergen, withBergen), null);
+  assert.equal(regionForPosition(osloPos.lat, osloPos.lon, REGIONS.oslo, withBergen), null);
+  assert.equal(regionForPosition(0, 0, REGIONS.oslo, withBergen), null);
+  assert.equal(regionForPosition(bergenPos.lat, bergenPos.lon, REGIONS.oslo, bare), null);
+});

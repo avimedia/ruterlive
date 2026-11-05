@@ -1,24 +1,18 @@
 /**
  * Regionvelger i kartmenyen og valg av startregion (lagret valg, tillatt posisjon).
  */
-import { clientVisibleRegions, chooseStartRegion, currentRegion, readStoredRegion, switchRegion } from './region.js';
-import { regionPath } from '../shared/regions.js';
+import { clientVisibleRegions, chooseStartRegion, currentRegion, readStoredRegion, regionForPosition, switchRegion } from './region.js';
+import { findRegion } from '../shared/regions.js';
 
 function goTo(path) {
   globalThis.location.assign(path + globalThis.location.search + globalThis.location.hash);
 }
 
-/** Bytter region hvis posisjonen ligger i en annen synlig region. Brukes av «Vis min posisjon». */
-export function switchRegionForPosition(lat, lon) {
-  const path = chooseStartRegion({
-    pathname: globalThis.location.pathname,
-    stored: null,
-    permission: 'granted',
-    position: { lat, lon },
-  });
-  if (!path) return false;
-  const target = clientVisibleRegions().find((r) => regionPath(r) === path);
+/** Bytter region hvis posisjonen ligger i en annen synlig region. Brukeren trykket selv, så valget lagres. */
+export function switchRegionForPosition(lat, lon, beforeSwitch) {
+  const target = regionForPosition(lat, lon, currentRegion());
   if (!target) return false;
+  beforeSwitch?.();
   switchRegion(target);
   return true;
 }
@@ -31,15 +25,22 @@ export function initStartRegion() {
     goTo(sync);
     return;
   }
-  if (readStoredRegion() || clientVisibleRegions().length < 2) return;
+  const storedRegion = findRegion(readStoredRegion());
+  if ((storedRegion && clientVisibleRegions().includes(storedRegion)) || clientVisibleRegions().length < 2) return;
   if (!navigator.permissions?.query || !navigator.geolocation) return;
-  navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+  let query;
+  try {
+    query = navigator.permissions.query({ name: 'geolocation' });
+  } catch {
+    return;
+  }
+  query.then((status) => {
     if (status.state !== 'granted') return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const path = chooseStartRegion({
           pathname,
-          stored: readStoredRegion(),
+          stored: null,
           permission: 'granted',
           position: { lat: pos.coords.latitude, lon: pos.coords.longitude },
         });

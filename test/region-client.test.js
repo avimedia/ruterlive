@@ -92,3 +92,30 @@ test('regionForPosition: annen synlig region gir målet, ellers null', () => {
   assert.equal(regionForPosition(0, 0, REGIONS.oslo, withBergen), null);
   assert.equal(regionForPosition(bergenPos.lat, bergenPos.lon, REGIONS.oslo, bare), null);
 });
+
+import { hasLinkParams } from '../js/region.js';
+
+test('chooseStartRegion: lenke med ?lat&lng velger regionen for posisjonen, lagret valg ignoreres', () => {
+  const osloLink = '?lat=59.91&lng=10.75&z=15';
+  assert.equal(choose({ stored: 'bergen', search: osloLink }), null, 'Oslo-lenke på / blir i Oslo');
+  assert.equal(choose({ stored: 'bergen', search: `${osloLink}&linje=31` }), null);
+  assert.equal(choose({ stored: 'oslo', search: '?lat=60.39&lng=5.32' }), '/bergen', 'Bergen-posisjon på / går til /bergen');
+  assert.equal(choose({ pathname: '/bergen', stored: 'bergen', search: osloLink }), '/', 'Oslo-posisjon på /bergen går til /');
+  assert.equal(choose({ pathname: '/bergen', search: '?lat=60.39&lng=5.32' }), null);
+  assert.equal(choose({ stored: 'bergen', search: '?lat=0&lng=0' }), null, 'utenfor alle regioner: bli der du er');
+  assert.equal(choose({ stored: 'oslo', search: '?lat=60.39&lng=5.32', visible: bare }), null, 'skjult region');
+});
+
+test('chooseStartRegion: bare ?linje= gir ingen omdirigering, ugyldig lat/lng følger vanlig regel', () => {
+  assert.equal(choose({ stored: 'bergen', search: '?linje=31' }), null);
+  assert.equal(choose({ stored: 'bergen', search: '?lat=abc&lng=10' }), '/bergen');
+  assert.equal(choose({ stored: 'bergen', search: '' }), '/bergen');
+});
+
+test('hasLinkParams: lat+lng eller linje', () => {
+  assert.equal(hasLinkParams('?lat=59.9&lng=10.7'), true);
+  assert.equal(hasLinkParams('?linje=31'), true);
+  assert.equal(hasLinkParams('?z=12'), false);
+  assert.equal(hasLinkParams(''), false);
+  assert.equal(hasLinkParams(undefined), false);
+});

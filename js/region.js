@@ -63,13 +63,34 @@ export function regionForPosition(lat, lon, current, visible = VISIBLE) {
   return target && target.id !== current.id ? target : null;
 }
 
+/** Posisjonen i en delt lenke (?lat=&lng=), eller null når den mangler eller er ugyldig. */
+function linkPosition(search) {
+  const params = new URLSearchParams(search ?? '');
+  if (!params.has('lat') || !params.has('lng')) return null;
+  const lat = Number(params.get('lat'));
+  const lon = Number(params.get('lng'));
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
+/** Lenke til et bestemt sted eller en linje (holdeplass-/linjesider, delte lenker): ikke flytt etter lagret valg eller posisjon. */
+export function hasLinkParams(search) {
+  return linkPosition(search) !== null || new URLSearchParams(search ?? '').has('linje');
+}
+
 /**
  * Hvilken sti kartet skal flyttes til ved oppstart, eller null (bli der du er).
  * Ren funksjon: Permissions API og posisjon hentes av kalleren.
- * Regionssti vinner alltid; ellers lagret valg; ellers posisjon bare når tillatelsen alt er gitt.
+ * Lenke med ?lat&lng: regionen for posisjonen (lagret valg ignoreres). Bare ?linje=: bli der du er.
+ * Ellers vinner regionssti; så lagret valg; så posisjon bare når tillatelsen alt er gitt.
  */
-export function chooseStartRegion({ pathname, stored, permission, position, visible = VISIBLE }) {
+export function chooseStartRegion({ pathname, stored, permission, position, search = '', visible = VISIBLE }) {
   const here = regionFromPath(pathname, visible);
+  const linked = linkPosition(search);
+  if (linked) {
+    const target = regionAt(linked.lat, linked.lon, visible);
+    return target && target.id !== here.region.id ? regionPath(target) : null;
+  }
+  if (hasLinkParams(search)) return null;
   if (here.region.path) return null;
   const storedRegion = findRegion(stored);
   if (storedRegion && visible.includes(storedRegion)) {

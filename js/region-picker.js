@@ -1,7 +1,7 @@
 /**
  * Regionvelger i kartmenyen og valg av startregion (lagret valg, tillatt posisjon).
  */
-import { clientVisibleRegions, chooseStartRegion, currentRegion, readStoredRegion, regionForPosition, switchRegion } from './region.js';
+import { clientVisibleRegions, chooseStartRegion, currentRegion, hasLinkParams, readStoredRegion, regionForPosition, switchRegion } from './region.js';
 import { findRegion } from '../shared/regions.js';
 
 function goTo(path) {
@@ -20,11 +20,14 @@ export function switchRegionForPosition(lat, lon, beforeSwitch) {
 /** Kjøres ved oppstart på kartsiden. Spør aldri om posisjon selv. */
 export function initStartRegion() {
   const pathname = globalThis.location.pathname;
-  const sync = chooseStartRegion({ pathname, stored: readStoredRegion(), permission: 'prompt', position: null });
+  const search = globalThis.location.search;
+  const sync = chooseStartRegion({ pathname, search, stored: readStoredRegion(), permission: 'prompt', position: null });
   if (sync) {
     goTo(sync);
     return;
   }
+  // Lenke til sted eller linje: bli der lenken peker, uansett egen posisjon
+  if (hasLinkParams(search)) return;
   const storedRegion = findRegion(readStoredRegion());
   if ((storedRegion && clientVisibleRegions().includes(storedRegion)) || clientVisibleRegions().length < 2) return;
   if (!navigator.permissions?.query || !navigator.geolocation) return;

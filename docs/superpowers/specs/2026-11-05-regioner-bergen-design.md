@@ -70,7 +70,7 @@ Alle regionsensitive endepunkter får `?region=` (standard `oslo`, så gamle kli
 ## Klient
 
 - Regionen kommer fra stien (`/` = Oslo, `/bergen` = Bergen). Den styrer kartsentrum, `?region=` på alle kall og hvilke linjer søket kjenner.
-- Regionvelger i kartmenyen. Valget lagres i `localStorage` og skifter sti med `history.pushState` uten ny sideinnlasting; data for den nye regionen hentes på nytt.
+- Regionvelger i kartmenyen. Valget lagres i `localStorage` og navigerer med `location.assign` (full innlasting; enklere og tryggere enn `pushState` med all tilstanden i `main.js`).
 - Automatisk: på `/` uten lagret valg brukes posisjonen bare hvis tillatelsen alt er gitt (Permissions API), eller når brukeren trykker «Vis min posisjon». Nærmeste region vinner hvis posisjonen ligger innenfor en regions `vehicleBounds`. Ingen spørsmål om posisjon ved innlasting. En lenke direkte til `/bergen` eller et valg i velgeren vinner over posisjonen.
 - `shared/line-list.js` får region på hver linje; lenkene fra kartet til innholdssider bruker regionens sti.
 - Dev-modus: reserveveien i nettleseren (`js/et-api.js`, `js/api.js`) bruker regionens datasett og grenser.

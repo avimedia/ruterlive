@@ -2,6 +2,7 @@ import { runWhenVisible } from './visibility.js';
 import { withRegion } from './region.js';
 import { initMap, getMap } from './map.js';
 import { initLocate } from './locate.js';
+import { initStartRegion, initRegionPicker } from './region-picker.js';
 import { initTheme } from './theme.js';
 import { initNoPageZoom } from './no-page-zoom.js';
 import { initStopSearch } from './search.js';
@@ -153,11 +154,13 @@ function mergeAndUpdate() {
   }
 }
 
+initStartRegion();
 initNoPageZoom();
 initMap();
 initTheme();
 initStopSearch();
 initSiteMenu();
+initRegionPicker();
 initShareLink();
 initLoadingIndicator();
 initTipToast();

@@ -44,3 +44,40 @@ test('parseLineParam: bruker gitt linjeliste, tom liste gir null', async () => {
   assert.equal(parseLineParam('?linje=1', bergen).mode, 'tram');
   assert.equal(parseLineParam('?linje=1', bergen).slug, 'bybanen-1');
 });
+
+import { chooseStartRegion } from '../js/region.js';
+
+const choose = (o) => chooseStartRegion({ pathname: '/', stored: null, permission: 'prompt', position: null, visible: withBergen, ...o });
+const bergenPos = { lat: 60.39, lon: 5.32 };
+const osloPos = { lat: 59.91, lon: 10.75 };
+
+test('chooseStartRegion: regionssti vinner (ingen løkke)', () => {
+  assert.equal(choose({ pathname: '/bergen', stored: 'oslo' }), null);
+  assert.equal(choose({ pathname: '/bergen', stored: 'bergen' }), null);
+  assert.equal(choose({ pathname: '/bergen', permission: 'granted', position: osloPos }), null);
+  assert.equal(choose({ pathname: '/bergen/linje/x', stored: 'oslo' }), null);
+});
+
+test('chooseStartRegion: lagret offentlig region ≠ stiens gir den regionens sti', () => {
+  assert.equal(choose({ stored: 'bergen' }), '/bergen');
+});
+
+test('chooseStartRegion: lagret Oslo på / eller ugyldig/skjult lagret verdi gir null', () => {
+  assert.equal(choose({ stored: 'oslo' }), null);
+  assert.equal(choose({ stored: 'xyz' }), null);
+  assert.equal(choose({ stored: 'bergen', visible: bare }), null);
+  assert.equal(choose({ stored: 'toString' }), null);
+});
+
+test('chooseStartRegion: posisjon bare med tillatelse granted', () => {
+  assert.equal(choose({ permission: 'granted', position: bergenPos }), '/bergen');
+  assert.equal(choose({ permission: 'prompt', position: bergenPos }), null);
+  assert.equal(choose({ permission: 'denied', position: bergenPos }), null);
+  assert.equal(choose({ permission: 'granted', position: null }), null);
+  assert.equal(choose({ permission: 'granted', position: osloPos }), null);
+  assert.equal(choose({ permission: 'granted', position: bergenPos, visible: bare }), null);
+});
+
+test('chooseStartRegion: lagret valg vinner over posisjon', () => {
+  assert.equal(choose({ stored: 'oslo', permission: 'granted', position: bergenPos }), null);
+});

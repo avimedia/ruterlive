@@ -106,7 +106,8 @@ body {
   color: var(--text-muted);
 }
 
-#theme-select {
+#theme-select,
+#region-select {
   font-size: 0.8rem;
   padding: 0.3rem 0.5rem;
   border-radius: 4px;
@@ -1860,7 +1861,8 @@ path.leaflet-interactive:focus {
   #theme-select {
     font-size: 16px;
   }
-  #theme-select {
+  #theme-select,
+  #region-select {
     padding: 0.1rem 0.35rem;
     line-height: 1.2;
   }
@@ -1897,4 +1899,8 @@ a,
   margin-left: 0.4rem;
   vertical-align: -3px;
   color: #2a9d8f;
+}
+
+.theme-select-wrap[hidden] {
+  display: none;
 }

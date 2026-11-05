@@ -37,7 +37,8 @@ Største risikoer: minne (ET-parsing, 384 MB heap), Entur sin ET-kvote (felles f
 ### Neste
 
 - Resten av Norge via Entur sin vehicles-API (viewport-basert), med regioner som lastes ved behov
-- «Avvik» – driftsmeldinger fra Entur sitt situations-API i kartet og på linjesidene
+- «Avvik» ✅ – driftsmeldinger fra Entur i kartet, på `/avvik` og på linje- og holdeplassider
+- Trafikkmeldinger fra Statens vegvesen (DATEX II)
 
 ### Andre mulige utvidelser
 

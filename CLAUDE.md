@@ -71,11 +71,22 @@ ET shapes for buses are often partial trips, so for a selected bus/boat (and fly
 
 ### Shared code
 
-`shared/regions.js` holds the region settings (`id`, `path`, `public`, `alwaysActive`, `authorities`, center, zoom, vehicle/stops/geometry bounds, ET dataset, `etMaxSize`, map link). Oslo (root path) and Bergen (`/bergen`, "Bergen og Vestland", whole Skyss area) are public; server and client read region values from it. `visibleRegions(preview)` = `public: true` plus ids in a preview list, so a new region can be hidden (`public: false`) and tried locally with `REGIONS_PREVIEW=<id>` (server env) and `VITE_REGIONS_PREVIEW=<id>` (client, at build time). `regionFromPath`/`regionAt` take the visible list. `shared/line-mode.js` has `getModeFromLineNumFallback` (Ruter lines `RUT:` only; other operators give null) and `mapJpTransportMode`, replacing the old copies.
+`shared/regions.js` holds the region settings (`id`, `situationCodespaces` (codespaces whose disruptions belong to the region), `path`, `public`, `alwaysActive`, `authorities`, center, zoom, vehicle/stops/geometry bounds, ET dataset, `etMaxSize`, map link). Oslo (root path) and Bergen (`/bergen`, "Bergen og Vestland", whole Skyss area) are public; server and client read region values from it. `visibleRegions(preview)` = `public: true` plus ids in a preview list, so a new region can be hidden (`public: false`) and tried locally with `REGIONS_PREVIEW=<id>` (server env) and `VITE_REGIONS_PREVIEW=<id>` (client, at build time). `regionFromPath`/`regionAt` take the visible list. `shared/line-mode.js` has `getModeFromLineNumFallback` (Ruter lines `RUT:` only; other operators give null) and `mapJpTransportMode`, replacing the old copies.
 
 `config.js` (e.g. `MAX_ROUTE_SPAN_KM`, `isFlytogLineCode`) and `shared/et-journeys.js` (ET vehicle id + one journey per vehicle) are imported by both server and client. Flytoget's line codes are `FLY1`/`FLY2`; `F1`, `F4`, `F6` are Vy/SJ trains.
 
 ET contains several journeys per physical vehicle (previous, current, next trip) sharing one `VehicleRef`, and many journeys lack it. `selectJourneysForVehicles` keeps one journey per vehicle; route shapes are still built from all journeys.
+
+### Avvik (SIRI SX)
+
+Nationwide disruption messages, shown as a button + panel on the map, on `/avvik`, and as boxes on line and stop pages.
+- Source: the Entur Vehicles GraphQL API `situations` field (not a separate SX feed), fetched for the whole country every 2 min by `server/situations.js` (15 s timeout; on failure the last list is kept for up to 15 min, then `null`). One shared cache, no per-user calls.
+- `server/situations-model.js`: `normalize`, `isRelevant`, an index, and `situationsForRegion/Stop/Line`. `shared/situation-areas.js` holds `SITUATION_AREAS`, `RAIL_CODESPACES` (includes `NSB`, because Vy train disruptions use that codespace), `CODESPACE_ALIASES` (`VYG` → `NSB`) and `lineRefKeys` (matching of line refs, also used by the client). `shared/situation-format.js` formats validity text. Situations with no affected line or stop (e.g. single departures) are kept in the index but not listed, and not counted.
+- The button count is every listable situation in the region, including `noImpact` ones (some operators flag closed stops that way).
+- `server/situations-routes.js`: `/api/situations?region=` (unknown region = 400, ETag, `max-age=60`), registered before `express.static`. `server/situation-links.js` links situations to line/stop pages.
+- Client: `js/situations.js` (pure functions, importable in node), `js/situations-panel.js` (DOM), polling every 2 min while the tab is visible. Vehicle popups get a note (`js/markers.js`) and the departure board badges (`js/routes.js`; the departures query includes the line id).
+- `/avvik` (`server/pages/situations-page.js`) has its own text in `content/avvik.html`, AdSense, is indexed and in the sitemap (`max-age=120`). `renderSituationBox` is used on line and stop pages.
+- Like other server-only endpoints, this does not work under Vite dev, only under `npm run build && npm run start`.
 
 ### Content pages (for AdSense)
 
@@ -83,12 +94,13 @@ URLs: Oslo is unchanged (`/linje/…`, `/guider/…`, `/holdeplass/…`); other 
 
 Server-rendered by Express, all through `server/pages/layout.js` (`renderPage`, `escapeHtml`), which adds the AdSense Auto ads script unless `ads: false`. The map (`/`) must never load AdSense: it is a navigation screen, which is why AdSense rejected the site in Oct 2026.
 - `/linje/:slug`: `server/line-catalog.js` (`LINES`, 62 lines, 28 of them trains: 12 Oslo lines + 16 `national` lines from VYG/GOA/SJN with `region` and their own `map` center; Vy Tåg's F1 is left out) + intros in `content/line-intros.json` + prose in `content/linje/<slug>.html`. `shared/line-list.js` is a hand copy of the catalog. Stop list = Entur JP journey pattern with the highest journeys × stops (cached 24 h, failures 60 s; for rail, replacement-bus patterns are skipped and patterns with the same end stops are summed); lines with < 3 stops show the route from the line name instead. Vehicle count from `server/live-vehicles.js` (same merge as `/api/initial-data`), filtered by line code and mode.
+- `/avvik`: disruption list for all regions (see Avvik above), with ads.
 - `/guider`, `/guider/:slug`, `/om`: `server/guide-catalog.js` + HTML fragments in `content/` (Norwegian prose: short, no filler, no closing summary, no invented author; facts checked against Entur).
 - `/sitemap.xml`, `robots.txt`; the catch-all serves the map only for `/`, `/index.html` and the paths of visible regions (`isMapPath`), everything else gets a 404 page.
 
 ### Entur API usage
 
-Every request to Entur must send the header `ET-Client-Name: ruterlive-web`. Rate limits (429) are the main operational problem, which is why the server caches aggressively and shares one cache across all users. Don't add per-user calls straight to Entur from the server without a cache.
+Every request to Entur must send the header `ET-Client-Name: ruterlive-web`. The Vehicles API is also the source for `situations` (see Avvik). Rate limits (429) are the main operational problem, which is why the server caches aggressively and shares one cache across all users. Don't add per-user calls straight to Entur from the server without a cache.
 
 ### Static and AdSense
 

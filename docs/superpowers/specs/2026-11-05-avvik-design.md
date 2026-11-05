@@ -57,7 +57,7 @@ API:
 
 Nettstedet dekker nå Oslo, Bergen og tog i hele Norge, og får avvik for hele landet. Oppdateres:
 
-- `index.html` (Oslo-kartet på `/`): `<title>`, `meta description`, `og:`/`twitter:`, `<noscript>`-teksten og intro i kartmenyen nevner Oslo, Bergen og tog i hele Norge, f.eks. tittel «Sanntidskart for kollektivtrafikken i Oslo, Bergen og hele Norge | livetrafikk.no». Regionkartet (`/bergen`, `server/pages/region-map.js`) må fortsatt bytte tittel/beskrivelse; testen mot `dist/index.html` sikrer det.
+- `index.html` (Oslo-kartet på `/`): `<title>`, `meta description`, `og:`/`twitter:`, `<noscript>`-teksten og intro i kartmenyen nevner Oslo og Bergen (og tog i hele Norge i beskrivelsen); tittel «Sanntidskart for kollektivtrafikken i Oslo og Bergen | livetrafikk.no». «Hele Norge» i tittelen venter til kartet dekker hele landet. Regionkartet (`/bergen`, `server/pages/region-map.js`) må fortsatt bytte tittel/beskrivelse; testen mot `dist/index.html` sikrer det.
 - `public/manifest.json` `description`.
 - Om-siden (`content/om.html`) og meta-beskrivelsen i `server/pages/guide-index.js`: nevner Bergen og avvik.
 - JSON-LD i `index.html`: `description` for hele nettstedet.

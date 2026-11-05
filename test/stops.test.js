@@ -238,7 +238,7 @@ test('sitemap og /guider har bare utvalgte holdeplasser', () => {
   assert.ok(xml.includes('<loc>https://livetrafikk.no/holdeplasser</loc>'));
   for (const s of FEATURED_STOPS) assert.ok(xml.includes(`<loc>https://livetrafikk.no/holdeplass/${s.slug}</loc>`));
   assert.ok(!xml.includes('/holdeplass/vestli<'));
-  assert.equal((xml.match(/<url>/g) || []).length, 4 + LINES.length + GUIDES.length + 1 + FEATURED_STOPS.length);
+  assert.equal((xml.match(/<url>/g) || []).length, 5 + LINES.length + GUIDES.length + 1 + FEATURED_STOPS.length);
   assert.ok(renderGuideIndex(GUIDES, LINES).includes('href="/holdeplasser"'));
 });
 

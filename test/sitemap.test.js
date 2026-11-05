@@ -17,7 +17,7 @@ test('buildSitemap inneholder faste sider, linjer og guider', () => {
     assert.ok(xml.includes(`<lastmod>${g.updated}</lastmod>`));
   }
   assert.equal((xml.match(/<lastmod>/g) || []).length, guides.length);
-  assert.equal((xml.match(/<url>/g) || []).length, 4 + LINES.length + guides.length);
+  assert.equal((xml.match(/<url>/g) || []).length, 5 + LINES.length + guides.length);
 });
 
 test('buildSitemap escaper slug', () => {

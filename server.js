@@ -9,6 +9,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { readFile } from 'fs/promises';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, getGtfsStopsMap } from './server/gtfs-stops-loader.js';
 import { makeJsonEntry, sendJson, memoEntry } from './server/json-cache.js';
@@ -27,6 +28,8 @@ import { serverVisibleRegions } from './server/region-preview.js';
 import { renderGuideIndex, renderAboutPage } from './server/pages/guide-index.js';
 import { buildSitemap, isMapPath } from './server/pages/sitemap.js';
 import { renderNotFound } from './server/pages/not-found.js';
+import { renderSituationsPage } from './server/pages/situations-page.js';
+import { createSituationLinks } from './server/situation-links.js';
 import { registerEnRoutes } from './server/en-routes.js';
 import { EN_PAGES } from './server/en-catalog.js';
 import { FEATURED_STOPS, featuredStopsFor, findStopForPlace, placePageFields } from './server/stop-catalog.js';
@@ -172,6 +175,32 @@ app.get('/om', async (_req, res) => {
     res.set('Cache-Control', 'no-store');
     res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
   }
+});
+
+// Avvik for hele landet. Siden bygges på nytt ved ny henting, ellers høyst én gang i minuttet.
+const situationLinks = createSituationLinks({ regions: visible, coordsFor: (id) => getGtfsStopsMap()?.get(id) });
+let situationsText = null;
+let situationsHtml = { key: '', html: '' };
+app.get('/avvik', async (_req, res) => {
+  try {
+    situationsText ??= await readFile(path.join(__dirname, 'content', 'avvik.html'), 'utf8');
+  } catch (err) {
+    console.warn('[RuterLive] Avvik-side:', err.message);
+    res.set('Cache-Control', 'no-store');
+    return res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
+  }
+  const service = getSituationService();
+  const index = service.getIndex();
+  const now = Date.now();
+  const key = index ? `${service.getVersion()}:${Math.floor(now / 60_000)}` : 'none';
+  if (situationsHtml.key !== key) {
+    situationsHtml = {
+      key,
+      html: renderSituationsPage({ index, text: situationsText, now, updatedAt: service.getUpdatedAt(), ...situationLinks }),
+    };
+  }
+  res.set('Cache-Control', index ? 'public, max-age=120' : 'no-store');
+  res.type('html').send(situationsHtml.html);
 });
 
 // Engelske sider (/en, /en/:slug)

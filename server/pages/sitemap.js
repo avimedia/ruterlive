@@ -32,6 +32,7 @@ export function buildSitemap({ lines, guides, enPages = [], stops = [], regions 
     urlEntry('/'),
     ...regions.filter((r) => r.path).map((r) => urlEntry(regionPath(r))),
     urlEntry('/guider'),
+    urlEntry('/avvik'),
     urlEntry('/om'),
     urlEntry('/personvern.html'),
     ...lines.filter((l) => l.indexed !== false).map((l) => urlEntry(inRegion(l.regionId, `/linje/${l.slug}`))),

@@ -54,8 +54,8 @@ export function lineBadge(line, { link = false, size = '' } = {}) {
 
 // Faste tekster i rammen per språk ('nb' er standard, 'en' for de engelske sidene).
 const CHROME_TEXT = {
-  nb: { nav: 'Hovedmeny', map: 'Kart', guides: 'Guider og linjer', about: 'Om', privacy: 'Personvern', contact: 'Kontakt', source: 'Sanntidsdata fra Entur' },
-  en: { nav: 'Main menu', map: 'Map', guides: 'Guides', about: 'About', privacy: 'Privacy', contact: 'Contact', source: 'Real-time data from Entur' },
+  nb: { nav: 'Hovedmeny', map: 'Kart', guides: 'Guider og linjer', situations: 'Avvik', about: 'Om', privacy: 'Personvern', contact: 'Kontakt', source: 'Sanntidsdata fra Entur' },
+  en: { nav: 'Main menu', map: 'Map', guides: 'Guides', situations: 'Disruptions', about: 'About', privacy: 'Privacy', contact: 'Contact', source: 'Real-time data from Entur' },
 };
 
 /** <link rel="alternate" hreflang> per språkversjon. `href` er en sti på livetrafikk.no. */
@@ -122,6 +122,7 @@ ${(noindex ? [] : ld).map((o) => `  ${jsonLd(o)}\n`).join('')}${ads ? `  ${ADSEN
       <nav aria-label="${t.nav}">
         <a href="${escapeHtml(mapPath)}">${t.map}</a>
         ${navLink('/guider', t.guides)}
+        ${navLink('/avvik', t.situations)}
         ${navLink('/om', t.about)}
       </nav>
     </div>
@@ -131,6 +132,7 @@ ${body}
   </main>
   <footer class="site-footer">
     <div class="site-footer-inner">
+      <a href="/avvik">${t.situations}</a>
       <a href="/personvern.html">${t.privacy}</a>
       <a href="https://apptastic.no/pages/contact/" rel="noopener">${t.contact}</a>
       <a href="/om#lisenser">${t.source}</a>

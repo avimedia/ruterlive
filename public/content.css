@@ -1074,3 +1074,148 @@ th {
     white-space: nowrap;
   }
 }
+
+/* ---------- Avvik (/avvik) ---------- */
+
+.situation-jump ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.situation-jump a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  padding: 0 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel-solid);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.situation-jump a:hover {
+  border-color: var(--line-ink);
+}
+
+.situation-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.situation-area {
+  scroll-margin-top: 1rem;
+}
+
+.situation {
+  margin: 0 0 1rem;
+  padding: 1rem 1.125rem;
+  border: 1px solid var(--border-light);
+  border-left: 0.3rem solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-panel-solid);
+}
+
+.situation[data-severity="normal"] {
+  border-left-color: #e9a23b;
+}
+
+.situation[data-severity="severe"],
+.situation[data-severity="verySevere"] {
+  border-left-color: #e63946;
+}
+
+.situation h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.0625rem;
+  line-height: 1.35;
+}
+
+.situation p {
+  margin: 0.5rem 0;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.situation-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.situation-tag {
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.375rem;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.situation-tag[data-severity="normal"] {
+  background: #e9c46a;
+  color: #111;
+}
+
+.situation-tag[data-severity="severe"],
+.situation-tag[data-severity="verySevere"] {
+  background: #c62828;
+  color: #fff;
+}
+
+.situation-validity {
+  margin: 0.5rem 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+}
+
+.situation-advice {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.situation-targets {
+  margin-top: 0.75rem;
+}
+
+.situation-label {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.situation-targets .badge-list {
+  margin: 0;
+}
+
+.situation-line {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.situation-stops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9375rem;
+}
+
+.situation-links {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9375rem;
+}

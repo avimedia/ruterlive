@@ -14,6 +14,8 @@ import { ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, getGtfsStopsMa
 import { makeJsonEntry, sendJson, memoEntry } from './server/json-cache.js';
 import { getRailShapes, getStaticFlybussShapes, loadRailShapes, loadFlybussShapes, refreshFlybussFromJp, FLYBUSS_REFRESH_MS } from './server/static-shapes.js';
 import { getRegistry } from './server/region-services.js';
+import { getSituationService } from './server/situations.js';
+import { registerSituationRoutes } from './server/situations-routes.js';
 import { registerLiveRoutes, regionServicesFor } from './server/live-routes.js';
 import { LINES, REGION_LINES, prewarmLineStops, jpQuery } from './server/line-catalog.js';
 import { createStopPlaceLookup } from './server/stop-search.js';
@@ -137,6 +139,9 @@ app.get('/api/static-network-shapes', (req, res) => {
 // Live-svar per region (?region=, standard Oslo): /api/route-shapes, /api/vehicles-live,
 // /api/route-shapes-all og /api/initial-data. Egne memo-entries per region gir egen ETag og shapesVersion.
 registerLiveRoutes(app, { registry });
+
+// Avvik (hele landet), filtrert per region
+registerSituationRoutes(app, { service: getSituationService(), visible });
 
 // Linje-, holdeplass- og guidesider og regionale kart (/bergen m.fl.) per synlig region
 const stopService = createStopService();
@@ -372,6 +377,7 @@ async function startup() {
     setTimeout(() => prewarmNationalRail().catch(() => {}), 20000);
     // ET (én henting nå, deretter bare i aktive regioner), rutekart hver time, avlasting etter 60 min
     registry.start();
+    getSituationService().start(); // Avvik hvert 2. minutt
     setInterval(loadRailShapes, 7 * 24 * 60 * 60 * 1000); // Ukentlig (30d overstiger Node sin 32-bit timeout)
 
     // Flybussruter fra Entur JP – ukentlig automatisk oppdatering

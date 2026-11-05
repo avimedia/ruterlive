@@ -184,8 +184,8 @@ export function createRailEtService({
   let last429 = -Infinity;
   let refreshing = null;
   let lastWarn = -Infinity;
-  let computed = null;
-  let computedAt = 0;
+  // Per GPS-nøkkelsett (ett per region i rail-live), så regionene ikke bygger hverandres lister på nytt
+  const computed = new WeakMap(); // gpsKeys -> { at, vehicles }
   const quays = createQuayCoords({ jpFetch, now, gtfs });
 
   function refresh() {
@@ -219,16 +219,17 @@ export function createRailEtService({
   function getVehicles(gpsKeys = new Set()) {
     if (now() - lastFetch > REFRESH_MS) refresh();
     if (!journeys) return NO_VEHICLES;
-    if (computed && now() - computedAt < COMPUTE_TTL_MS && computed.gpsKeys === gpsKeys) return computed.vehicles;
+    const hit = computed.get(gpsKeys);
+    if (hit && now() - hit.at < COMPUTE_TTL_MS) return hit.vehicles;
     const t = now();
     const vehicles = [];
     for (const j of selectRailJourneys(journeys, t, gpsKeys)) {
       const v = railJourneyToVehicle(j, quays.get, t);
       if (v) vehicles.push(v);
     }
-    computed = { gpsKeys, vehicles: Object.freeze(vehicles) };
-    computedAt = t;
-    return computed.vehicles;
+    const entry = { at: t, vehicles: Object.freeze(vehicles) };
+    computed.set(gpsKeys, entry);
+    return entry.vehicles;
   }
 
   return { getVehicles, refresh, stats: () => ({ journeys: journeys?.length ?? 0, quays: quays.size() }) };

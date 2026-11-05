@@ -160,6 +160,12 @@ test('createRailEtService: henter i bakgrunnen, gir [] før første henting, hop
   assert.deepEqual(vs.map((v) => v.vehicleId), ['BNR:441:2026-10-26']);
   assert.equal(svc.getVehicles(keys), vs, 'samme array innen 15 s');
   assert.equal(fetches, 1);
+  // To regioner med hvert sitt nøkkelsett bygger ikke hverandres lister på nytt
+  const other = new Set();
+  const vo = svc.getVehicles(other);
+  assert.equal(vo.length, 2);
+  assert.equal(svc.getVehicles(keys), vs, 'samme array etter kall med annet nøkkelsett');
+  assert.equal(svc.getVehicles(other), vo);
 });
 
 test('createRailEtService: 429 gir pause, ingen ny henting før den er over', async () => {

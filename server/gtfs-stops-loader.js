@@ -25,7 +25,7 @@ function stopsBoxes(regions) {
 
 /**
  * Parser stops.txt CSV.
- * Returnerer Map<quayId, { lat, lon, name }> for stops-in-bbox og søk.
+ * Returnerer Map<quayId, { lat, lon, name, parent }> for stops-in-bbox, søk og avvik (parent = StopPlace-nummer).
  * Beholder bare quays i synlige regioners stopsBounds for å spare minne.
  * Format: stop_id,stop_name,stop_lat,stop_lon,...
  * Entur bruker stop_id = NSR:Quay:XXXXX.
@@ -40,6 +40,7 @@ function parseStopsTxt(content, boxes) {
   const nameIdx = header.indexOf('stop_name');
   const latIdx = header.indexOf('stop_lat');
   const lonIdx = header.indexOf('stop_lon');
+  const parentIdx = header.indexOf('parent_station');
   if (stopIdIdx < 0 || latIdx < 0 || lonIdx < 0) return map;
 
   // Linje for linje uten å splitte hele filen; split(',') når feltet ikke har anførselstegn
@@ -57,7 +58,9 @@ function parseStopsTxt(content, boxes) {
     if (!/^NSR:Quay:\d+$/.test(stopId)) continue;
     if (!boxes.some((b) => lat >= b.minLat && lat <= b.maxLat && lon >= b.minLon && lon <= b.maxLon)) continue;
     const name = (nameIdx >= 0 ? cols[nameIdx]?.trim() : '') || '';
-    map.set(ownString(stopId), { lat, lon, name: ownString(name) });
+    // Stoppestedet som tall (Smi, ingen ekstra streng): gir koordinater til avvik på NSR:StopPlace
+    const pm = parentIdx >= 0 ? /^NSR:StopPlace:(\d+)$/.exec(cols[parentIdx]?.trim() || '') : null;
+    map.set(ownString(stopId), { lat, lon, name: ownString(name), parent: pm ? Number(pm[1]) : undefined });
   }
   // RegExp.input (siste regex-input) er en delstreng av filen og ville holdt den i live
   /(?:)/.exec('');
@@ -159,8 +162,8 @@ export function getGtfsQuayCache() {
 }
 
 /**
- * Hele GTFS-kartet Map<quayId, { lat, lon, name }> for søk. Må ikke muteres.
- * @returns {Map<string, { lat: number, lon: number, name: string }>|null}
+ * Hele GTFS-kartet Map<quayId, { lat, lon, name, parent }> for søk og avvik. Må ikke muteres.
+ * @returns {Map<string, { lat: number, lon: number, name: string, parent?: number }>|null}
  */
 export function getGtfsStopsMap() {
   return gtfsQuayCache;

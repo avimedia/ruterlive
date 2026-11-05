@@ -1,5 +1,5 @@
 /**
- * Tekster for avvik som både /avvik-siden (server) og kartets avvikspanel (js/situations-panel.js) bruker.
+ * Tekster for avvik som både /avvik-siden (server) og kartets avvikslag (js/situations-layer.js) bruker.
  * Ren modul: norsk dato og klokkeslett i Europe/Oslo.
  */
 
@@ -51,7 +51,7 @@ function dayText(ms, now, relative) {
 
 /**
  * «Gjelder fra 5. nov. kl. 08.00 til 20. nov.»; åpen slutt gir «inntil videre».
- * relative: true gir «i dag»/«i morgen» i stedet for datoen (kartpanelet).
+ * relative: true gir «i dag»/«i morgen» i stedet for datoen (kartet).
  */
 export function formatValidityPeriod({ start, end }, now, { relative = false } = {}) {
   if (start == null && end == null) return 'Gjelder inntil videre';

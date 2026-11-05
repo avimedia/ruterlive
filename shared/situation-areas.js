@@ -1,6 +1,6 @@
 /**
  * Kodeområder for avvik (SIRI SX), gruppert i områder med norske navn.
- * Brukes av /avvik, regionfilteret og kartets avviksknapp (js/situations.js). Ukjente kodeområder havner i «Andre».
+ * Brukes av /avvik, regionfilteret og kartets avvikslag (js/situations.js). Ukjente kodeområder havner i «Andre».
  */
 
 // Kodeområder som regnes som tog og vises i alle regioner

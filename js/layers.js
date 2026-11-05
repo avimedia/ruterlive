@@ -110,6 +110,16 @@ export function initLayers(callback) {
     routesToggle.addEventListener('click', (e) => e.stopPropagation());
   }
 
+  // Avvik-laget: merkene tegnes av js/situations-layer.js, her lagres bare valget
+  const sitToggle = document.getElementById('situations-toggle');
+  if (sitToggle) {
+    sitToggle.addEventListener('change', (e) => {
+      e.stopPropagation();
+      saveLayerState();
+    });
+    sitToggle.addEventListener('click', (e) => e.stopPropagation());
+  }
+
   // OpenRailwayMap-toggle (jernbanekart)
   const ormToggle = document.getElementById('openrailwaymap-toggle');
   if (ormToggle) {

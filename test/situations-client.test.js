@@ -183,3 +183,41 @@ test('situationCardHtml: arvede nøkler som alvorlighetsgrad gir ingen merkelapp
   const html = situationCardHtml(sit({ severity: 'constructor' }), { now: NOW });
   assert.ok(!html.includes('sit-tag"'));
 });
+
+test('groupSituationStops: ett merke per posisjon, samme id eller innen noen meter; uten koordinat intet merke', async () => {
+  const { groupSituationStops } = await import('../js/situations.js');
+  const a = sit({ id: 'a', stops: [{ id: 'NSR:Quay:1', name: 'Storo', lat: 59.94, lon: 10.77 }, { id: 'NSR:Quay:2', name: 'Storo', lat: 59.94003, lon: 10.77002 }] });
+  const b = sit({ id: 'b', stops: [{ id: 'NSR:Quay:1', name: 'Storo', lat: 59.94, lon: 10.77 }, { id: 'NSR:Quay:9', name: 'Nydalen', lat: 59.95, lon: 10.765 }] });
+  const c = sit({ id: 'c', stops: [{ id: 'NSR:Quay:5', name: 'Uten koordinat' }] });
+  const groups = groupSituationStops([a, b, c]);
+  assert.equal(groups.length, 2);
+  const storo = groups.find((g) => g.name === 'Storo');
+  assert.deepEqual(storo.situations.map((s) => s.id), ['a', 'b'], 'hvert avvik én gang per merke');
+  assert.deepEqual([storo.lat, storo.lon], [59.94, 10.77]);
+  assert.deepEqual(storo.ids.sort(), ['NSR:Quay:1', 'NSR:Quay:2']);
+  assert.deepEqual(groups.find((g) => g.name === 'Nydalen').situations.map((s) => s.id), ['b']);
+  assert.deepEqual(groupSituationStops([]), []);
+  assert.deepEqual(groupSituationStops(null), []);
+});
+
+test('groupSituationStops: 100 m unna gir eget merke', async () => {
+  const { groupSituationStops } = await import('../js/situations.js');
+  const s = sit({ stops: [{ id: 'q1', name: 'A', lat: 59.94, lon: 10.77 }, { id: 'q2', name: 'A', lat: 59.9409, lon: 10.77 }] });
+  assert.equal(groupSituationStops([s]).length, 2);
+});
+
+test('situationsLayerLabel: tall i parentes, uten tall ved 0 eller uten data', async () => {
+  const { situationsLayerLabel } = await import('../js/situations.js');
+  assert.equal(situationsLayerLabel(47), 'Avvik (47)');
+  assert.equal(situationsLayerLabel(0), 'Avvik');
+  assert.equal(situationsLayerLabel(null), 'Avvik');
+});
+
+test('situationsPageHref: Oslo til Ruter-ankeret, Bergen til Skyss-ankeret, ellers /avvik', async () => {
+  const { situationsPageHref } = await import('../js/situations.js');
+  const { REGIONS } = await import('../shared/regions.js');
+  assert.equal(situationsPageHref(REGIONS.oslo), '/avvik#avvik-rut');
+  assert.equal(situationsPageHref(REGIONS.bergen), '/avvik#avvik-sky');
+  assert.equal(situationsPageHref({}), '/avvik');
+  assert.equal(situationsPageHref(null), '/avvik');
+});

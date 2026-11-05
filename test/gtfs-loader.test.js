@@ -118,3 +118,23 @@ test('loadGtfsStops: quay i Bergen beholdes når Bergen er synlig, Trondheim fil
   assert.deepEqual([...cache.keys()].sort(), ['NSR:Quay:1', 'NSR:Quay:2']);
   assert.equal(mod.searchStops('bergen busstasjon').length, 1);
 });
+
+test('loadGtfsStops: parent_station lagres som stoppestedsnummer (for avvikskoordinater)', async () => {
+  const mod = await import('../server/gtfs-stops-loader.js?parent');
+  const zip = new AdmZip();
+  zip.addFile(
+    'stops.txt',
+    Buffer.from(
+      'stop_id,stop_name,stop_lat,stop_lon,stop_desc,location_type,parent_station\n' +
+        'NSR:Quay:1,Jernbanetorget,59.911,10.750,,,NSR:StopPlace:58366\n' +
+        'NSR:Quay:2,Uten forelder,59.912,10.751,,,\n' +
+        'NSR:StopPlace:58366,Jernbanetorget,59.911,10.750,,1,\n'
+    )
+  );
+  await mod.loadGtfsStops(rangeFetch(zip.toBuffer(), []));
+  const map = mod.getGtfsStopsMap();
+  assert.equal(map.get('NSR:Quay:1').parent, 58366);
+  assert.equal(map.get('NSR:Quay:2').parent, undefined);
+  assert.equal(map.has('NSR:StopPlace:58366'), false);
+  assert.deepEqual(mod.searchStops('uten'), [{ id: 'NSR:Quay:2', lat: 59.912, lon: 10.751, name: 'Uten forelder' }]);
+});

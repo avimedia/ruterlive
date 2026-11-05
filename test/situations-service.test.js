@@ -125,3 +125,21 @@ test('/api/situations: identisk Entur-data ved ny henting gir samme ETag (304)',
     assert.equal(r2.status, 304);
   });
 });
+
+test('/api/situations: stopp får lat/lon fra coordsFor, ukjente uten', async () => {
+  const stops = { stopPoints: [{ id: 'NSR:Quay:1', name: 'A' }, { id: 'NSR:StopPlace:9', name: 'B' }] };
+  const { service } = setup([okResponse([raw('RUT:SituationNumber:1', { affects: { ...raw('x').affects, ...stops } })])]);
+  await service.refreshNow();
+  const app = express();
+  const coordsFor = (ids) => new Map(ids.filter((id) => id === 'NSR:Quay:1').map((id) => [id, [59.91, 10.75]]));
+  registerSituationRoutes(app, { service, visible: [{ id: 'oslo', situationCodespaces: ['RUT'] }], coordsFor });
+  const server = app.listen(0);
+  try {
+    const r = await fetch(`http://127.0.0.1:${server.address().port}/api/situations`);
+    const body = await r.json();
+    assert.deepEqual(body.situations[0].stops, [{ id: 'NSR:Quay:1', name: 'A', lat: 59.91, lon: 10.75 }, { id: 'NSR:StopPlace:9', name: 'B' }]);
+    assert.equal('lat' in service.getIndex().all[0].stops[0], false);
+  } finally {
+    server.close();
+  }
+});

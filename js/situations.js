@@ -1,13 +1,13 @@
 /**
  * Avvik (SIRI SX) på kartet: henter /api/situations for regionen, holder lista og gir oppslag per linje
- * og holdeplass. Rene funksjoner (ingen DOM), så testene kan importere modulen; panelet ligger i
- * js/situations-panel.js. Endepunktet finnes bare på prod-serveren: feil gir tom knapp, ingen logg.
+ * og holdeplass. Rene funksjoner (ingen DOM), så testene kan importere modulen; kartlaget ligger i
+ * js/situations-layer.js. Endepunktet finnes bare på prod-serveren: feil gir laget uten tall, ingen logg.
  */
 
 import { withRegion } from './region.js';
 import { runWhenVisible } from './visibility.js';
 import { escapeHtml } from './stop-place-format.js';
-import { lineRefKeys, situationOnLine } from '../shared/situation-areas.js';
+import { lineRefKeys, situationOnLine, areaFor } from '../shared/situation-areas.js';
 import { severityLabel, textHtml, formatValidityPeriod } from '../shared/situation-format.js';
 
 export const POLL_MS = 120_000;
@@ -46,9 +46,62 @@ export function onSituationsChanged(cb) {
   return () => listeners.delete(cb);
 }
 
-/** Tallet på knappen: alle avvik serveren lister for regionen, også «noImpact» (Ruling 5). */
+/** Tallet ved kartlaget: alle avvik serveren lister for regionen, også «noImpact» (Ruling 5). */
 export function badgeCount(list) {
   return Array.isArray(list) ? list.length : 0;
+}
+
+/** Teksten ved avkrysningen: «Avvik (47)», bare «Avvik» ved 0 eller uten data. */
+export function situationsLayerLabel(n) {
+  return Number.isFinite(n) && n > 0 ? `Avvik (${n})` : 'Avvik';
+}
+
+/** /avvik med ankeret for regionens område (Oslo → Ruter, Bergen → Skyss). */
+export function situationsPageHref(region) {
+  const space = region?.situationCodespaces?.[0];
+  if (!space) return '/avvik';
+  const area = areaFor(space);
+  return area.id === 'other' ? '/avvik' : `/avvik#avvik-${area.id.toLowerCase()}`;
+}
+
+// Holdeplasser innen så mange meter regnes som samme posisjon (quayer på hver side av gata)
+const SAME_PLACE_M = 15;
+
+function metersBetween(a, b) {
+  const k = Math.PI / 180;
+  const x = (b.lon - a.lon) * k * Math.cos(((a.lat + b.lat) / 2) * k);
+  const y = (b.lat - a.lat) * k;
+  return Math.sqrt(x * x + y * y) * 6371000;
+}
+
+/**
+ * Merker for kartlaget: ett per posisjon. Stopp med samme id eller innen SAME_PLACE_M slås sammen;
+ * hvert merke har { lat, lon, name, ids, situations } med hvert avvik én gang, i lista sin rekkefølge.
+ * Stopp uten koordinat gir intet merke.
+ */
+export function groupSituationStops(list, { nearM = SAME_PLACE_M } = {}) {
+  const groups = [];
+  const byId = new Map();
+  for (const s of Array.isArray(list) ? list : []) {
+    for (const p of s?.stops || []) {
+      if (!Number.isFinite(p?.lat) || !Number.isFinite(p?.lon)) continue;
+      let g = byId.get(p.id) || groups.find((x) => metersBetween(x, p) <= nearM);
+      if (!g) {
+        g = { lat: p.lat, lon: p.lon, name: p.name || '', ids: [], situations: [], seen: new Set() };
+        groups.push(g);
+      }
+      if (!byId.has(p.id)) {
+        byId.set(p.id, g);
+        g.ids.push(p.id);
+      }
+      if (!g.name && p.name) g.name = p.name;
+      if (!g.seen.has(s.id)) {
+        g.seen.add(s.id);
+        g.situations.push(s);
+      }
+    }
+  }
+  return groups.map(({ seen, ...g }) => g);
 }
 
 /**
@@ -108,8 +161,8 @@ export function lineKeyFromVehicle(v) {
 const isHttp = (u) => typeof u === 'string' && /^https?:\/\//i.test(u);
 
 /**
- * Ett kort i panelet som HTML-streng. Alt fra operatøren escapes; lenker bare http(s).
- * Linjemerkene er knapper med data-line-index (indeks i s.lines), som panelet kobler til linjevalg.
+ * Ett kort i avvikspopupen på kartet som HTML-streng. Alt fra operatøren escapes; lenker bare http(s).
+ * Linjemerkene er knapper med data-line-index (indeks i s.lines), som kartlaget kobler til linjevalg.
  */
 export function situationCardHtml(s, { now = Date.now() } = {}) {
   const tags = [];
@@ -155,7 +208,7 @@ export async function fetchSituations(fetchImpl = globalThis.fetch) {
     if (!res?.ok) return false;
     const data = await res.json();
     if (!data || !Array.isArray(data.situations)) return false;
-    // Entur utilgjengelig lenge: serveren svarer available: false, og panelet viser feiltekst
+    // Entur utilgjengelig lenge: serveren svarer available: false, og kartlaget viser ikke tall eller merker
     if (data.available === false) {
       unavailable = true;
       situations = [];

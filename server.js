@@ -17,6 +17,7 @@ import { getRailShapes, getStaticFlybussShapes, loadRailShapes, loadFlybussShape
 import { getRegistry } from './server/region-services.js';
 import { getSituationService } from './server/situations.js';
 import { registerSituationRoutes } from './server/situations-routes.js';
+import { createStopCoords } from './server/situation-coords.js';
 import { registerLiveRoutes, regionServicesFor } from './server/live-routes.js';
 import { LINES, REGION_LINES, prewarmLineStops, jpQuery } from './server/line-catalog.js';
 import { createStopPlaceLookup } from './server/stop-search.js';
@@ -32,7 +33,7 @@ import { renderSituationsPage } from './server/pages/situations-page.js';
 import { createSituationLinks } from './server/situation-links.js';
 import { registerEnRoutes } from './server/en-routes.js';
 import { EN_PAGES } from './server/en-catalog.js';
-import { FEATURED_STOPS, featuredStopsFor, findStopForPlace, placePageFields } from './server/stop-catalog.js';
+import { FEATURED_STOPS, featuredStopsFor, findStopForPlace, placePageFields, stopsFor } from './server/stop-catalog.js';
 import { createStopService } from './server/stop-service.js';
 import { renderStopIndex } from './server/pages/stop-page.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
@@ -144,7 +145,9 @@ app.get('/api/static-network-shapes', (req, res) => {
 registerLiveRoutes(app, { registry });
 
 // Avvik (hele landet), filtrert per region
-registerSituationRoutes(app, { service: getSituationService(), visible });
+// Holdeplasskoordinater til kartets avvikslag: GTFS-quayene og stoppkatalogene som allerede er i minnet
+const situationCoords = createStopCoords({ getStopsMap: getGtfsStopsMap, catalogStops: () => visible.flatMap((r) => stopsFor(r.id)) });
+registerSituationRoutes(app, { service: getSituationService(), visible, coordsFor: situationCoords });
 
 // Linje-, holdeplass- og guidesider og regionale kart (/bergen m.fl.) per synlig region
 const stopService = createStopService();

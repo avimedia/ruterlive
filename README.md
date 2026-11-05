@@ -11,7 +11,7 @@ Viser buss, T-bane, trikk, båt, regiontog og Flytoget basert på Entur API. I B
 - **Holdeplasser** – vises ved zoom 14+, klikk for avgangstavle
 - **Søk** – finn holdeplass etter navn
 - **Regioner** – Oslo på `/`, Bergen på `/bergen`; velger i lagpanelet. Nye regioner legges til i `shared/regions.js`; skjul dem med `public: false` og prøv lokalt med `REGIONS_PREVIEW=<id>` (server) og `VITE_REGIONS_PREVIEW=<id>` (bygg)
-- **Avvik** – driftsmeldinger fra Entur (Vehicles-API `situations`) for hele landet: knapp og panel i kartet, `/avvik`, og på linje- og holdeplassider. Virker bare med `npm run build && npm run start`, ikke i Vite dev
+- **Avvik** – driftsmeldinger fra Entur (Vehicles-API `situations`) for hele landet: kartlaget «Avvik» (holdeplasser med avvik), `/avvik`, og på linje- og holdeplassider. Virker bare med `npm run build && npm run start`, ikke i Vite dev
 - **Guider og linjesider** – `/guider`, én side per T-bane-, trikk-, tog-, Flytoget- og flybusslinje (`/linje/<slug>`) med stoppliste fra Entur
 
 ## Transporttyper

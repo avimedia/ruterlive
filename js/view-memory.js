@@ -89,9 +89,9 @@ export function initViewMemory(map) {
 }
 
 function layerInputs(root) {
-  return [...root.querySelectorAll('.layer-controls input[data-mode], #routes-toggle')];
+  return [...root.querySelectorAll('.layer-controls input[data-mode], #routes-toggle, #situations-toggle')];
 }
-const layerId = (el) => el.dataset.mode || 'routes';
+const layerId = (el) => el.dataset.mode || el.dataset.layer || 'routes';
 
 /** Gjenoppretter avkryssingsboksene (kalles før første filtrering). */
 export function restoreLayerState(root = document) {

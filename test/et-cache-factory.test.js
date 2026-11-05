@@ -18,7 +18,9 @@ function make(opts = {}) {
   const clock = { advance: (ms) => { t += ms; } };
   const cache = createEtCache({
     datasetId: 'SKY', isActive: () => true, runExclusive: pass, fetchFn,
-    now: () => t, refreshMs: 90_000, waitForFirst: true, ...opts,
+    now: () => t, refreshMs: 90_000, waitForFirst: true,
+    parserOpts: { relevantWithinMs: null }, // køtestene: alle turer i fiksturen, uavhengig av klokka
+    ...opts,
   });
   return { cache, fetchFn, clock };
 }
@@ -179,7 +181,10 @@ test('stoppet body: idle-timeout avbryter, frigjør køen for neste region', asy
     cancel() { cancelled = true; },
   }), { status: 200 });
   const a = createEtCache({ datasetId: 'RUT', runExclusive: runtime.runExclusive, fetchFn: stalled, bodyIdleMs: 50 });
-  const b = createEtCache({ datasetId: 'SKY', runExclusive: runtime.runExclusive, fetchFn: makeFetch(), bodyIdleMs: 50 });
+  const b = createEtCache({
+    datasetId: 'SKY', runExclusive: runtime.runExclusive, fetchFn: makeFetch(), bodyIdleMs: 50,
+    parserOpts: { relevantWithinMs: null },
+  });
   const t0 = Date.now();
   const ra = a.refreshNow();
   const rb = b.refreshNow();
@@ -189,4 +194,34 @@ test('stoppet body: idle-timeout avbryter, frigjør køen for neste region', asy
   assert.ok(cancelled, 'body avbrutt');
   assert.equal(b.getVersion(), 1);
   assert.ok((await b.getJourneys()).length >= 2);
+});
+
+const FIXTURE_NOW = Date.parse('2026-10-21T08:23:09+02:00'); // ResponseTimestamp i fiksturen
+
+test('maxSize per region i URL-en, standard 3000', async () => {
+  const a = makeFetch();
+  const b = makeFetch();
+  await createEtCache({ datasetId: 'SKY', fetchFn: a, maxSize: 10000, waitForFirst: true }).getJourneys();
+  await createEtCache({ datasetId: 'RUT', fetchFn: b, maxSize: undefined, waitForFirst: true }).getJourneys();
+  assert.ok(a.urls[0].includes('datasetId=SKY&maxSize=10000'), a.urls[0]);
+  assert.ok(b.urls[0].includes('maxSize=3000'), b.urls[0]);
+});
+
+test('lagrer bare turer i gang eller som starter innen en time (falsk klokke)', async () => {
+  const at = (ms) => createEtCache({ datasetId: 'RUT', fetchFn: makeFetch(), now: () => ms, waitForFirst: true });
+  assert.equal((await at(FIXTURE_NOW).getJourneys()).length, 10, '10 av 17 relevante ved svartidspunktet');
+  assert.equal((await at(FIXTURE_NOW + 3 * 3_600_000).getJourneys()).length, 0, 'alle sluttet');
+  assert.equal((await at(FIXTURE_NOW - 3 * 3_600_000).getJourneys()).length, 0, 'alle starter om mer enn en time');
+});
+
+test('like mange turer som maxSize: advarsel om avkutting (Entur sender ikke MoreData)', async () => {
+  const warn = mock.method(console, 'warn', () => {});
+  const log = mock.method(console, 'log', () => {});
+  try {
+    await createEtCache({
+      datasetId: 'SKY', fetchFn: makeFetch(), maxSize: 17, waitForFirst: true, now: () => FIXTURE_NOW,
+    }).getJourneys();
+    assert.ok(warn.mock.calls.some((c) => /17 turer ≥ maxSize=17/.test(c.arguments[0])));
+    assert.ok(log.mock.calls.some((c) => /17 turer lest, 10 beholdt/.test(c.arguments[0])));
+  } finally { warn.mock.restore(); log.mock.restore(); }
 });

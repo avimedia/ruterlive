@@ -68,6 +68,7 @@ function defaultStaticShapes(region) {
 export function defaultRegionServices(region, { runtime, etFetchFn, deps = {}, lines, geometryTimeoutMs = 15000 }) {
   const etCacheOptions = {
     datasetId: region.etDatasets[0],
+    maxSize: region.etMaxSize, // SKY har ~6800 turer; 3000 kuttet over halvparten av turene som går
     isActive: () => runtime.stateOf(region.id) === 'active',
     runExclusive: runtime.runExclusive, // to ET-parsinger kjører aldri samtidig
     waitForFirst: region.alwaysActive === true,

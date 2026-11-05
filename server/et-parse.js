@@ -157,9 +157,12 @@ const CLOSE_JOURNEY_MAX_LEN = 80; // lengste sluttagg vi venter (med prefiks)
 export function createEtStreamParser(opts = {}) {
   const journeys = [];
   const intern = makeInterner();
+  const stats = { seen: 0 };
   let buf = '';
   let scanFrom = 0;
   return {
+    /** Antall turer i XML-en så langt, også de som ble hoppet over (for å oppdage avkutting). */
+    get seen() { return stats.seen; },
     push(chunk) {
       if (!chunk) return;
       buf += chunk;
@@ -168,13 +171,13 @@ export function createEtStreamParser(opts = {}) {
       let cut = -1;
       for (let m; (m = CLOSE_JOURNEY_RE.exec(buf));) cut = m.index + m[0].length;
       if (cut > 0) {
-        parseInto(buf.slice(0, cut), journeys, intern, opts);
+        parseInto(buf.slice(0, cut), journeys, intern, opts, stats);
         buf = buf.slice(cut);
       }
       scanFrom = Math.max(0, buf.length - CLOSE_JOURNEY_MAX_LEN);
     },
     end() {
-      if (buf) parseInto(buf, journeys, intern, opts);
+      if (buf) parseInto(buf, journeys, intern, opts, stats);
       buf = '';
       /(?:)/.exec('');
       return journeys;
@@ -205,11 +208,29 @@ const isCallCancelled = (cel) => {
  *   dropper turer som fortsatt mangler den. For regioner uten linjenummer-fallback (Bergen).
  * opts.mode: fast modus for alle turer (f.eks. 'rail' for BNR, der linjekoder som R70 ikke er tall).
  * opts.skipCancelled: hopper over innstilte turer og innstilte kall.
+ * opts.relevantWithinMs: lagrer bare turer som er i gang eller starter innen så mange ms; turer som
+ *   sluttet for mer enn opts.endedGraceMs (standard 2 min) siden droppes også. Klokke: opts.now.
+ *   SKY har turer for flere døgn fremover (~95 % av svaret); de trengs verken til posisjoner eller rutekart.
  */
-function parseInto(xmlText, journeys, intern, opts = {}) {
+const DEFAULT_ENDED_GRACE_MS = 2 * 60 * 1000;
+
+/** Første og siste tid for turen (faktisk for passerte kall, forventet for resten). */
+function isRelevant(recordedCalls, estimatedCalls, opts) {
+  const now = (opts.now ?? Date.now)();
+  const firstEst = estimatedCalls[0];
+  const lastEst = estimatedCalls[estimatedCalls.length - 1];
+  const first = recordedCalls[0]?.time ?? (firstEst ? firstEst.depTime || firstEst.arrTime : null);
+  const last = lastEst ? lastEst.arrTime || lastEst.depTime : recordedCalls[recordedCalls.length - 1]?.time;
+  if (first != null && first > now + opts.relevantWithinMs) return false;
+  if (last != null && last < now - (opts.endedGraceMs ?? DEFAULT_ENDED_GRACE_MS)) return false;
+  return true;
+}
+
+function parseInto(xmlText, journeys, intern, opts = {}, stats = null) {
   const text = (src, name) => firstText(src, name, intern);
 
   for (const jel of eachElement(xmlText, 'EstimatedVehicleJourney')) {
+    if (stats) stats.seen++;
     const lineRef = text(jel, 'LineRef');
     const mode = opts.mode || getModeFromLineNumFallback(lineRef)
       || (opts.useVehicleMode ? mapJpTransportMode(text(jel, 'VehicleMode')) : null);
@@ -246,6 +267,7 @@ function parseInto(xmlText, journeys, intern, opts = {}) {
     }
 
     if (recordedCalls.length === 0 && estimatedCalls.length === 0) continue;
+    if (opts.relevantWithinMs != null && !isRelevant(recordedCalls, estimatedCalls, opts)) continue;
 
     journeys.push({
       vehicleId: journeyVehicleId({

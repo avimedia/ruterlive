@@ -22,6 +22,8 @@ export const REGIONS = Object.freeze({
     // Rutegeometri fra Journey Planner klippes til denne boksen
     geometryBounds: Object.freeze({ s: 59.0, n: 60.45, w: 9.4, e: 12.1 }),
     etDatasets: Object.freeze(['RUT']),
+    // maxSize for ET-kallet: RUT har ~2200 turer, margin så svaret ikke kuttes stille (Entur sender ikke MoreData)
+    etMaxSize: 5000,
     // Linjenummer-fallback for transportmodus ('ruter': 1–6 T-bane, 11–19 trikk, ≥20 buss)
     lineNumberFallback: 'ruter',
     // Kartlenke fra linjesidene
@@ -42,6 +44,7 @@ export const REGIONS = Object.freeze({
     stopsBounds: Object.freeze({ minLat: 59.1, maxLat: 62.8, minLon: 4.3, maxLon: 8.1 }),
     geometryBounds: Object.freeze({ s: 58.9, n: 63.0, w: 4.1, e: 8.3 }),
     etDatasets: Object.freeze(['SKY']),
+    etMaxSize: 10000, // SKY: ~6800 turer for flere døgn fremover
     lineNumberFallback: null,
     mapLink: Object.freeze({ lat: 60.3925, lng: 5.324 }),
   }),

@@ -16,6 +16,9 @@ const MORE_DATA_TAG = '<MoreData>true</MoreData>';
 // Ingen nye biter så lenge: nedlastingen avbrytes, så en stoppet body ikke holder den delte køen
 // (undici venter ellers opptil 300 s, og den andre regionens oppdatering står i kø imens)
 const BODY_IDLE_MS = 20000;
+const DEFAULT_MAX_SIZE = 3000; // overstyres per region med etMaxSize
+const RELEVANT_WITHIN_MS = 60 * 60 * 1000; // turer som starter senere enn om en time lagres ikke
+const ENDED_GRACE_MS = 2 * 60 * 1000; // turer som sluttet for mer enn 2 min siden lagres ikke
 
 /** Leser body bit for bit; avviser og avbryter hvis det går mer enn idleMs mellom bitene. */
 async function readBody(body, idleMs, onChunk) {
@@ -57,8 +60,11 @@ export function createEtCache({
   waitForFirst = false,
   parserOpts = {},
   bodyIdleMs = BODY_IDLE_MS,
+  maxSize = DEFAULT_MAX_SIZE,
 }) {
-  const url = `https://api.entur.io/realtime/v1/rest/et?datasetId=${datasetId}&maxSize=3000`;
+  const url = `https://api.entur.io/realtime/v1/rest/et?datasetId=${datasetId}&maxSize=${maxSize}`;
+  // Bare turer i gang eller som starter innen en time lagres (posisjoner og rutekart trenger ikke flere)
+  const parseOpts = { relevantWithinMs: RELEVANT_WITHIN_MS, endedGraceMs: ENDED_GRACE_MS, now, ...parserOpts };
   /** Frosne turer fra siste vellykkede henting, eller null før første / etter drop(). */
   let journeys = null;
   let version = 0; // Øker for hver ny ET fra Entur
@@ -72,6 +78,7 @@ export function createEtCache({
 
   async function doRefresh() {
     const gen = generation;
+    const fetchedAt = now();
     const res = await fetchFn(
       url,
       { headers: { 'ET-Client-Name': CLIENT_NAME } },
@@ -85,8 +92,10 @@ export function createEtCache({
       }
       throw new Error(`ET ${res.status}`);
     }
+    const headersMs = now() - fetchedAt;
     await runExclusive(async () => {
-      const parser = createEtStreamParser(parserOpts);
+      const startedAt = now();
+      const parser = createEtStreamParser(parseOpts);
       const decoder = new TextDecoder();
       let tail = '';
       let moreData = false;
@@ -103,9 +112,19 @@ export function createEtCache({
       }
       push(decoder.decode());
       const parsed = parser.end();
+      const count = parser.seen;
       for (const j of parsed) Object.freeze(j);
       if (moreData) {
-        console.warn(`[RuterLive] ET ${datasetId}: MoreData=true, svaret er avkortet (maxSize=3000 for lite)`);
+        console.warn(`[RuterLive] ET ${datasetId}: MoreData=true, svaret er avkortet (maxSize=${maxSize} for lite)`);
+      }
+      // Entur sender ikke alltid MoreData: like mange turer som maxSize betyr trolig avkutting
+      if (count >= maxSize) {
+        console.warn(`[RuterLive] ET ${datasetId}: ${count} turer ≥ maxSize=${maxSize}, svaret er trolig avkortet`);
+      }
+      // Første henting og deretter omtrent hver halvtime (hver 20.), så loggen ikke fylles
+      if (version % 20 === 0) {
+        console.log(`[RuterLive] ET ${datasetId}: ${count} turer lest, ${parsed.length} beholdt, `
+          + `svar ${headersMs} ms, nedlasting+parsing ${now() - startedAt} ms`);
       }
       if (gen !== generation) return; // drop() under henting: ikke behold turene
       journeys = parsed;

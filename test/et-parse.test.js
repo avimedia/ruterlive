@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DOMParser } from '@xmldom/xmldom';
-import { parseEtJourneys } from '../server/et-parse.js';
+import { parseEtJourneys, createEtStreamParser } from '../server/et-parse.js';
 import { journeyVehicleId } from '../shared/et-journeys.js';
 import { callDelaySeconds } from '../shared/vehicle-delay.js';
 
@@ -184,4 +184,37 @@ test('strømparser: samme turer uansett hvordan XML-en deles opp', async () => {
     }
   }
   assert.deepEqual(createEtStreamParser().end(), []);
+});
+
+// Én tur med gitte tider (ms): passerte kall med faktisk tid, resten forventet
+function etXml(journeys) {
+  const iso = (ms) => new Date(ms).toISOString();
+  const body = journeys.map(({ id, rec = [], est = [] }) => `<EstimatedVehicleJourney><LineRef>RUT:Line:31</LineRef>`
+    + `<FramedVehicleJourneyRef><DatedVehicleJourneyRef>${id}</DatedVehicleJourneyRef></FramedVehicleJourneyRef>`
+    + `<RecordedCalls>${rec.map((t, i) => `<RecordedCall><StopPointRef>NSR:Quay:${i}</StopPointRef><ActualDepartureTime>${iso(t)}</ActualDepartureTime></RecordedCall>`).join('')}</RecordedCalls>`
+    + `<EstimatedCalls>${est.map((t, i) => `<EstimatedCall><StopPointRef>NSR:Quay:${50 + i}</StopPointRef><ExpectedArrivalTime>${iso(t)}</ExpectedArrivalTime><ExpectedDepartureTime>${iso(t)}</ExpectedDepartureTime></EstimatedCall>`).join('')}</EstimatedCalls>`
+    + `</EstimatedVehicleJourney>`).join('');
+  return `<Siri><ServiceDelivery><EstimatedTimetableDelivery><EstimatedJourneyVersionFrame>${body}</EstimatedJourneyVersionFrame></EstimatedTimetableDelivery></ServiceDelivery></Siri>`;
+}
+
+test('relevantWithinMs: dropper sluttede (> 2 min) og turer som starter om mer enn en time', () => {
+  const now = Date.parse('2026-11-05T12:00:00Z');
+  const min = 60_000;
+  const xml = etXml([
+    { id: 'underveis', rec: [now - 5 * min], est: [now + 5 * min] },
+    { id: 'sluttet-1-min', rec: [now - 20 * min, now - 1 * min] },
+    { id: 'sluttet-5-min', rec: [now - 30 * min, now - 5 * min] },
+    { id: 'sluttet-est-5-min', est: [now - 20 * min, now - 5 * min] },
+    { id: 'om-59-min', est: [now + 59 * min, now + 80 * min] },
+    { id: 'om-61-min', est: [now + 61 * min, now + 90 * min] },
+    { id: 'i-morgen', est: [now + 24 * 60 * min] },
+  ]);
+  const p = createEtStreamParser({ relevantWithinMs: 60 * min, now: () => now });
+  p.push(xml);
+  const ids = p.end().map((j) => j.datedVehicleJourneyRef);
+  assert.deepEqual(ids, ['underveis', 'sluttet-1-min', 'om-59-min']);
+  assert.equal(p.seen, 7, 'seen teller alle turer i XML-en');
+  const alle = createEtStreamParser({ now: () => now });
+  alle.push(xml);
+  assert.equal(alle.end().length, 7, 'uten relevantWithinMs: ingen filtrering');
 });

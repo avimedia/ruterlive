@@ -198,6 +198,8 @@ test('defaultRegionServices: Bergen-ET beholder ukjent modus, Oslo venter p√• f√
   assert.deepEqual(b.etCacheOptions.parserOpts, { keepUnknownMode: true, useVehicleMode: true });
   assert.equal(b.etCacheOptions.waitForFirst, false);
   assert.equal(b.etCacheOptions.datasetId, 'SKY');
+  assert.equal(b.etCacheOptions.maxSize, 10000, 'SKY har ~6800 turer');
+  assert.equal(o.etCacheOptions.maxSize, 5000);
   assert.equal(o.etCacheOptions.runExclusive, runtime.runExclusive);
 });
 

@@ -8,7 +8,8 @@ const FIXTURE = readFileSync(new URL('./fixtures/et-sample.xml', import.meta.url
 
 // Som Oslo i regionregisteret: venter på første henting
 const osloCache = () => {
-  const c = createEtCache({ datasetId: 'RUT', waitForFirst: true });
+  // Uten tidsfilter: testene sammenligner med parseEtJourneys(hele fiksturen) og bruker falsk klokke
+  const c = createEtCache({ datasetId: 'RUT', waitForFirst: true, parserOpts: { relevantWithinMs: null } });
   return { getEtJourneys: () => c.getJourneys(), getEtVersion: () => c.getVersion(), cache: c };
 };
 

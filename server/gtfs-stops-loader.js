@@ -7,7 +7,7 @@
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { dedupeInFlight } from './in-flight.js';
 import { readZipEntry } from './zip-range.js';
-import { getRegion } from '../shared/regions.js';
+import { serverVisibleRegions } from './region-preview.js';
 
 const GTFS_URL =
   'https://storage.googleapis.com/marduk-production/outbound/gtfs/rb_norway-aggregated-gtfs-basic.zip';
@@ -18,17 +18,19 @@ let gtfsQuayCache = null;
 let gtfsCoordMap = null;
 let lastLoadTime = 0;
 
-/** Stor-Oslo bbox – reduserer minne på server (Render gratisplan). */
-const OSLO_BBOX = getRegion().stopsBounds;
+/** Bboxer for alle synlige regioner – reduserer minne på server (Render gratisplan). */
+function stopsBoxes(regions) {
+  return regions.map((r) => r.stopsBounds);
+}
 
 /**
  * Parser stops.txt CSV.
  * Returnerer Map<quayId, { lat, lon, name }> for stops-in-bbox og søk.
- * Filtrerer til Stor-Oslo for å spare minne.
+ * Beholder bare quays i synlige regioners stopsBounds for å spare minne.
  * Format: stop_id,stop_name,stop_lat,stop_lon,...
  * Entur bruker stop_id = NSR:Quay:XXXXX.
  */
-function parseStopsTxt(content) {
+function parseStopsTxt(content, boxes) {
   const map = new Map();
   let pos = content.indexOf('\n');
   if (pos < 0) return map;
@@ -40,7 +42,6 @@ function parseStopsTxt(content) {
   const lonIdx = header.indexOf('stop_lon');
   if (stopIdIdx < 0 || latIdx < 0 || lonIdx < 0) return map;
 
-  const { minLat, maxLat, minLon, maxLon } = OSLO_BBOX;
   // Linje for linje uten å splitte hele filen; split(',') når feltet ikke har anførselstegn
   while (pos < content.length) {
     let end = content.indexOf('\n', pos + 1);
@@ -54,7 +55,7 @@ function parseStopsTxt(content) {
     const lon = parseFloat(cols[lonIdx]);
     if (!stopId || isNaN(lat) || isNaN(lon)) continue;
     if (!/^NSR:Quay:\d+$/.test(stopId)) continue;
-    if (lat < minLat || lat > maxLat || lon < minLon || lon > maxLon) continue;
+    if (!boxes.some((b) => lat >= b.minLat && lat <= b.maxLat && lon >= b.minLon && lon <= b.maxLon)) continue;
     const name = (nameIdx >= 0 ? cols[nameIdx]?.trim() : '') || '';
     map.set(ownString(stopId), { lat, lon, name: ownString(name) });
   }
@@ -95,18 +96,18 @@ function parseCsvLine(line) {
  * Laster GTFS basic zip, ekstraherer stops.txt og bygger quay-cache.
  * @returns {Promise<Map<string, [number, number]>|null>}
  */
-export async function loadGtfsStops(fetchFn = fetchWithRetry) {
+export async function loadGtfsStops(fetchFn = fetchWithRetry, regions = serverVisibleRegions()) {
   if (gtfsQuayCache && Date.now() - lastLoadTime < CACHE_TTL_MS) {
     return gtfsQuayCache;
   }
-  return downloadGtfsStops(fetchFn);
+  return downloadGtfsStops(fetchFn, regions);
 }
 
 // Én delt nedlasting om gangen, så samtidige kall ved kald start ikke laster 95 MB flere ganger.
-const downloadDeduped = dedupeInFlight(async (fetchFn) => {
+const downloadDeduped = dedupeInFlight(async (fetchFn, regions) => {
   try {
     const content = (await fetchStopsTxt(fetchFn)).toString('utf8');
-    const stops = parseStopsTxt(content);
+    const stops = parseStopsTxt(content, stopsBoxes(regions));
     const coords = new Map();
     for (const [id, v] of stops) coords.set(id, [v.lat, v.lon]);
     gtfsQuayCache = stops;
@@ -132,9 +133,9 @@ async function fetchStopsTxt(fetchFn) {
   return readZipEntry(GTFS_URL, 'stops.txt', fetchFn);
 }
 
-function downloadGtfsStops(fetchFn) {
+function downloadGtfsStops(fetchFn, regions) {
   // Avviser aldri: ved tidsavbrudd brukes forrige cache (eller null), som før.
-  return downloadDeduped(fetchFn).catch((e) => {
+  return downloadDeduped(fetchFn, regions).catch((e) => {
     console.warn('[RuterLive] GTFS stops:', e.message);
     return gtfsQuayCache;
   });

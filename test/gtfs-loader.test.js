@@ -98,3 +98,21 @@ test('loadGtfsStops avviser aldri når både Range og fallback feiler', async ()
   const r = await mod.loadGtfsStops(async () => { throw new Error('nett nede'); });
   assert.equal(r, null);
 });
+
+test('loadGtfsStops: quay i Bergen beholdes når Bergen er synlig, Trondheim filtreres bort', async () => {
+  const { visibleRegions } = await import('../shared/regions.js');
+  const mod = await import('../server/gtfs-stops-loader.js?bergen');
+  const zip = new AdmZip();
+  zip.addFile(
+    'stops.txt',
+    Buffer.from(
+      'stop_id,stop_name,stop_lat,stop_lon\n' +
+        'NSR:Quay:1,Jernbanetorget,59.911,10.750\n' +
+        'NSR:Quay:2,Bergen busstasjon,60.39,5.33\n' +
+        'NSR:Quay:3,Trondheim S,63.436,10.40\n'
+    )
+  );
+  const cache = await mod.loadGtfsStops(rangeFetch(zip.toBuffer(), []), visibleRegions(['bergen']));
+  assert.deepEqual([...cache.keys()].sort(), ['NSR:Quay:1', 'NSR:Quay:2']);
+  assert.equal(mod.searchStops('bergen busstasjon').length, 1);
+});

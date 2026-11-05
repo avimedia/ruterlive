@@ -10,7 +10,7 @@ const DEFAULT_ZOOM = getRegion().defaultZoom;
 const TILE_URL = 'https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png';
 
 const TILE_OPTS = {
-  attribution: '&copy; <a href="https://www.kartverket.no/">Kartverket</a> · <a href="https://entur.no/">Entur</a>',
+  attribution: '&copy; <a href="https://www.kartverket.no/">Kartverket</a> · Data: <a href="https://entur.no/">Entur</a> (<a href="/om#lisenser">NLOD</a>)',
   maxZoom: 18,
   className: 'basemap-tiles',
 };

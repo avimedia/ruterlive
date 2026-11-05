@@ -129,7 +129,7 @@ ${body}
     <div class="site-footer-inner">
       <a href="/personvern.html">${t.privacy}</a>
       <a href="https://apptastic.no/pages/contact/" rel="noopener">${t.contact}</a>
-      <span>${t.source}</span>
+      <a href="/om#lisenser">${t.source}</a>
     </div>
   </footer>
 </body>

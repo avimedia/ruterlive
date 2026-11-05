@@ -1,11 +1,19 @@
-<p>livetrafikk.no er et gratis kart som viser hvor kollektivtrafikken i Oslo og omegn er akkurat nå. På <a href="/">kartet</a> ser du buss, T-bane, trikk og båt fra Ruter, regiontog fra Vy, Flytoget og flybussen, og du kan klikke deg fram til ruter, holdeplasser og avgangstavler.</p>
+<p>livetrafikk.no er et gratis kart som viser hvor kollektivtrafikken i Oslo og omegn er akkurat nå. På <a href="/">kartet</a> ser du buss, T-bane, trikk og båt fra Ruter, Flytoget, flybussen og tog i hele Norge, og du kan klikke deg fram til ruter, holdeplasser og avgangstavler.</p>
 
 <h2>En uavhengig tjeneste</h2>
 <p>livetrafikk.no er ikke laget av Ruter, Vy, Flytoget eller Entur, og er ikke tilknyttet noen av dem. Tjenesten bruker de åpne dataene Entur gjør tilgjengelig for alle. Skal du kjøpe billett, klage på en tur eller få offisiell informasjon om avvik, må du gå til operatøren selv.</p>
 
 <h2>Hvor dataene kommer fra</h2>
-<p>All trafikkdata kommer fra Entur, den nasjonale tjenesten for reiseinformasjon. Posisjonene kommer fra to kilder. Tog og Flytoget sender sine egne posisjoner til Entur, og dem viser vi som de er. Ruter sender ikke GPS-posisjoner til Entur, så for buss, T-bane, trikk og båt regner vi ut omtrent hvor kjøretøyet er ut fra avgangstidene. Hvordan det gjøres, og hva det betyr for nøyaktigheten, står i <a href="/guider/sanntidsposisjoner">Slik fungerer sanntidsposisjonene</a>.</p>
+<p>All trafikkdata kommer fra Entur, den nasjonale tjenesten for reiseinformasjon. Posisjonene kommer fra to kilder. Vy, Go-Ahead og Flytoget sender GPS-posisjoner for togene sine til Entur, og dem viser vi som de er. Ruter sender ikke GPS-posisjoner til Entur, og det gjør heller ikke SJ og Tågkompaniet. For dem regner vi ut omtrent hvor kjøretøyet er ut fra avgangstidene og forsinkelsene i rutedataene. Hvordan det gjøres, og hva det betyr for nøyaktigheten, står i <a href="/guider/sanntidsposisjoner">Slik fungerer sanntidsposisjonene</a>.</p>
 <p>Avgangstavlene og stopplistene på linjesidene hentes fra Enturs reiseplanlegger. Bakgrunnskartet er fra Kartverket, og jernbanekartet fra OpenRailwayMap.</p>
+
+<h2>Hvor ofte dataene oppdateres</h2>
+<p>Kartet henter nye posisjoner hvert 30. sekund. GPS-posisjonene er da høyst et halvt minutt gamle. Rutedataene som de beregnede posisjonene bygger på, hentes fra Entur hvert halvannet minutt for Ruter og hvert fjerde minutt for togene uten GPS. Mellom hentingene flytter kartet kjøretøyene jevnt langs ruta. Avgangstavlene er høyst 30 sekunder gamle.</p>
+<p>Serveren henter dataene én gang og deler dem med alle som bruker kartet. Det holder antall forespørsler mot Entur nede uansett hvor mange som er inne.</p>
+
+<h2 id="lisenser">Lisenser</h2>
+<p>Inneholder data under <a href="https://data.norge.no/nlod/no/2.0">Norsk lisens for offentlige data (NLOD)</a> tilgjengeliggjort av Entur AS. Dataene er bearbeidet: posisjonene for kjøretøy uten GPS er beregnet av livetrafikk.no, og rutelinjene er forenklet. Entur står ikke bak tjenesten.</p>
+<p>Bakgrunnskart © <a href="https://www.kartverket.no/">Kartverket</a> (<a href="https://creativecommons.org/licenses/by/4.0/deed.no">CC BY 4.0</a>). Jernbanekart © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap-bidragsytere</a> og <a href="https://openrailwaymap.org/">OpenRailwayMap</a> (<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC BY-SA 2.0</a>).</p>
 
 <h2>Guider og linjesider</h2>
 <p>I tillegg til kartet har livetrafikk.no <a href="/guider">guider og linjesider</a> om T-banen, trikken, togene rundt Oslo og veiene til Oslo lufthavn. Hver linje har sin egen side med stoppliste og hvor mange kjøretøy som er ute. Er du ny på kartet, begynn med <a href="/guider/slik-bruker-du-kartet">Slik bruker du kartet</a>.</p>

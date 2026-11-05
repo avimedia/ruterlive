@@ -1867,6 +1867,19 @@ path.leaflet-interactive:focus {
     line-height: 1.2;
   }
 }
+/* Mobil og nettbrett: mindre skrift i Tema/Region, så lagvelgeren bare blir så bred som avkrysningene
+   trenger (viewport har maximum-scale=1, så iOS zoomer ikke inn ved fokus) */
+@media (max-width: 1099px) {
+  #layers-panel { min-width: 0; }
+  #theme-select,
+  #region-select {
+    font-size: 0.75rem;
+    padding: 0.1rem 0.2rem;
+    max-width: 100%;
+  }
+  /* Etiketten over feltet: «Region»/«Tema» ved siden av gjorde boksen bredere enn avkrysningene */
+  .theme-select-wrap { display: grid; justify-items: start; gap: 0.1rem; }
+}
 /* Ingen dobbelttrykk-zoom-forsinkelse på knapper og felt */
 button,
 input,
@@ -1906,7 +1919,7 @@ a,
 }
 
 /* ---------- Avvik: kartlaget (js/situations-layer.js) og kortene i popupen ---------- */
-.sit-marker { background: none; border: none; }
+.sit-marker { background: none; border: none; display: flex; align-items: center; justify-content: center; }
 .sit-marker svg { display: block; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45)); }
 .sit-marker--severe svg path:first-child { fill: #e63946; }
 .sit-marker:focus-visible { outline: 2px solid #2b7fff; outline-offset: 2px; border-radius: 4px; }

@@ -1,5 +1,5 @@
 import L from 'leaflet';
-import { setRoutesVisible } from './routes.js';
+import { setRoutesVisible, setStopsVisible } from './routes.js';
 import { setOpenRailwayMapVisible, isOpenRailwayMapVisible } from './map.js';
 import { restoreLayerState, saveLayerState } from './view-memory.js';
 import { formatVehicleCounts } from './vehicle-count-text.js';
@@ -108,6 +108,18 @@ export function initLayers(callback) {
       onFilterChange?.(getVisibleModes());
     });
     routesToggle.addEventListener('click', (e) => e.stopPropagation());
+  }
+
+  // Holdeplasser-laget (holdeplassene i utsnittet; den valgte rutens stopp vises uansett)
+  const stopsToggle = document.getElementById('stops-toggle');
+  if (stopsToggle) {
+    setStopsVisible(stopsToggle.checked);
+    stopsToggle.addEventListener('change', (e) => {
+      e.stopPropagation();
+      setStopsVisible(stopsToggle.checked);
+      saveLayerState();
+    });
+    stopsToggle.addEventListener('click', (e) => e.stopPropagation());
   }
 
   // Avvik-laget: merkene tegnes av js/situations-layer.js, her lagres bare valget

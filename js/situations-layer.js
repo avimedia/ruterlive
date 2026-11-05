@@ -6,8 +6,8 @@
 
 import L from 'leaflet';
 import {
-  getSituations, onSituationsChanged, badgeCount, situationCardHtml, initSituations, isUnavailable,
-  groupSituationStops, situationsLayerLabel, situationsPageHref,
+  getSituations, onSituationsChanged, situationCardHtml, initSituations, isUnavailable,
+  situationMarkers, situationsLayerLabel, situationsPageHref,
 } from './situations.js';
 import { findSituationLine, selectLine } from './line-search.js';
 import { escapeHtml } from './stop-place-format.js';
@@ -15,8 +15,8 @@ import { currentRegion } from './region.js';
 import { getMap } from './map.js';
 
 const PANE = 'situationPane';
-// Over holdeplassene (markerPane 600), under kjøretøyene (vehiclePane 750)
-const PANE_Z = 720;
+// Over kjøretøyene (vehiclePane 750): merkene er små og få, og skal ikke dekkes; under tooltip (800) og popup (900)
+const PANE_Z = 760;
 
 const ICON_HTML = '<svg viewBox="0 0 24 22" width="22" height="20" aria-hidden="true" focusable="false"><path d="M10.3 1.9 1.4 17.6A2 2 0 0 0 3.1 20.6h17.8a2 2 0 0 0 1.7-3L13.7 1.9a2 2 0 0 0-3.4 0z" fill="#f4a261" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 7.5v5.5" stroke="#14213d" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="16.6" r="1.3" fill="#14213d"/></svg>';
 
@@ -31,9 +31,10 @@ function icon(severe) {
   return L.divIcon({
     className: severe ? 'sit-marker sit-marker--severe' : 'sit-marker',
     html: ICON_HTML,
-    iconSize: [22, 20],
-    iconAnchor: [11, 18],
-    popupAnchor: [0, -16],
+    // 30×30 trykkflate rundt trekanten (22×20), spissen nederst på posisjonen
+    iconSize: [30, 30],
+    iconAnchor: [15, 25],
+    popupAnchor: [0, -22],
   });
 }
 
@@ -114,11 +115,12 @@ function render() {
   if (!layer) return;
   layer.clearLayers();
   if (!isOn()) return;
-  for (const g of groupSituationStops(getSituations())) addMarker(g);
+  for (const g of situationMarkers(getSituations(), currentRegion())) addMarker(g);
 }
 
+/** Tallet er antall merker laget viser i regionen (samme som kartet tegner). */
 function updateLabel(list) {
-  if (labelEl) labelEl.textContent = situationsLayerLabel(loaded ? badgeCount(list) : null);
+  if (labelEl) labelEl.textContent = situationsLayerLabel(loaded ? situationMarkers(list, currentRegion()).length : null);
 }
 
 /** Lenkene «Avvik» i toppmenyen går til regionens område på /avvik. */

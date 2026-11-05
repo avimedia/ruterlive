@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  badgeCount,
   situationsForLine,
   situationsForQuays,
   formatValidity,
@@ -28,13 +27,6 @@ const sit = (over) => ({
   lines: [],
   stops: [],
   ...over,
-});
-
-test('badgeCount: teller alle avvik i lista, også noImpact (Ruling 5)', () => {
-  const list = [sit({ id: 'a' }), sit({ id: 'b', severity: 'noImpact' }), sit({ id: 'c', severity: 'severe' })];
-  assert.equal(badgeCount(list), 3);
-  assert.equal(badgeCount([]), 0);
-  assert.equal(badgeCount(null), 0);
 });
 
 test('situationsForLine: treff på lineRef, ellers kodeområde + kode', () => {
@@ -220,4 +212,27 @@ test('situationsPageHref: Oslo til Ruter-ankeret, Bergen til Skyss-ankeret, elle
   assert.equal(situationsPageHref(REGIONS.bergen), '/avvik#avvik-sky');
   assert.equal(situationsPageHref({}), '/avvik');
   assert.equal(situationsPageHref(null), '/avvik');
+});
+
+test('groupSituationStops: bounds holder merker utenfor regionen ute (Holmestrand i Bergen)', async () => {
+  const { groupSituationStops } = await import('../js/situations.js');
+  const { REGIONS } = await import('../shared/regions.js');
+  const s = sit({ stops: [{ id: 'q1', name: 'Holmestrand stasjon', lat: 59.49039, lon: 10.31048 }, { id: 'q2', name: 'Vik', lat: 60.47279, lon: 4.9517 }] });
+  assert.deepEqual(groupSituationStops([s], { bounds: REGIONS.bergen.vehicleBounds }).map((g) => g.name), ['Vik']);
+  assert.deepEqual(groupSituationStops([s], { bounds: REGIONS.oslo.vehicleBounds }).map((g) => g.name), ['Holmestrand stasjon']);
+});
+
+test('situationMarkers + situationsLayerLabel: tallet er antall merker i regionen, ikke antall avvik', async () => {
+  const { situationMarkers, situationsLayerLabel } = await import('../js/situations.js');
+  const { REGIONS } = await import('../shared/regions.js');
+  const list = [
+    sit({ id: 'a', stops: [{ id: 'q1', name: 'Tøyen', lat: 59.9157, lon: 10.7759 }] }),
+    sit({ id: 'b', stops: [{ id: 'q1', name: 'Tøyen', lat: 59.9157, lon: 10.7759 }] }),
+    sit({ id: 'c', lines: [{ ref: 'RUT:Line:1', code: '1' }] }),
+    sit({ id: 'd', stops: [{ id: 'q9', name: 'Bergen', lat: 60.39, lon: 5.33 }] }),
+  ];
+  const markers = situationMarkers(list, REGIONS.oslo);
+  assert.equal(markers.length, 1);
+  assert.equal(situationsLayerLabel(markers.length), 'Avvik (1)');
+  assert.equal(situationsLayerLabel(situationMarkers([list[2]], REGIONS.oslo).length), 'Avvik');
 });

@@ -3,7 +3,7 @@ import { getMap } from './map.js';
 import { withRegion } from './region.js';
 import { isFlytogLineCode } from '../config.js';
 import { splitRouteAt, chooseClosestShape } from './route-split.js';
-import { groupStops } from './stop-groups.js';
+import { groupStops, stopsMode } from './stop-groups.js';
 import { prefersDepartureSheet, showDepartures, onDeparturesClosed } from './departure-sheet.js';
 import { groupDepartures } from './departure-groups.js';
 import { situationsForLine, situationsForQuays, situationNoteHtml, lineKeyFromCall, onSituationsChanged } from './situations.js';
@@ -46,6 +46,8 @@ let highlightedRoutes = [];
 const DIM_OPACITY = 0.3;
 const AHEAD_DASH = '2, 10';
 let routesVisible = true;
+// Laget «Holdeplasser»: av = ingen holdeplasser for utsnittet (og ingen bbox-henting), rutens stopp vises fortsatt
+let stopsVisible = true;
 /** Nøkkel for tegnede rutelinjer; panorering og zoom endrer den ikke. */
 let lastLinesKey = '';
 /** Fra siste tegning av rutelinjer: uthevet rute, modi og rutekart for holdeplassene. */
@@ -58,7 +60,6 @@ let stopsBounds = null;
 let bboxFetchId = 0;
 
 /** Zoom-nivå før holdeplasser vises (med navn). */
-const ZOOM_STOPS_VISIBLE = 14;
 /** Holdeplasser tegnes for utsnittet + denne margen; små panoreringer tegner ikke på nytt. */
 const STOPS_PAD = 0.5;
 
@@ -303,12 +304,12 @@ function drawRouteLines(map, shapes, visibleModes, selectedVehicle) {
 }
 
 /**
- * Holdeplasser: ved valgt kjøretøy kun rutens stopp (zoom 12+), ellers zoom 15+ for utsnittet med margin.
+ * Holdeplasser: ved valgt kjøretøy kun rutens stopp (zoom 12+), ellers zoom 14+ for utsnittet med margin (se stopsMode).
  * Tegnes på nytt bare når modus/linjer endres eller utsnittet går utenfor det som er tegnet.
  */
 function updateStops(map) {
   const zoom = map.getZoom();
-  const mode = lastHighlighted.length > 0 && zoom >= 12 ? 'route' : zoom >= ZOOM_STOPS_VISIBLE ? 'view' : 'none';
+  const mode = stopsMode({ zoom, hasRoute: lastHighlighted.length > 0, stopsOn: stopsVisible });
   const key = `${lastLinesKey}|${mode}`;
   if (key === lastStopsKey && (mode !== 'view' || stopsBounds?.contains(map.getBounds()))) return;
   lastStopsKey = key;
@@ -705,6 +706,13 @@ export function refreshRouteHighlightTheme() {
 
 export function setRoutesVisible(visible) {
   routesVisible = visible;
+}
+
+/** Laget «Holdeplasser» av/på; tegner holdeplassene på nytt med en gang. */
+export function setStopsVisible(visible) {
+  stopsVisible = visible;
+  const map = getMap();
+  if (map) updateStops(map);
 }
 
 export function isRoutesVisible() {

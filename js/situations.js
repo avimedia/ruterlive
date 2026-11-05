@@ -46,12 +46,7 @@ export function onSituationsChanged(cb) {
   return () => listeners.delete(cb);
 }
 
-/** Tallet ved kartlaget: alle avvik serveren lister for regionen, også «noImpact» (Ruling 5). */
-export function badgeCount(list) {
-  return Array.isArray(list) ? list.length : 0;
-}
-
-/** Teksten ved avkrysningen: «Avvik (47)», bare «Avvik» ved 0 eller uten data. */
+/** Teksten ved avkrysningen: «Avvik (N)» med N = antall merker, bare «Avvik» ved 0 eller uten data. */
 export function situationsLayerLabel(n) {
   return Number.isFinite(n) && n > 0 ? `Avvik (${n})` : 'Avvik';
 }
@@ -77,14 +72,15 @@ function metersBetween(a, b) {
 /**
  * Merker for kartlaget: ett per posisjon. Stopp med samme id eller innen SAME_PLACE_M slås sammen;
  * hvert merke har { lat, lon, name, ids, situations } med hvert avvik én gang, i lista sin rekkefølge.
- * Stopp uten koordinat gir intet merke.
+ * Stopp uten koordinat, eller utenfor `bounds` ({ minLat, maxLat, minLon, maxLon }), gir intet merke.
  */
-export function groupSituationStops(list, { nearM = SAME_PLACE_M } = {}) {
+export function groupSituationStops(list, { nearM = SAME_PLACE_M, bounds = null } = {}) {
+  const inside = (p) => !bounds || (p.lat >= bounds.minLat && p.lat <= bounds.maxLat && p.lon >= bounds.minLon && p.lon <= bounds.maxLon);
   const groups = [];
   const byId = new Map();
   for (const s of Array.isArray(list) ? list : []) {
     for (const p of s?.stops || []) {
-      if (!Number.isFinite(p?.lat) || !Number.isFinite(p?.lon)) continue;
+      if (!Number.isFinite(p?.lat) || !Number.isFinite(p?.lon) || !inside(p)) continue;
       let g = byId.get(p.id) || groups.find((x) => metersBetween(x, p) <= nearM);
       if (!g) {
         g = { lat: p.lat, lon: p.lon, name: p.name || '', ids: [], situations: [], seen: new Set() };
@@ -102,6 +98,11 @@ export function groupSituationStops(list, { nearM = SAME_PLACE_M } = {}) {
     }
   }
   return groups.map(({ seen, ...g }) => g);
+}
+
+/** Merkene kartlaget tegner for regionen: bare innenfor regionens kartboks (togavvik er landsdekkende). */
+export function situationMarkers(list, region) {
+  return groupSituationStops(list, { bounds: region?.vehicleBounds ?? null });
 }
 
 /**

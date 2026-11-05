@@ -77,3 +77,12 @@ test('groupStops: gruppen beholder det første stoppets egenskaper', () => {
   const g = groupStops([{ ...at(59.91, 10.75, 'Majorstuen', 'NSR:Quay:1'), color: '#2a9d8f' }, { ...at(59.9101, 10.75, 'Majorstuen', 'NSR:Quay:2'), color: '#e63946' }]);
   assert.equal(g[0].first.color, '#2a9d8f');
 });
+
+test('stopsMode: valgt rute viser rutens stopp også med «Holdeplasser» av; utsnittets stopp bare når laget er på', async () => {
+  const { stopsMode } = await import('../js/stop-groups.js');
+  assert.equal(stopsMode({ zoom: 13, hasRoute: true, stopsOn: false }), 'route');
+  assert.equal(stopsMode({ zoom: 11, hasRoute: true, stopsOn: true }), 'none');
+  assert.equal(stopsMode({ zoom: 14, hasRoute: false, stopsOn: true }), 'view');
+  assert.equal(stopsMode({ zoom: 16, hasRoute: false, stopsOn: false }), 'none');
+  assert.equal(stopsMode({ zoom: 13, hasRoute: false, stopsOn: true }), 'none');
+});

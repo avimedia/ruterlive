@@ -3,6 +3,18 @@
  * én per plattform/spor/quay). Rene funksjoner uten Leaflet, brukt av js/routes.js.
  */
 
+/** Holdeplasser for hele utsnittet vises fra denne zoomen (laget «Holdeplasser»). */
+export const ZOOM_STOPS_VISIBLE = 14;
+
+/**
+ * Hvilke holdeplasser kartet tegner: 'route' = den valgte rutens stopp (zoom 12+, også med laget av, de hører
+ * til ruta), 'view' = alle i utsnittet (zoom 14+, bare med «Holdeplasser» på), ellers 'none'.
+ */
+export function stopsMode({ zoom, hasRoute, stopsOn }) {
+  if (hasRoute && zoom >= 12) return 'route';
+  return stopsOn && zoom >= ZOOM_STOPS_VISIBLE ? 'view' : 'none';
+}
+
 /** Maks avstand (meter) til nærmeste stopp i gruppen. 120 m samler f.eks. Nationaltheatret stasjon og T-banen/trikken. */
 export const GROUP_LINK_M = 120;
 /** Maks avstand (meter) fra gruppens første stopp, så like navn langs en gate ikke lenkes i det uendelige. */

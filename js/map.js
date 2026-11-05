@@ -1,9 +1,9 @@
 import L from 'leaflet';
 import { clearRouteSelection } from './routes.js';
-import { getRegion } from '../shared/regions.js';
+import { currentRegion } from './region.js';
 
-const OSLO_CENTER = getRegion().center;
-const DEFAULT_ZOOM = getRegion().defaultZoom;
+const REGION_CENTER = currentRegion().center;
+const DEFAULT_ZOOM = currentRegion().defaultZoom;
 
 // Kartverket gråtone (CC BY 4.0, ingen nøkkel). Mørkt tema = samme fliser med CSS-filter
 // på .basemap-tiles (se css/style.css), så rutelinjer, markører og jernbaneoverlay påvirkes ikke.
@@ -24,7 +24,7 @@ let openRailwayMapLayer = null;
 
 export function initMap() {
   map = L.map('map-container', {
-    center: OSLO_CENTER,
+    center: REGION_CENTER,
     zoom: DEFAULT_ZOOM,
     zoomControl: true,
   });

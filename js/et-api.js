@@ -7,9 +7,9 @@ import { MAX_ROUTE_SPAN_KM } from '../config.js';
 import { journeyVehicleId, selectJourneysForVehicles } from '../shared/et-journeys.js';
 import { callDelaySeconds } from '../shared/vehicle-delay.js';
 import { getModeFromLineNumFallback, mapJpTransportMode } from '../shared/line-mode.js';
-import { getRegion } from '../shared/regions.js';
+import { currentRegion } from './region.js';
 
-const ET_URL = import.meta.env.DEV ? `/api/entur-et/et?datasetId=${getRegion().etDatasets[0]}&maxSize=3000` : '/api/et-cached';
+const ET_URL = import.meta.env.DEV ? `/api/entur-et/et?datasetId=${currentRegion().etDatasets[0]}&maxSize=3000` : '/api/et-cached';
 const JP_GRAPHQL_URL = '/api/entur-jp/graphql';
 const CLIENT_NAME = 'ruterlive-web';
 const RETRY_DELAYS = [2000, 4000, 8000]; // Backoff ved 502/503 (cold start)

@@ -1,5 +1,7 @@
 import L from 'leaflet';
 import { getMap } from './map.js';
+import { currentRegion, withRegion } from './region.js';
+import { regionPath } from '../shared/regions.js';
 import { isFlytogLineCode } from '../config.js';
 import { splitRouteAt, chooseClosestShape } from './route-split.js';
 import { groupStops } from './stop-groups.js';
@@ -166,7 +168,7 @@ function vehicleRouteFor(vehicle) {
     return { shape: hit.shape, pending: hit.pending };
   }
   vehicleRoutes.set(key, { shape: null, pending: true, at: Date.now() });
-  fetch(`/api/vehicle-route?${new URLSearchParams(params)}`)
+  fetch(withRegion(`/api/vehicle-route?${new URLSearchParams(params)}`))
     .then((r) => (r.ok ? r.json() : null))
     .then(routeResponseToShape)
     .catch(() => null)
@@ -516,7 +518,7 @@ async function showDepartureBoard(popup, quayIds) {
           ${body}
         </table>
         ${groups.length === 0 ? '<p class="departure-empty">Ingen avganger de neste timene.</p>' : '<p class="departure-hint">Trykk på en avgang for å se hvor den er nå.</p>'}
-        ${/^[a-z0-9-]+$/.test(data?.place?.page ?? '') ? `<a class="departure-place-link" href="/holdeplass/${data.place.page}">Om ${escapeHtml(name)} →</a>` : ''}
+        ${/^[a-z0-9-]+$/.test(data?.place?.page ?? '') ? `<a class="departure-place-link" href="${regionPath(currentRegion(), `/holdeplass/${data.place.page}`)}">Om ${escapeHtml(name)} →</a>` : ''}
       </div>`;
     popup.setContent(html);
   } catch (err) {

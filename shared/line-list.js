@@ -107,10 +107,10 @@ export function parseLineQuery(query) {
  * Linjer som passer spørringen. extra = [{ code, mode }] fra kjøretøy som er live nå.
  * Kodedelen må være eksakt ved ett tegn, ellers starter-med. Eksakte treff først, så moduslisten.
  */
-export function matchLines(query, extra = [], { exactOnly = false } = {}) {
+export function matchLines(query, extra = [], { exactOnly = false, lines = LINE_LIST } = {}) {
   const { mode, rest } = parseLineQuery(query);
   if (!rest && !mode) return [];
-  const all = [...LINE_LIST];
+  const all = [...lines];
   const seen = new Set(all.map((l) => `${l.mode}|${l.code.toUpperCase()}`));
   for (const e of extra || []) {
     const code = String(e?.code ?? '').trim();

@@ -5,10 +5,13 @@
 
 import L from 'leaflet';
 import { getMap } from './map.js';
+import { currentRegion, withRegion } from './region.js';
 import { isFlytogLineCode } from '../config.js';
 import { setLineHighlight } from './markers.js';
 import {
   matchLines,
+  LINE_LIST,
+  linesFor,
   chipLabel,
   parseLineParam,
   MODE_COLORS,
@@ -19,6 +22,10 @@ import {
   normLineCode,
   preferredAuthority,
 } from '../shared/line-list.js';
+
+// Regionens linjekatalog; Oslo ligger klar, andre regioner lastes (egen chunk) ved oppstart
+let regionLines = currentRegion().id === 'oslo' ? LINE_LIST : [];
+Promise.resolve(linesFor(currentRegion().id)).then((l) => { regionLines = l; }).catch(() => {});
 
 let vehicles = [];
 let shapes = [];
@@ -67,7 +74,7 @@ export function setLineSearchData(nextVehicles, nextShapes) {
 }
 
 export function searchLines(query) {
-  return matchLines(query, liveCodes);
+  return matchLines(query, liveCodes, { lines: regionLines });
 }
 
 function vehiclesOfActive() {
@@ -133,7 +140,7 @@ function fetchJpRoute() {
   if (ref && /^[A-Z]{3}:Line:[A-Za-z0-9_.-]{1,64}$/.test(ref)) params.ref = ref;
   else if (active.highlight.authority) params.authority = active.highlight.authority;
   const token = ++jpToken;
-  fetch(`/api/vehicle-route?${new URLSearchParams(params)}`)
+  fetch(withRegion(`/api/vehicle-route?${new URLSearchParams(params)}`))
     .then((r) => (r.ok ? r.json() : null))
     .then((data) => {
       if (token !== jpToken || !active || !Array.isArray(data?.points) || data.points.length < 2) return;

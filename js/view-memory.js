@@ -4,6 +4,7 @@
  */
 
 import { NORWAY_BOUNDS } from '../shared/regions.js';
+import { currentRegion, viewKeyFor } from './region.js';
 
 export const VIEW_KEY = 'ruterlive-view';
 export const LAYERS_KEY = 'ruterlive-layers';
@@ -70,7 +71,7 @@ function writeStorage(key, value) {
 
 /** Setter kartet til sist lagrede utsnitt (kalles bare uten lat/lng i URL). */
 export function restoreView(map) {
-  const v = parseView(readStorage(VIEW_KEY));
+  const v = parseView(readStorage(viewKeyFor(currentRegion(), VIEW_KEY)));
   if (v) map.setView([v.lat, v.lng], v.z, { animate: false });
 }
 
@@ -82,7 +83,7 @@ export function initViewMemory(map) {
     timer = setTimeout(() => {
       const c = map.getCenter();
       const s = serializeView(c.lat, c.lng, map.getZoom());
-      if (s) writeStorage(VIEW_KEY, s);
+      if (s) writeStorage(viewKeyFor(currentRegion(), VIEW_KEY), s);
     }, 500);
   });
 }

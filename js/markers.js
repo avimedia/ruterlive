@@ -7,6 +7,7 @@ import { onLinePosition } from './line-geometry.js';
 import { delayLabel, shownDelay, DELAY_MAJOR_S } from '../shared/vehicle-delay.js';
 import { headingFromMove, angleDiff, MIN_HEADING_CHANGE_DEG } from './vehicle-heading.js';
 import { linePageFor, vehicleOnLine } from '../shared/line-list.js';
+import { currentRegion } from './region.js';
 
 const MODE_TO_CLASS = {
   bus: 'bus',
@@ -627,7 +628,7 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
       if (via) popupParts.push(`Via: ${e(via)}`);
     }
     // Lenke til linjesiden når linja har en (innholdssidene er der annonsene vises)
-    const page = linePageFor(v, vehicleModeClass(v));
+    const page = linePageFor(v, vehicleModeClass(v), currentRegion().id);
     if (page) popupParts.push(`<a class="vehicle-popup-link" href="${page.path}">Om ${e(page.title)} →</a>`);
     const popupHtml = popupParts.join('<br>');
     const tooltipText = e(late ? `${title} · ${late}` : title);

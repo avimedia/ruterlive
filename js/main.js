@@ -1,4 +1,5 @@
 import { runWhenVisible } from './visibility.js';
+import { withRegion } from './region.js';
 import { initMap, getMap } from './map.js';
 import { initLocate } from './locate.js';
 import { initTheme } from './theme.js';
@@ -236,12 +237,12 @@ function requestStaticShapes(shapes, live) {
     if (!railMissing) return;
     [2000, 8000, 25000].forEach((delay) => {
       setTimeout(runWhenVisible(() => {
-        if (!hasRailShapes(routeShapes)) fetchJson('/api/rail-shapes').then(addShapes);
+        if (!hasRailShapes(routeShapes)) fetchJson(withRegion('/api/rail-shapes')).then(addShapes);
       }), delay);
     });
     return;
   }
-  const tryStaticNetworkShapes = () => fetchJson('/api/static-network-shapes').then(addShapes);
+  const tryStaticNetworkShapes = () => fetchJson(withRegion('/api/static-network-shapes')).then(addShapes);
   tryStaticNetworkShapes();
   const retryStatic = runWhenVisible(tryStaticNetworkShapes);
   setTimeout(retryStatic, 8000);
@@ -250,7 +251,7 @@ function requestStaticShapes(shapes, live) {
   [2000, 8000, 25000].forEach((delay) => {
     setTimeout(runWhenVisible(() => {
       if (hasRailShapes(routeShapes)) return;
-      Promise.all([fetchJson('/api/rail-shapes'), fetchJson('/api/route-shapes')]).then(([rail, route]) => {
+      Promise.all([fetchJson(withRegion('/api/rail-shapes')), fetchJson(withRegion('/api/route-shapes'))]).then(([rail, route]) => {
         addShapes(Array.isArray(rail) && rail.length > 0 ? rail : route);
       });
     }), delay);
@@ -273,7 +274,7 @@ let loadedShapesVersion = null;
 const feedPolicy = createFeedPolicy();
 
 async function fetchShapesFor(version) {
-  const res = await fetch(`/api/route-shapes-all?v=${encodeURIComponent(version)}`);
+  const res = await fetch(withRegion(`/api/route-shapes-all?v=${encodeURIComponent(version)}`));
   if (!res.ok) throw new Error(`route-shapes-all ${res.status}`);
   const shapes = await res.json();
   return Array.isArray(shapes) ? shapes : [];
@@ -292,7 +293,7 @@ function decodeLivePaths(data) {
 
 /** Ny feed: bare kjøretøy hvert 30. s, rutekart hentes først og deretter bare ved ny versjon. */
 async function fetchVehiclesLive() {
-  const res = await fetch('/api/vehicles-live');
+  const res = await fetch(withRegion('/api/vehicles-live'));
   if (!res.ok) throw Object.assign(new Error(`vehicles-live ${res.status}`), { status: res.status });
   const data = await res.json();
   const vehicles = decodeLivePaths(data);
@@ -357,7 +358,7 @@ async function fetchInitialData(attempt = 0) {
         feedPolicy.recordFailure();
       }
     }
-    const res = await fetch('/api/initial-data');
+    const res = await fetch(withRegion('/api/initial-data'));
     if ((res.status === 502 || res.status === 503) && attempt < RETRY_DELAYS.length) {
       await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
       return fetchInitialData(attempt + 1);
@@ -376,7 +377,7 @@ async function fetchInitialData(attempt = 0) {
 }
 
 function loadRouteShapes(attempt = 0) {
-  fetch('/api/route-shapes')
+  fetch(withRegion('/api/route-shapes'))
     .then((r) => {
       if ((r.status === 502 || r.status === 503) && attempt < RETRY_DELAYS.length) {
         setTimeout(() => loadRouteShapes(attempt + 1), RETRY_DELAYS[attempt]);

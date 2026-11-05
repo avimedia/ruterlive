@@ -6,6 +6,7 @@ import { focusStopFromSearch } from './routes.js';
 import { searchLines, selectLine, initLineChip } from './line-search.js';
 import { MODE_COLORS } from '../shared/line-list.js';
 import { getMap } from './map.js';
+import { currentRegion, withRegion } from './region.js';
 import { lineBadgesHtml, formatDistance, escapeHtml } from './stop-place-format.js';
 
 let debounceTimer = null;
@@ -84,9 +85,10 @@ export function initStopSearch() {
 
   /** Kartets midtpunkt, så nærmeste stoppested med samme navn kommer først. */
   function searchUrl(q) {
-    const c = getMap()?.getCenter?.();
-    const pos = c ? `&lat=${c.lat.toFixed(3)}&lng=${c.lng.toFixed(3)}` : '';
-    return `/api/stops-search?q=${encodeURIComponent(q)}${pos}`;
+    // Uten kart: regionens midtpunkt, så ikke treff fra en annen region kommer først
+    const c = getMap()?.getCenter?.() ?? { lat: currentRegion().center[0], lng: currentRegion().center[1] };
+    const pos = `&lat=${c.lat.toFixed(3)}&lng=${c.lng.toFixed(3)}`;
+    return withRegion(`/api/stops-search?q=${encodeURIComponent(q)}${pos}`);
   }
 
   input.addEventListener('input', () => {

@@ -1,11 +1,11 @@
 import { normalizeGpsVehicles } from '../shared/gps-vehicles.js';
 import { isHidden } from './visibility.js';
-import { getRegion } from '../shared/regions.js';
+import { currentRegion } from './region.js';
 
 const POLL_MS = 20000;
 const POLL_BACKOFF_MS = 45000; // Ved 502/503: lengre intervall for å ikke spamme
 const RETRY_DELAYS = [2000, 4000, 8000]; // Backoff ved 502/503 (cold start)
-const OSLO_BOUNDS = getRegion().vehicleBounds;
+const REGION_BOUNDS = currentRegion().vehicleBounds;
 
 // I prod: cached. I dev: direkte proxy (Vite har ikke cache)
 const VEHICLES_URL = import.meta.env.DEV ? '/api/entur/graphql' : '/api/vehicles-cached';
@@ -19,7 +19,7 @@ function parseVehicles(data) {
 }
 
 function buildQuery(bounds) {
-  const b = bounds || OSLO_BOUNDS;
+  const b = bounds || REGION_BOUNDS;
   return `{ vehicles(boundingBox: { minLat: ${b.minLat}, maxLat: ${b.maxLat}, minLon: ${b.minLon}, maxLon: ${b.maxLon} }) { vehicleId lastUpdated location { latitude longitude } line { publicCode lineRef } mode bearing destinationName } }`;
 }
 
@@ -107,7 +107,7 @@ function scheduleNextPoll(bounds, onVehicles, onError) {
 
 export function connectVehicles(boundingBox, onVehicles, onError) {
   disconnect();
-  const bounds = boundingBox || OSLO_BOUNDS;
+  const bounds = boundingBox || REGION_BOUNDS;
   fetchVehicles(bounds, onVehicles, onError).then(() => {
     scheduleNextPoll(bounds, onVehicles, onError);
   });

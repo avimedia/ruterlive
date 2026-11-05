@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { REGIONS, DEFAULT_REGION, getRegion, isInBounds } from '../shared/regions.js';
+import {
+  REGIONS, DEFAULT_REGION, getRegion, isInBounds, findRegion, publicRegions, visibleRegions,
+  regionFromPath, regionPath, regionAt,
+} from '../shared/regions.js';
 import { getModeFromLineNumFallback, isRuterLine, mapJpTransportMode } from '../shared/line-mode.js';
 
 test('Oslo er standardregion med alle innstillinger', () => {
@@ -42,4 +45,78 @@ test('linjenummer-fallback gjelder bare Ruter', () => {
 test('mapJpTransportMode (delt)', () => {
   assert.equal(mapJpTransportMode('ferry'), 'water');
   assert.equal(mapJpTransportMode('coach'), null);
+});
+
+test('Bergen i regionmodellen, ikke offentlig', () => {
+  const b = REGIONS.bergen;
+  assert.equal(b.id, 'bergen');
+  assert.equal(b.public, false);
+  assert.equal(b.path, '/bergen');
+  assert.equal(b.alwaysActive, false);
+  assert.deepEqual([...b.etDatasets], ['SKY']);
+  assert.deepEqual([...b.authorities], ['SKY']);
+  assert.equal(b.lineNumberFallback, null);
+  assert.deepEqual([...b.center], [60.3925, 5.3240]);
+  assert.deepEqual(b.vehicleBounds, { minLat: 60.15, maxLat: 60.65, minLon: 4.85, maxLon: 5.75 });
+  assert.deepEqual(b.stopsBounds, { minLat: 60.0, maxLat: 60.8, minLon: 4.7, maxLon: 5.9 });
+  assert.deepEqual(b.geometryBounds, { s: 59.95, n: 60.85, w: 4.6, e: 6.0 });
+  const o = REGIONS.oslo;
+  assert.equal(o.path, '');
+  assert.equal(o.public, true);
+  assert.equal(o.alwaysActive, true);
+  assert.deepEqual([...o.authorities], ['RUT']);
+  assert.equal(o.jpRailFallback, true);
+  assert.notEqual(b.jpRailFallback, true);
+});
+
+test('findRegion kjenner bare egne id-er', () => {
+  assert.equal(findRegion('__proto__'), null);
+  assert.equal(findRegion('constructor'), null);
+  assert.equal(findRegion('finnes-ikke'), null);
+  assert.equal(findRegion('bergen'), REGIONS.bergen);
+});
+
+test('publicRegions og visibleRegions', () => {
+  assert.deepEqual(publicRegions().map(r => r.id), ['oslo']);
+  assert.deepEqual(visibleRegions().map(r => r.id), ['oslo']);
+  assert.deepEqual(visibleRegions(['bergen']).map(r => r.id), ['oslo', 'bergen']);
+  assert.deepEqual(visibleRegions(['finnes-ikke']).map(r => r.id), ['oslo']);
+});
+
+test('regionFromPath', () => {
+  const vis = visibleRegions(['bergen']);
+  let r = regionFromPath('/bergen/linje/buss-2', vis);
+  assert.equal(r.region.id, 'bergen');
+  assert.equal(r.rest, '/linje/buss-2');
+  r = regionFromPath('/bergen', vis);
+  assert.equal(r.region.id, 'bergen');
+  assert.equal(r.rest, '/');
+  r = regionFromPath('/', vis);
+  assert.equal(r.region.id, 'oslo');
+  assert.equal(r.rest, '/');
+  r = regionFromPath('/linje/x', vis);
+  assert.equal(r.region.id, 'oslo');
+  assert.equal(r.rest, '/linje/x');
+  r = regionFromPath('/bergensbanen', vis);
+  assert.equal(r.region.id, 'oslo');
+  assert.equal(r.rest, '/bergensbanen');
+  // Ikke synlig: Oslo og hele stien
+  r = regionFromPath('/bergen/linje/buss-2');
+  assert.equal(r.region.id, 'oslo');
+  assert.equal(r.rest, '/bergen/linje/buss-2');
+});
+
+test('regionPath', () => {
+  assert.equal(regionPath(REGIONS.oslo, '/linje/x'), '/linje/x');
+  assert.equal(regionPath(REGIONS.oslo), '/');
+  assert.equal(regionPath(REGIONS.bergen), '/bergen');
+  assert.equal(regionPath(REGIONS.bergen, '/linje/x'), '/bergen/linje/x');
+});
+
+test('regionAt', () => {
+  const vis = visibleRegions(['bergen']);
+  assert.equal(regionAt(60.39, 5.32, vis).id, 'bergen');
+  assert.equal(regionAt(59.91, 10.75, vis).id, 'oslo');
+  assert.equal(regionAt(63.4, 10.4, vis), null);
+  assert.equal(regionAt(60.39, 5.32), null); // Bergen ikke synlig
 });

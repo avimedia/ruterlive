@@ -1,12 +1,17 @@
 /**
  * Regioninnstillinger, delt av server og nettleser (ingen process.env her).
- * Å legge til en region er en ny oppføring i REGIONS. Foreløpig er Oslo den eneste.
+ * Å legge til en region er en ny oppføring i REGIONS. Bergen er med, men skjult til lansering (public: false).
  */
 
 export const REGIONS = Object.freeze({
   oslo: Object.freeze({
     id: 'oslo',
     name: 'Oslo og Viken',
+    path: '', // URL-prefiks; Oslo ligger på roten
+    public: true,
+    alwaysActive: true, // ET-data holdes varme uavhengig av besøk
+    authorities: Object.freeze(['RUT']),
+    jpRailFallback: true, // tog-rutefallback via Journey Planner fra Oslo S
     center: Object.freeze([59.9110, 10.7525]), // Oslo S / Jernbanetorget
     defaultZoom: 14,
     // Kjøretøy-spørringen mot Entur og kartutsnittet som huskes
@@ -20,6 +25,22 @@ export const REGIONS = Object.freeze({
     lineNumberFallback: 'ruter',
     // Kartlenke fra linjesidene
     mapLink: Object.freeze({ lat: 59.925, lng: 10.75 }),
+  }),
+  bergen: Object.freeze({
+    id: 'bergen',
+    name: 'Bergen og Vestland',
+    path: '/bergen',
+    public: false,
+    alwaysActive: false,
+    authorities: Object.freeze(['SKY']),
+    center: Object.freeze([60.3925, 5.3240]), // Byparken
+    defaultZoom: 14,
+    vehicleBounds: Object.freeze({ minLat: 60.15, maxLat: 60.65, minLon: 4.85, maxLon: 5.75 }),
+    stopsBounds: Object.freeze({ minLat: 60.0, maxLat: 60.8, minLon: 4.7, maxLon: 5.9 }),
+    geometryBounds: Object.freeze({ s: 59.95, n: 60.85, w: 4.6, e: 6.0 }),
+    etDatasets: Object.freeze(['SKY']),
+    lineNumberFallback: null,
+    mapLink: Object.freeze({ lat: 60.3925, lng: 5.324 }),
   }),
 });
 
@@ -37,4 +58,43 @@ export function getRegion(id = DEFAULT_REGION) {
 export function isInBounds(region, lat, lon) {
   const b = region.vehicleBounds;
   return lat >= b.minLat && lat <= b.maxLat && lon >= b.minLon && lon <= b.maxLon;
+}
+
+/** Regionen med gitt id, eller null for ukjente id-er (også __proto__ o.l.). */
+export function findRegion(id) {
+  return typeof id === 'string' && Object.hasOwn(REGIONS, id) ? REGIONS[id] : null;
+}
+
+/** Offentlige regioner, Oslo først. */
+export function publicRegions(regions = REGIONS) {
+  return Object.values(regions)
+    .filter((r) => r.public)
+    .sort((a, b) => (b.id === DEFAULT_REGION) - (a.id === DEFAULT_REGION));
+}
+
+/** Synlige regioner: offentlige pluss de som er slått på i forhåndsvisningslisten (Oslo først). */
+export function visibleRegions(preview = [], regions = REGIONS) {
+  return Object.values(regions)
+    .filter((r) => r.public || preview.includes(r.id))
+    .sort((a, b) => (b.id === DEFAULT_REGION) - (a.id === DEFAULT_REGION));
+}
+
+/** Region og resten av stien: /bergen/linje/x gir bergen og /linje/x. Ukjent eller skjult gir Oslo. */
+export function regionFromPath(pathname, visible = visibleRegions()) {
+  for (const region of visible) {
+    if (!region.path) continue;
+    if (pathname === region.path) return { region, rest: '/' };
+    if (pathname.startsWith(region.path + '/')) return { region, rest: pathname.slice(region.path.length) };
+  }
+  return { region: REGIONS[DEFAULT_REGION], rest: pathname };
+}
+
+/** Sti i regionen: regionPath(oslo, '/linje/x') er /linje/x, regionPath(bergen) er /bergen. */
+export function regionPath(region, sub = '') {
+  return (region.path + sub) || '/';
+}
+
+/** Første synlige region der punktet ligger innenfor vehicleBounds, ellers null. */
+export function regionAt(lat, lon, visible = visibleRegions()) {
+  return visible.find((r) => isInBounds(r, lat, lon)) || null;
 }

@@ -12,6 +12,7 @@ import { getRegion } from '../shared/regions.js';
 
 const REFRESH_MS = 90000; // 90 sek – færre kall mot Entur
 const BACKOFF_AFTER_429_MS = 300000; // 5 min venting ved 429
+const FAILURE_BACKOFF_MS = 60000; // 1 min venting etter andre feil når vi ikke har turer
 const MORE_DATA_TAG = '<MoreData>true</MoreData>';
 
 /**
@@ -38,9 +39,12 @@ export function createEtCache({
   let last429At = 0;
   let lastWarnAt = 0;
   let refreshPromise = null;
+  let lastFailAt = 0;
+  let generation = 0; // Øker ved drop(); pågående henting forkastes
   let timer = null;
 
   async function doRefresh() {
+    const gen = generation;
     const res = await fetchFn(
       url,
       { headers: { 'ET-Client-Name': CLIENT_NAME } },
@@ -76,10 +80,12 @@ export function createEtCache({
       if (moreData) {
         console.warn(`[RuterLive] ET ${datasetId}: MoreData=true, svaret er avkortet (maxSize=3000 for lite)`);
       }
+      if (gen !== generation) return; // drop() under henting: ikke behold turene
       journeys = parsed;
       version++;
       lastFetch = now();
     });
+    lastFailAt = 0;
   }
 
   /** Én henting om gangen. Avviser bare når vi ikke har noen tidligere turer. */
@@ -89,6 +95,7 @@ export function createEtCache({
       try {
         await doRefresh();
       } catch (err) {
+        lastFailAt = now();
         if (!journeys) throw err;
         if (now() - lastWarnAt > BACKOFF_AFTER_429_MS) {
           lastWarnAt = now();
@@ -104,6 +111,7 @@ export function createEtCache({
   // Feil i bakgrunnshenting (429, timeout) logges; uhåndtert rejection ville drept prosessen.
   function refreshInBackground() {
     if (last429At && now() - last429At < BACKOFF_AFTER_429_MS) return; // Vent etter 429
+    if (!journeys && lastFailAt && now() - lastFailAt < FAILURE_BACKOFF_MS) return; // Vent etter feil uten data
     refreshNow().catch((e) => console.warn(`[RuterLive] ET-henting ${datasetId}:`, e.message));
   }
 
@@ -133,6 +141,7 @@ export function createEtCache({
     drop() {
       journeys = null;
       lastFetch = 0;
+      generation++;
     },
     /** Én henting nå, deretter intervall som bare henter mens regionen er aktiv. */
     start() {

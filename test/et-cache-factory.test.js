@@ -87,8 +87,6 @@ test('429 gir backoff på 5 min i bakgrunnen', async () => {
   const warn = mock.method(console, 'warn', () => {});
   try {
     let n = 0;
-    const fetchFn = async () => { n++; return new Response('', { status: n === 1 ? 200 : 429 }); };
-    fetchFn.body = null;
     const first = makeFetch();
     let mode = 'ok';
     const ff = async (...a) => (mode === 'ok' ? first(...a) : (n++, new Response('', { status: 429 })));
@@ -123,4 +121,51 @@ test('én henting om gangen', async () => {
   const { cache, fetchFn } = make();
   await Promise.all([cache.refreshNow(), cache.refreshNow(), cache.getJourneys()]);
   assert.equal(fetchFn.calls, 1);
+});
+
+test('drop() under pågående henting forkaster resultatet', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let calls = 0;
+  const fetchFn = async () => { calls++; if (calls === 1) await gate; return new Response(FIXTURE, { status: 200 }); };
+  const { cache } = make({ fetchFn, waitForFirst: false });
+  assert.deepEqual(await cache.getJourneys(), []);
+  cache.drop();
+  release();
+  await tickIO(); await tickIO();
+  assert.equal(cache.getVersion(), 0, 'forkastet henting øker ikke versjonen');
+  assert.deepEqual(await cache.getJourneys(), []);
+  await tickIO(); await tickIO();
+  assert.equal(calls, 2, 'ny henting startet');
+  assert.ok((await cache.getJourneys()).length >= 2);
+});
+
+test('feil uten data: 60 s backoff og dempet logging', async () => {
+  const warn = mock.method(console, 'warn', () => {});
+  try {
+    let calls = 0;
+    const fetchFn = async () => { calls++; return new Response('', { status: 500 }); };
+    const { cache, clock } = make({ fetchFn, waitForFirst: false });
+    for (let i = 0; i < 5; i++) { await cache.getJourneys(); await tickIO(); await tickIO(); }
+    assert.equal(calls, 1);
+    assert.equal(warn.mock.calls.length, 1);
+    clock.advance(61_000);
+    await cache.getJourneys(); await tickIO(); await tickIO();
+    assert.equal(calls, 2);
+  } finally { warn.mock.restore(); }
+});
+
+test('MoreData-tagg delt over to biter gir advarsel', async () => {
+  const warn = mock.method(console, 'warn', () => {});
+  try {
+    const body = FIXTURE.replace('</ServiceDelivery>', '<MoreData>true</MoreData></ServiceDelivery>');
+    const i = body.indexOf('<MoreData>') + 6;
+    const enc = new TextEncoder();
+    const fetchFn = async () => new Response(new ReadableStream({
+      start(c) { c.enqueue(enc.encode(body.slice(0, i))); c.enqueue(enc.encode(body.slice(i))); c.close(); },
+    }), { status: 200 });
+    const { cache } = make({ fetchFn });
+    await cache.getJourneys();
+    assert.ok(warn.mock.calls.some((c) => /MoreData/.test(c.arguments.join(' '))));
+  } finally { warn.mock.restore(); }
 });

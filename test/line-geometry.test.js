@@ -285,3 +285,12 @@ test('bytebudsjett per region: Bergen-trasé holder seg under budsjettet', async
     console.log = log;
   }
 });
+
+test('createLineGeometryService: uten linjer ingen JP-kall', async () => {
+  let calls = 0;
+  const svc = createLineGeometryService({ fetchFn: async () => { calls++; throw new Error('ingen kall'); }, lines: [] });
+  const { shapes, failed } = await svc.refresh();
+  assert.equal(calls, 0);
+  assert.equal(failed, 0);
+  assert.deepEqual(shapes, []);
+});

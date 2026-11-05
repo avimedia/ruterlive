@@ -330,6 +330,7 @@ export function createLineGeometryService({
   }
 
   async function runRefresh(maxAgeMs) {
+    if (lines.length === 0) return { shapes: current, failed: 0 }; // ingen linjer: ingen JP-kall
     const map = await lineIds();
     let failed = 0;
     for (const line of lines) {

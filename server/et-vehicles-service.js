@@ -7,8 +7,6 @@
 import { MAX_ROUTE_SPAN_KM, MAX_ROUTE_SPAN_KM_BUS } from '../config.js';
 import { selectJourneysForVehicles } from '../shared/et-journeys.js';
 import { buildVehiclePath } from '../shared/vehicle-path.js';
-import { getEtJourneys, getEtVersion } from './et-cache.js';
-import { getRegion } from '../shared/regions.js';
 import { getLinePublicCode } from './shape-service.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { ensureLineModes, getLineMode } from './line-modes.js';
@@ -254,10 +252,3 @@ export function createEtVehiclesService({ region, etCache, deps = {} }) {
 
   return { getVehiclesAndShapes };
 }
-
-// Oslo-instans for server.js og live-vehicles.js
-const oslo = createEtVehiclesService({
-  region: getRegion('oslo'),
-  etCache: { getJourneys: getEtJourneys, getVersion: getEtVersion },
-});
-export const getEtVehiclesAndShapes = () => oslo.getVehiclesAndShapes();

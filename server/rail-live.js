@@ -1,7 +1,7 @@
 /**
  * Tog i hele Norge inn i kjøretøylista: GPS-tog fra hele landet (rail-vehicles-cache.js) og
- * ET-tog uten GPS fra BNR (rail-et-service.js), slått sammen med Oslo-lista fra vehicles-cache.js.
- * Togene innenfor Oslo-boksen finnes i begge GPS-listene; de dedupliseres på vehicleId.
+ * ET-tog uten GPS fra BNR (rail-et-service.js), slått sammen med regionens GPS-liste fra vehicles-cache.js.
+ * Togene innenfor regionboksen finnes i begge GPS-listene; de dedupliseres på vehicleId.
  */
 
 import { getCachedRailVehicles } from './rail-vehicles-cache.js';
@@ -74,23 +74,22 @@ export function createRailLive({ getRail = getCachedRailVehicles, railEt = creat
 }
 
 let sharedEt = null;
-let shared = null;
-function sharedLive() {
-  if (!shared) {
-    sharedEt = createRailEtService();
-    shared = createRailLive({ railEt: sharedEt });
-  }
-  return shared;
+function sharedRailEt() {
+  if (!sharedEt) sharedEt = createRailEtService();
+  return sharedEt;
 }
 
-/** Delt instans for server.js og live-vehicles.js. */
-export function withNationalRail(vehiclesData) {
-  return sharedLive()(vehiclesData);
+/**
+ * Egen withNationalRail per region, med felles GPS-tog og BNR-ET (én henting for alle regioner).
+ * Hver region trenger sin egen, siden memoiseringen bare holder siste kilde; ellers ville svaret
+ * blitt bygget på nytt ved hvert regionbytte.
+ */
+export function createNationalRail() {
+  return createRailLive({ railEt: sharedRailEt() });
 }
 
 /** Ved oppstart: første henting av GPS-tog og BNR-ET, så togene er med i første svar til klientene. */
 export function prewarmNationalRail() {
-  sharedLive();
   getCachedRailVehicles().catch(() => {});
-  return sharedEt.refresh();
+  return sharedRailEt().refresh();
 }

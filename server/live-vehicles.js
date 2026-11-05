@@ -1,12 +1,11 @@
 /**
  * Slår sammen kjøretøy fra Entur GraphQL og SIRI ET, samt rutekart.
- * Delt av /api/initial-data og linjesidene.
+ * Hjelperne brukes av regionregisteret (region-services.js); getLiveData/getMergedVehicles av linjesidene.
  */
 
-import { getCachedVehicles } from './vehicles-cache.js';
-import { getEtVehiclesAndShapes } from './et-vehicles-service.js';
 import { matchRouteForVehicle } from '../shared/route-match.js';
-import { withNationalRail } from './rail-live.js';
+// Syklisk import (region-services bruker hjelperne her); trygt, bare funksjonsdeklarasjoner brukes på tvers
+import { getRegionServices } from './region-services.js';
 
 function shapeKey(s) {
   return `${(s.mode || '').toLowerCase()}|${(s.line || '').toString()}|${s.from || ''}|${s.to || ''}`;
@@ -28,7 +27,7 @@ export function mergeShapes(a, b) {
 /**
  * GPS-kjøretøy (GraphQL) beriket med fra/til/via fra ET, pluss ET-kjøretøy uten GPS.
  * @param {object} vehiclesData svar fra getCachedVehicles
- * @param {{ vehicles?: object[] }} etResult svar fra getEtVehiclesAndShapes
+ * @param {{ vehicles?: object[] }} etResult svar fra etVehicles.getVehiclesAndShapes()
  */
 export function mergeVehicles(vehiclesData, etResult) {
   const graphqlVehicles = Array.isArray(vehiclesData?.data?.vehicles)
@@ -63,10 +62,6 @@ export function withRouteInfo(vehicles, shapes) {
   });
 }
 
-/**
- * @param {() => object[]} [getAllShapes] statiske rutekart (eies av server.js)
- * @returns {Promise<{ vehicles: object[], routeShapes: object[] }>}
- */
 /** Gammelt format (/api/initial-data) uten nyere felt som `delay`, så svaret er uendret for gamle klienter. */
 export function withoutDelay(vehicles) {
   return vehicles.map((v) => {
@@ -76,20 +71,29 @@ export function withoutDelay(vehicles) {
   });
 }
 
-export async function getLiveData(getAllShapes = () => []) {
-  const [osloData, etResult] = await Promise.all([
-    getCachedVehicles(),
-    getEtVehiclesAndShapes(),
-  ]);
-  const vehiclesData = await withNationalRail(osloData);
+function servicesFor(regionId) {
+  const s = getRegionServices(regionId);
+  if (!s) throw new Error(`Ukjent eller skjult region: ${regionId}`);
+  return s;
+}
+
+/**
+ * Sammenslåtte kjøretøy og rutekart (statiske + ET) for regionen.
+ * @returns {Promise<{ vehicles: object[], routeShapes: object[] }>}
+ */
+export async function getLiveData(regionId = 'oslo') {
+  const s = servicesFor(regionId);
+  const { vehiclesData, etResult } = await s.live.getLiveSources();
   return {
     vehicles: mergeVehicles(vehiclesData, etResult),
-    routeShapes: mergeShapes(getAllShapes(), etResult?.shapes ?? []),
+    routeShapes: mergeShapes(s.live.getAllShapes(), etResult?.shapes ?? []),
   };
 }
 
-export async function getMergedVehicles() {
-  return (await getLiveData()).vehicles;
+/** Bare kjøretøyene (linjesidene); bygger ikke rutekartene. */
+export async function getMergedVehicles(regionId = 'oslo') {
+  const { vehiclesData, etResult } = await servicesFor(regionId).live.getLiveSources();
+  return mergeVehicles(vehiclesData, etResult);
 }
 
 const VEHICLE_MODES = {

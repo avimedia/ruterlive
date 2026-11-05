@@ -2,8 +2,15 @@ import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseEtJourneys } from '../server/et-parse.js';
+import { createEtCache } from '../server/et-cache.js';
 
 const FIXTURE = readFileSync(new URL('./fixtures/et-sample.xml', import.meta.url), 'utf8');
+
+// Som Oslo i regionregisteret: venter på første henting
+const osloCache = () => {
+  const c = createEtCache({ datasetId: 'RUT', waitForFirst: true });
+  return { getEtJourneys: () => c.getJourneys(), getEtVersion: () => c.getVersion(), cache: c };
+};
 
 const tick = async () => {
   await new Promise((r) => setImmediate(r));
@@ -22,7 +29,7 @@ test('getEtJourneys parser én gang per ny XML og deler resultatet', async () =>
   mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
   try {
     const etCache = await import('../server/et-cache.js');
-    const { getEtJourneys, getEtVersion } = etCache;
+    const { getEtJourneys, getEtVersion, cache } = osloCache();
     const a = await getEtJourneys();
     const b = await getEtJourneys();
     assert.equal(calls, 1);
@@ -30,6 +37,8 @@ test('getEtJourneys parser én gang per ny XML og deler resultatet', async () =>
     assert.deepEqual(a, parseEtJourneys(FIXTURE));
     assert.equal(getEtVersion(), 1);
     assert.equal('ensureEtCache' in etCache || 'getCachedEt' in etCache, false, 'XML-en eksponeres ikke');
+    assert.equal('getEtJourneys' in etCache, false, 'ingen Oslo-singleton ved siden av registeret');
+    assert.equal('getXml' in cache, false);
     assert.throws(() => { a[0].mode = 'rail'; }, TypeError, 'delte turer kan ikke muteres');
 
     // Ny XML etter utløpt cache → forrige turer straks, nytt parseresultat etter revalidering
@@ -59,7 +68,7 @@ test('getEtJourneys: feil uten data avviser; 429 med data gir forrige turer og p
   };
   mock.timers.enable({ apis: ['Date'], now: 5_000_000 });
   try {
-    const { getEtJourneys, getEtVersion } = await import('../server/et-cache.js?feil');
+    const { getEtJourneys, getEtVersion } = osloCache();
     await assert.rejects(getEtJourneys());
     status = 200;
     const a = await getEtJourneys();

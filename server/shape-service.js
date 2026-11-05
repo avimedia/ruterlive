@@ -5,7 +5,6 @@
 
 import { MAX_ROUTE_SPAN_KM, MAX_ROUTE_SPAN_KM_BUS } from '../config.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
-import { getEtJourneys } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { fetchJpRoutes } from './jp-route-fetcher.js';
 import { ensureLineModes, getLineMode } from './line-modes.js';
@@ -237,9 +236,3 @@ export function createShapeService({ region, etCache, deps = {} }) {
 
   return { getCachedShapes: () => cachedShapes, isCacheFresh, refresh };
 }
-
-// Oslo-instans for server.js
-const oslo = createShapeService({ region: getRegion('oslo'), etCache: { getJourneys: getEtJourneys } });
-export const getCachedShapes = () => oslo.getCachedShapes();
-export const isCacheFresh = () => oslo.isCacheFresh();
-export const refreshRouteShapes = () => oslo.refresh();

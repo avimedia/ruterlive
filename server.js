@@ -9,20 +9,13 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getCachedShapes, refreshRouteShapes } from './server/shape-service.js';
-import { fetchRailShapesOnly, fetchFlybussShapesOnly } from './server/jp-route-fetcher.js';
-import { fetchOsmRailTracks } from './server/osm-rail-fetcher.js';
-import { getFlybussShapes } from './server/flybuss-shapes.js';
-import { getFallbackRailShapes } from './server/rail-fallback-shapes.js';
-import { startEtCachePoll } from './server/et-cache.js';
 import { getCachedVehicles } from './server/vehicles-cache.js';
-import { loadGtfsStops, ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, getGtfsStopsMap } from './server/gtfs-stops-loader.js';
-import { getMergedVehicles, countVehiclesForLine, mergeShapes, mergeVehicles, withRouteInfo, withoutDelay } from './server/live-vehicles.js';
-import { getEtVehiclesAndShapes } from './server/et-vehicles-service.js';
-import { makeJsonEntry, sendJson, memoEntry, awaitUpgrade } from './server/json-cache.js';
-import { buildVehiclesPayload } from './server/vehicles-payload.js';
-import { sortShapes, createThrottledSnapshot } from './server/shapes-version.js';
-import { createLineGeometryService, applyLineGeometry } from './server/line-geometry.js';
+import { ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, getGtfsStopsMap } from './server/gtfs-stops-loader.js';
+import { getMergedVehicles, countVehiclesForLine } from './server/live-vehicles.js';
+import { makeJsonEntry, sendJson, memoEntry } from './server/json-cache.js';
+import { getRailShapes, getStaticFlybussShapes, loadRailShapes, loadFlybussShapes, refreshFlybussFromJp, FLYBUSS_REFRESH_MS } from './server/static-shapes.js';
+import { getRegistry } from './server/region-services.js';
+import { registerLiveRoutes, regionServicesFor } from './server/live-routes.js';
 import { LINES, getLineBySlug, getLineStops, getLineText, prewarmLineStops, jpQuery } from './server/line-catalog.js';
 import { createStopPlaceLookup } from './server/stop-search.js';
 import { createDepartureBoard } from './server/departure-board.js';
@@ -42,10 +35,8 @@ import { precompressedStatic, setStaticHeaders, compressTextResponses } from './
 import { findJourneyVehicle, SERVICE_JOURNEY_RE } from './server/journey-vehicle.js';
 import { shortVehicleId } from './server/vehicle-id.js';
 import { getCachedRailVehicles } from './server/rail-vehicles-cache.js';
-import { getEtJourneys } from './server/et-cache.js';
 import { securityHeaders, canonicalHost, createRateLimiter, createUpstreamBudget, budgetedFetch } from './server/security.js';
-import { createRailNetworkService } from './server/rail-network.js';
-import { withNationalRail, prewarmNationalRail } from './server/rail-live.js';
+import { prewarmNationalRail } from './server/rail-live.js';
 
 function sendNotFound(res) {
   res.set('Cache-Control', 'no-store');
@@ -55,56 +46,8 @@ function sendNotFound(res) {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
-let railShapesCache = [];
-let flybussShapesCache = [];
-
-async function loadRailShapes() {
-  try {
-    const enturShapes = await fetchRailShapesOnly();
-    if (enturShapes.length > 0) {
-      railShapesCache = enturShapes;
-      console.log(`[RuterLive] Jernbanekart (Entur): ${enturShapes.length} linjer`);
-      return true;
-    }
-  } catch (e) {
-    console.warn('[RuterLive] Entur jernbane:', e.message);
-  }
-  try {
-    const osmShapes = await fetchOsmRailTracks();
-    if (osmShapes.length > 0) {
-      railShapesCache = osmShapes;
-      console.log(`[RuterLive] Jernbanekart (OSM): ${osmShapes.length} strekninger`);
-      return true;
-    }
-  } catch (e) {
-    console.warn('[RuterLive] OSM jernbane:', e.message);
-  }
-  if (railShapesCache.length === 0) {
-    railShapesCache = getFallbackRailShapes();
-    console.log('[RuterLive] Jernbanekart (fallback): ' + railShapesCache.length + ' linjer');
-  }
-  return railShapesCache.length > 0;
-}
-
-function loadFlybussShapes() {
-  flybussShapesCache = getFlybussShapes();
-  console.log(`[RuterLive] Flybuss-rutenett: ${flybussShapesCache.length} linjer`);
-}
-
-const FLYBUSS_REFRESH_MS = 7 * 24 * 60 * 60 * 1000; // Ukentlig
-
-async function refreshFlybussFromJp() {
-  try {
-    await ensureGtfsStopsLoaded();
-    const jpShapes = await fetchFlybussShapesOnly();
-    if (jpShapes.length > 0) {
-      flybussShapesCache = mergeShapes(getFlybussShapes(), jpShapes); // JP vinner ved konflikt
-      console.log(`[RuterLive] Flybuss oppdatert fra Entur JP: ${jpShapes.length} linjer`);
-    }
-  } catch (e) {
-    console.warn('[RuterLive] Flybuss JP-oppdatering:', e.message);
-  }
-}
+// Ett register for alle synlige regioner (offentlige + REGIONS_PREVIEW): ET, rutekart og live-svar per region
+const registry = getRegistry();
 
 const app = express();
 app.disable('x-powered-by');
@@ -162,127 +105,32 @@ app.get('/sitemap.xml', (_req, res) => {
   );
 });
 
-// Statiske rutekart slått sammen; bygges på nytt bare når en av kildecachene er byttet ut.
-const mergeStaticShapes = memoEntry((base, rail, flybuss) => mergeShapes(mergeShapes(base, rail), flybuss));
-function getAllShapes() {
-  return mergeStaticShapes(getCachedShapes(), railShapesCache, flybussShapesCache);
-}
-
 // Store rutekart-svar: forhåndskomprimert med ETag, bygget ved første forespørsel etter kildebytte.
-const routeShapesEntry = memoEntry((all) => makeJsonEntry(all));
 const railShapesEntry = memoEntry((rail) => makeJsonEntry(rail));
 const staticNetworkEntry = memoEntry((rail, flybuss) => makeJsonEntry([...rail, ...flybuss]));
 
 // Tom jernbane ved kald start skal ikke caches en time i nettleseren
 const staticCacheControl = (hasRail) => (hasRail ? 'public, max-age=3600' : 'public, max-age=30');
 
-// Cached rutekart – klart med en gang brukeren laster siden (inkl. jernbane og flybuss fra egen preload)
-app.get('/api/route-shapes', (req, res) => {
-  sendJson(req, res, routeShapesEntry(getAllShapes()), { cacheControl: 'public, max-age=30' });
-});
-
 // Kun jernbaneruter – for å sikre at strekninger alltid lastes
 app.get('/api/rail-shapes', (req, res) => {
-  sendJson(req, res, railShapesEntry(railShapesCache), {
-    cacheControl: staticCacheControl(railShapesCache.length > 0),
+  const rail = getRailShapes();
+  sendJson(req, res, railShapesEntry(rail), {
+    cacheControl: staticCacheControl(rail.length > 0),
   });
 });
 
 // Flybuss + jernbane – alltid tilgjengelig, lastes ved oppstart
 app.get('/api/static-network-shapes', (req, res) => {
-  sendJson(req, res, staticNetworkEntry(railShapesCache, flybussShapesCache), {
-    cacheControl: staticCacheControl(railShapesCache.length > 0),
+  const rail = getRailShapes();
+  sendJson(req, res, staticNetworkEntry(rail, getStaticFlybussShapes()), {
+    cacheControl: staticCacheControl(rail.length > 0),
   });
 });
 
-// Forhåndskomprimerte live-svar. Nøkkel er identiteten til kildecachene (kjøretøy, ET-resultat,
-// rutekart); samme kilder (også et konstant tomt ET-resultat ved feil) gir samme ferdige entry.
-const NO_SHAPES = Object.freeze([]);
-let lastShapesEntry = null;
-// Faktisk trasé fra JP for linjene som alltid vises + flybuss (erstatter rette ET-streker)
-const lineGeometry = createLineGeometryService({ timeoutMs: 15000 });
-// Togrutene i hele landet (JP); erstatter Oslo-utsnittene og de eldre togkartene for linjene de dekker
-const railNetwork = createRailNetworkService();
-// Sortert, så samme sett gir samme ETag
-const liveShapes = memoEntry((all, etShapes, geometry, railNet) =>
-  sortShapes(applyLineGeometry(applyLineGeometry(mergeShapes(all, etShapes), geometry), railNet)));
-const liveShapesEntry = memoEntry((shapes) => {
-  // samme innhold → samme entry; byttes sjelden, så sterkere komprimering i bakgrunnen
-  lastShapesEntry = makeJsonEntry(shapes, lastShapesEntry, { brUpgrade: 10 });
-  return lastShapesEntry;
-});
-// ET-rutekart byttes høyst hver 30. min, ellers ny shapesVersion (og ~450 kB per klient) hvert 90. s
-const ET_SHAPES_MIN_INTERVAL_MS = 30 * 60 * 1000;
-const etShapesSnapshot = createThrottledSnapshot(ET_SHAPES_MIN_INTERVAL_MS);
-const shapesVersionOf = (entry) => entry.etag.slice(1, 13);
-// Hentes av alle klienter hvert 30. s: høyere komprimering lønner seg (~10 ms per bygging)
-// GPS-kjøretøy uten fra/til får dem fra rutekartene her, så nettleseren slipper egne JP-søk
-const liveVehiclesEntry = memoEntry((vehiclesData, etResult, shapes, shapesEntry) => makeJsonEntry(
-  buildVehiclesPayload(withRouteInfo(mergeVehicles(vehiclesData, etResult), shapes), {
-    shapesVersion: shapesVersionOf(shapesEntry),
-  }),
-  null,
-  { gzipLevel: 9, brQuality: 9, brUpgrade: 10 }
-));
-// Gamle klienter: hele formatet med path i ms. Bygges bare når noen ber om det.
-const legacyInitialEntry = memoEntry((vehiclesData, etResult, all) => makeJsonEntry({
-  vehicles: withoutDelay(mergeVehicles(vehiclesData, etResult)),
-  routeShapes: mergeShapes(all, etResult?.shapes ?? NO_SHAPES),
-}));
-
-async function getLiveSources() {
-  const [osloData, etResult] = await Promise.all([getCachedVehicles(), getEtVehiclesAndShapes()]);
-  // Tog i hele landet: GPS uten bbox + ET (BNR) for tog uten GPS. Samme objekt når kildene er uendret.
-  const vehiclesData = await withNationalRail(osloData);
-  return { vehiclesData, etResult };
-}
-
-async function getLiveEntries() {
-  const { vehiclesData, etResult } = await getLiveSources();
-  const shapes = liveShapes(getAllShapes(), etShapesSnapshot(etResult?.shapes ?? NO_SHAPES), lineGeometry.getShapes(), railNetwork.getShapes());
-  const shapesEntry = liveShapesEntry(shapes);
-  const vehiclesEntry = liveVehiclesEntry(vehiclesData, etResult, shapes, shapesEntry);
-  return { vehiclesEntry, shapesEntry, shapesVersion: shapesVersionOf(shapesEntry) };
-}
-
-// Bare kjøretøy – klienten poller denne hvert 30. s. Rutekart hentes separat og bare ved ny versjon.
-// Format: { t0, shapesVersion, vehicles } der ET-path har tider i sekunder relativt til t0.
-app.get('/api/vehicles-live', async (req, res) => {
-  try {
-    const { vehiclesEntry: e } = await getLiveEntries();
-    await awaitUpgrade(e);
-    // s-maxage: Cloudflare holder svaret i 10 s, så Render svarer omtrent én gang per 10 s per Cloudflare-sted
-    sendJson(req, res, e, { cacheControl: 'public, max-age=15, s-maxage=10' });
-  } catch (err) {
-    res.set('Cache-Control', 'no-store');
-    res.status(503).json({ vehicles: [], shapesVersion: null });
-  }
-});
-
-// Alle rutekart. Versjonert via ?v=, så nettleseren kan cache dem lenge.
-app.get('/api/route-shapes-all', async (req, res) => {
-  try {
-    const { shapesEntry: e, shapesVersion: ver } = await getLiveEntries();
-    await awaitUpgrade(e);
-    const cacheControl = req.query.v && req.query.v === ver
-      ? 'public, max-age=86400, immutable'
-      : 'public, max-age=30';
-    sendJson(req, res, e, { cacheControl });
-  } catch (err) {
-    res.set('Cache-Control', 'no-store');
-    res.status(503).json([]);
-  }
-});
-
-// Alt på en gang – beholdt uendret i format for gamle klienter (bufret JS i nettleseren).
-app.get('/api/initial-data', async (req, res) => {
-  try {
-    const { vehiclesData, etResult } = await getLiveSources();
-    sendJson(req, res, legacyInitialEntry(vehiclesData, etResult, getAllShapes()), { cacheControl: 'public, max-age=15' });
-  } catch (err) {
-    res.status(503).json({ vehicles: [], routeShapes: [] });
-  }
-});
+// Live-svar per region (?region=, standard Oslo): /api/route-shapes, /api/vehicles-live,
+// /api/route-shapes-all og /api/initial-data. Egne memo-entries per region gir egen ETag og shapesVersion.
+registerLiveRoutes(app, { registry });
 
 // Linjeside med stoppliste (Entur JP) og antall kjøretøy akkurat nå
 app.get('/linje/:slug', async (req, res) => {
@@ -376,12 +224,15 @@ app.get('/api/vehicles-cached', async (_req, res) => {
 
 // Hel rute for valgt buss/båt/flybuss fra Entur JP (ET har ofte bare deler av turen).
 // Delt cache for alle brukere: 24 t per linje, feil 10 min.
-const vehicleRoutes = createVehicleRouteService({ fetchFn: enturFetch });
+// Én tjeneste per region: uten ref foretrekkes regionens operatør (Oslo: RUT), og cachen deles ikke.
+const vehicleRoutes = new Map(registry.regions.map((r) => [r.id, createVehicleRouteService({ fetchFn: enturFetch, region: r })]));
 app.get('/api/vehicle-route', apiRateLimit, async (req, res) => {
+  const s = regionServicesFor(registry, req, res);
+  if (!s) return;
   const parsed = parseVehicleRouteParams(req.query);
   if (!parsed.ok) return res.status(400).json({ error: parsed.error });
   try {
-    const entry = await vehicleRoutes.getRouteEntry(parsed.params);
+    const entry = await vehicleRoutes.get(s.region.id).getRouteEntry(parsed.params);
     if (!entry) {
       res.set('Cache-Control', 'public, max-age=300');
       return res.status(404).json({ error: 'fant ingen rute' });
@@ -426,7 +277,7 @@ app.get('/api/journey-vehicle', apiRateLimit, async (req, res) => {
     const [oslo, rail, etJourneys] = await Promise.all([
       getCachedVehicles().catch(() => null),
       getCachedRailVehicles().catch(() => null),
-      getEtJourneys().catch(() => []),
+      registry.get('oslo').etCache.getJourneys().catch(() => []),
     ]);
     const vehicleId = findJourneyVehicle(sj, { gps: [oslo?.data?.vehicles, rail?.data?.vehicles], etJourneys });
     res.set('Cache-Control', 'public, max-age=15');
@@ -478,13 +329,23 @@ app.get('/api/stops-in-bbox', apiRateLimit, async (req, res) => {
 
 // Søk etter holdeplasser etter navn: ett treff per stoppested med kommune, linjer og quays.
 // Gruppering og linjer fra JP, kommune fra geocoderen; begge cachet per ID i 24 t (stopPlaces).
+// Bare holdeplassene innenfor regionens stopsBounds, så et søk i Oslo ikke gir treff i Bergen.
+function* stopsInBounds(stops, b) {
+  if (!stops) return;
+  for (const e of stops) {
+    const v = e[1];
+    if (v.lat >= b.minLat && v.lat <= b.maxLat && v.lon >= b.minLon && v.lon <= b.maxLon) yield e;
+  }
+}
 app.get('/api/stops-search', apiRateLimit, async (req, res) => {
+  const s = regionServicesFor(registry, req, res);
+  if (!s) return;
   try {
     await ensureGtfsStopsLoaded();
     const q = (req.query.q || '').toString().trim().slice(0, 60);
     const lat = parseFloat(req.query.lat);
     const lng = parseFloat(req.query.lng);
-    const places = await stopPlaces.search(getGtfsStopsMap(), q, { lat, lng });
+    const places = await stopPlaces.search(stopsInBounds(getGtfsStopsMap(), s.region.stopsBounds), q, { lat, lng });
     res.set('Cache-Control', 'public, max-age=300');
     res.json(places);
   } catch (err) {
@@ -519,25 +380,27 @@ app.get('*', (req, res) => {
 
 const LINE_GEOMETRY_DELAY_MS = 45000;
 const LINE_GEOMETRY_RETRY_MS = 11 * 60 * 1000; // etter negativ cache (10 min)
-let lineGeometryRetries = 0;
-function refreshLineGeometry(isRetry = false) {
-  if (!isRetry) lineGeometryRetries = 0;
-  lineGeometry.refresh(isRetry ? {} : { maxAgeMs: 23 * 60 * 60 * 1000 })
+const lineGeometryRetries = new Map();
+function refreshLineGeometry(regionId, isRetry = false) {
+  if (!isRetry) lineGeometryRetries.set(regionId, 0);
+  registry.get(regionId).lineGeometry.refresh(isRetry ? {} : { maxAgeMs: 23 * 60 * 60 * 1000 })
     .then(({ failed }) => {
-      if (failed > 0 && lineGeometryRetries < 3) {
-        lineGeometryRetries++;
-        setTimeout(() => refreshLineGeometry(true), LINE_GEOMETRY_RETRY_MS);
+      const n = lineGeometryRetries.get(regionId) ?? 0;
+      if (failed > 0 && n < 3) {
+        lineGeometryRetries.set(regionId, n + 1);
+        setTimeout(() => refreshLineGeometry(regionId, true), LINE_GEOMETRY_RETRY_MS);
       }
     })
-    .catch((e) => console.warn('[RuterLive] Linjetrasé:', e.message));
+    .catch((e) => console.warn(`[RuterLive] Linjetrasé ${regionId}:`, e.message));
 }
+const refreshAllLineGeometry = () => registry.regions.forEach((r) => refreshLineGeometry(r.id));
 
 const RAIL_NETWORK_DELAY_MS = 25000;
 const RAIL_NETWORK_RETRY_MS = 11 * 60 * 1000;
 let railNetworkRetries = 0;
 function refreshRailNetwork(isRetry = false) {
   if (!isRetry) railNetworkRetries = 0;
-  railNetwork.refresh()
+  registry.railNetwork.refresh()
     .then(({ failed }) => {
       if (failed > 0 && railNetworkRetries < 3) {
         railNetworkRetries++;
@@ -562,11 +425,8 @@ async function startup() {
     getCachedVehicles().catch((e) => console.warn('[RuterLive] Vehicles cache prewarm:', e.message));
     // Tog i hele landet (GPS + BNR-ET); etter GTFS-start, så quay-oppslag i JP bare gjelder utenfor Oslo
     setTimeout(() => prewarmNationalRail().catch(() => {}), 20000);
-    startEtCachePoll();
-    refreshRouteShapes()
-      .then((shapes) => console.log(`[RuterLive] Rutekart cache: ${shapes?.length ?? 0} linjer (inkl. jernbane, flybuss)`))
-      .catch((e) => console.warn('[RuterLive] Rutekart preload:', e.message));
-    setInterval(refreshRouteShapes, 60 * 60 * 1000);
+    // ET (én henting nå, deretter bare i aktive regioner), rutekart hver time, avlasting etter 60 min
+    registry.start();
     setInterval(loadRailShapes, 7 * 24 * 60 * 60 * 1000); // Ukentlig (30d overstiger Node sin 32-bit timeout)
 
     // Flybussruter fra Entur JP – ukentlig automatisk oppdatering
@@ -574,8 +434,8 @@ async function startup() {
     setTimeout(refreshFlybussFromJp, 15000); // Etter oppstart
     setInterval(refreshFlybussFromJp, FLYBUSS_REFRESH_MS);
     // Linjetrasé etter GTFS-lastingen (minnetopp), deretter hvert døgn; nytt forsøk ved feil
-    setTimeout(() => refreshLineGeometry(), LINE_GEOMETRY_DELAY_MS);
-    setInterval(() => refreshLineGeometry(), 24 * 60 * 60 * 1000);
+    setTimeout(refreshAllLineGeometry, LINE_GEOMETRY_DELAY_MS);
+    setInterval(refreshAllLineGeometry, 24 * 60 * 60 * 1000);
     // Togruter i hele landet: før linjetraseen (lette JP-kall, ett om gangen), deretter hvert døgn
     setTimeout(() => refreshRailNetwork(), RAIL_NETWORK_DELAY_MS);
     setInterval(() => refreshRailNetwork(), 24 * 60 * 60 * 1000);

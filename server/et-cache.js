@@ -8,7 +8,6 @@
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { createEtStreamParser } from './et-parse.js';
 import { CLIENT_NAME } from './entur-client.js';
-import { getRegion } from '../shared/regions.js';
 
 const REFRESH_MS = 90000; // 90 sek – færre kall mot Entur
 const BACKOFF_AFTER_429_MS = 300000; // 5 min venting ved 429
@@ -158,16 +157,3 @@ export function createEtCache({
     },
   };
 }
-
-// Oslo-instans (alltid aktiv) til alle brukere er flyttet til regionkjøretiden
-const oslo = createEtCache({
-  datasetId: getRegion('oslo').etDatasets[0],
-  isActive: () => true,
-  runExclusive: (fn) => fn(),
-  waitForFirst: true,
-});
-
-export const getEtAge = () => oslo.getAge();
-export const getEtVersion = () => oslo.getVersion();
-export const getEtJourneys = () => oslo.getJourneys();
-export const startEtCachePoll = () => oslo.start();

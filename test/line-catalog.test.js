@@ -159,7 +159,7 @@ test('toglinjer utenfor Oslo: slug, region, myndighet og kartutsnitt', () => {
 
 // --- Bergen: generert katalog ---
 
-import { buildRegionLines, renderCatalogModule } from '../scripts/build-line-catalog.mjs';
+import { buildRegionLines, renderCatalogModule, uniqueSlug } from '../scripts/build-line-catalog.mjs';
 import { linesForRegion } from '../server/region-services.js';
 import { getRegion } from '../shared/regions.js';
 import { getLineText } from '../server/line-catalog.js';
@@ -239,4 +239,18 @@ test('linesForRegion: Bergen gir bare linjer med geometry (tram og flybuss)', ()
   assert.ok(lines.some((l) => l.mode === 'tram'));
   assert.ok(lines.every((l) => l.mode === 'tram' || l.mode === 'flybuss'));
   assert.ok(linesForRegion(getRegion('oslo')).length > 40);
+});
+
+test('uniqueSlug: duplikater får operatør/bokstav, aldri et siffersuffiks som ligner en annen linje', () => {
+  const taken = new Set(['buss-5', 'buss-2']);
+  assert.equal(uniqueSlug('buss-5', taken, 'SKY'), 'buss-5-sky');
+  taken.add('buss-5-sky');
+  assert.equal(uniqueSlug('buss-5', taken, 'SKY'), 'buss-5-sky-b');
+  const { lines } = buildRegionLines('bergen', [
+    jp('SKY:Line:2', '2', 'a', 'bus'),
+    jp('SKY:Line:5', '5', 'b', 'bus'),
+    jp('SKY:Line:5x', '5', 'c', 'bus'),
+    jp('SKY:Line:5y', '5', 'd', 'bus'),
+  ]);
+  assert.deepEqual(lines.map((l) => l.slug).sort(), ['buss-2', 'buss-5', 'buss-5-sky', 'buss-5-sky-b']);
 });

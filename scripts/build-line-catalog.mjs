@@ -32,6 +32,21 @@ const MODE_SORT = [...MODE_ORDER, 'water'];
 const isOnDemand = (l) => /^skyss bestilling/i.test(String(l.name ?? '')) || /^skyss bestilling$/i.test(String(l.publicCode ?? '').trim());
 
 /**
+ * Slug som ikke finnes i `taken`. Ved kollisjon beholdes basen urørt og operatøren legges til
+ * (buss-5-sky), så et siffersuffiks aldri kan se ut som en annen linje (buss-5 -> buss-2). Er den også
+ * tatt, legges bokstavene b, c, ... til (buss-5-sky-b).
+ */
+export function uniqueSlug(base, taken, authority = '') {
+  if (!taken.has(base)) return base;
+  const withAuth = authority ? `${base}-${String(authority).toLowerCase()}` : `${base}-x`;
+  if (!taken.has(withAuth)) return withAuth;
+  for (let i = 0; ; i++) {
+    const cand = `${withAuth}-${String.fromCharCode(98 + (i % 25))}${i >= 25 ? i : ''}`;
+    if (!taken.has(cand)) return cand;
+  }
+}
+
+/**
  * @param {string} regionId
  * @param {{ id: string, publicCode: string|null, name: string, transportMode: string }[]} jpLines
  * @returns {{ lines: object[], mismatches: { id: string, publicCode: string }[] }}
@@ -48,8 +63,7 @@ export function buildRegionLines(regionId, jpLines) {
     const mode = isFly ? cfg.extra.mode : jl.transportMode;
     if (!SLUG_PREFIX[mode]) continue;
     const authority = String(jl.id).split(':')[0];
-    let slug = `${cfg.slugPrefix?.[mode] ?? SLUG_PREFIX[mode]}-${code.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-    for (let n = 2; slugs.has(slug); n++) slug = `${slug.replace(/-\d+$/, '')}-${n}`;
+    const slug = uniqueSlug(`${cfg.slugPrefix?.[mode] ?? SLUG_PREFIX[mode]}-${code.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, slugs, authority);
     slugs.add(slug);
     const prefix = cfg.titlePrefix?.[mode] ?? TITLE_PREFIX[mode];
     const line = { slug, code, mode, authority, title: `${prefix} ${code}` };

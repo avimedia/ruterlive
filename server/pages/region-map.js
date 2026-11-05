@@ -14,16 +14,35 @@ export function regionMapMeta(region) {
   };
 }
 
-/** Bytter ut Oslo-teksten i index.html med regionens. Rører ikke resten av siden. */
+const warned = new Set();
+
+/**
+ * Bytter ut Oslo-teksten i index.html med regionens, og fjerner språkalternativene (hreflang) som
+ * peker til Oslo-sidene. Rører ikke resten av siden. Advarer én gang per region hvis et mønster ikke traff.
+ */
 export function regionMapHtml(html, region) {
   const { title, description, url } = regionMapMeta(region);
-  return html
-    .replace(/<title>[^<]*<\/title>/, () => `<title>${esc(title)}</title>`)
-    .replace(/(<meta name="description" content=")[^"]*(")/, (_m, a, b) => `${a}${esc(description)}${b}`)
-    .replace(/(<meta property="og:title" content=")[^"]*(")/, (_m, a, b) => `${a}${esc(title)}${b}`)
-    .replace(/(<meta property="og:description" content=")[^"]*(")/, (_m, a, b) => `${a}${esc(description)}${b}`)
-    .replace(/(<meta name="twitter:title" content=")[^"]*(")/, (_m, a, b) => `${a}${esc(title)}${b}`)
-    .replace(/(<meta name="twitter:description" content=")[^"]*(")/, (_m, a, b) => `${a}${esc(description)}${b}`)
-    .replace(/(<link rel="canonical" href=")[^"]*(")/, (_m, a, b) => `${a}${url}${b}`)
-    .replace(/(<meta property="og:url" content=")[^"]*(")/, (_m, a, b) => `${a}${url}${b}`);
+  let missed = 0;
+  const sub = (re, fn) => {
+    html = html.replace(re, (...m) => { missed--; return fn(...m); });
+  };
+  const attr = (name, value) => sub(new RegExp(`(<meta ${name} content=")[^"]*(")`), (_m, a, b) => `${a}${value}${b}`);
+  const total = 9;
+  missed = total;
+  sub(/<title>[^<]*<\/title>/, () => `<title>${esc(title)}</title>`);
+  attr('name="description"', esc(description));
+  attr('property="og:title"', esc(title));
+  attr('property="og:description"', esc(description));
+  attr('name="twitter:title"', esc(title));
+  attr('name="twitter:description"', esc(description));
+  sub(/(<link rel="canonical" href=")[^"]*(")/, (_m, a, b) => `${a}${url}${b}`);
+  attr('property="og:url"', url);
+  // Ingen språkversjoner av regionkartet: alternates til / og /en ville stride mot canonical
+  sub(/[ \t]*<link rel="alternate" hreflang="[^"]*" href="[^"]*">\n?/, () => '');
+  html = html.replace(/[ \t]*<link rel="alternate" hreflang="[^"]*" href="[^"]*">\n?/g, '');
+  if (missed > 0 && !warned.has(region.id)) {
+    warned.add(region.id);
+    console.warn(`[RuterLive] Kartsiden for ${region.id}: ${missed} av ${total} tekstbytter traff ikke i index.html`);
+  }
+  return html;
 }

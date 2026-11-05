@@ -2,7 +2,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { REGIONS, visibleRegions } from '../shared/regions.js';
@@ -201,7 +201,7 @@ test('getLineStops for Bergen: ref brukes direkte, SKY-linjer slås opp via auth
   const fetchFn = async (_url, opts) => {
     const q = JSON.parse(opts.body).query;
     queries.push(q);
-    if (q.includes('authorities')) return { ok: true, json: async () => ({ data: { lines: [{ id: 'SKY:Line:1', publicCode: '1' }] } }) };
+    if (q.includes('authorities')) return { ok: true, json: async () => ({ data: { lines: [{ id: 'SKY:Line:1', publicCode: '1' }, { id: 'SKY:Line:bestilling', publicCode: '3', transportMode: 'bus' }, { id: 'SKY:Line:tram3', publicCode: '3', transportMode: 'tram' }] } }) };
     return { ok: true, json: async () => ({ data: { line: { name: 'Bybanen', journeyPatterns: [{ quays: [{ name: 'Byparken' }, { name: 'M' }, { name: 'Lagunen' }], serviceJourneys: [{ id: 'a', transportMode: 'tram' }] }] } } }) };
   };
   const b1 = await getLineStops(getLineBySlug('bybanen-1', 'bergen'), fetchFn);
@@ -224,4 +224,50 @@ test('countVehiclesForLine: Bergen-linje teller bare egen operatør og modus', (
   assert.equal(countVehiclesForLine([v('SKY:Line:3', 'bus'), v('RUT:Line:3', 'bus'), v('SKY:Line:3', 'tram')], line), 1);
   const boat = REGION_LINES.bergen.find((l) => l.mode === 'water');
   assert.equal(countVehiclesForLine([{ mode: 'water', line: { publicCode: boat.code, lineRef: `${boat.authority}:Line:x` } }], boat), 1);
+});
+
+test('regionkart: ingen hreflang, canonical /bergen', () => {
+  const html = regionMapHtml(readFileSync(indexPath, 'utf8'), bergen);
+  assert.doesNotMatch(html, /hreflang/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/livetrafikk\.no\/bergen">/);
+});
+
+test('regionMapHtml mot bygd dist/index.html: alle bytter treffer (hoppes over uten dist)', { skip: !existsSync(new URL('../dist/index.html', import.meta.url)) }, (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
+  const html = regionMapHtml(readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8'), { ...bergen, id: 'dist-test' });
+  assert.equal(warn.mock.calls.length, 0);
+  assert.doesNotMatch(html, /hreflang|i Oslo i sanntid/);
+});
+
+test('regionMapHtml advarer når et mønster ikke treffer', (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
+  regionMapHtml('<html></html>', { ...bergen, id: 'warn-test' });
+  regionMapHtml('<html></html>', { ...bergen, id: 'warn-test' });
+  assert.equal(warn.mock.calls.length, 1);
+  assert.match(warn.mock.calls[0].arguments[0], /traff ikke/);
+});
+
+// ID-cachen for Bergen er delt med testen over, som leverer de to linjene med kode 3
+test('getLineStops: to JP-linjer med samme kode, modus avgjør', async () => {
+  const queries = [];
+  const fetchFn = async (_u, opts) => {
+    const q = JSON.parse(opts.body).query;
+    queries.push(q);
+    if (q.includes('authorities')) return { ok: true, json: async () => ({ data: { lines: [
+      { id: 'SKY:Line:bestilling', publicCode: '3', transportMode: 'bus' },
+      { id: 'SKY:Line:tram3', publicCode: '3', transportMode: 'tram' },
+    ] } }) };
+    return { ok: true, json: async () => ({ data: { line: { name: 'x', journeyPatterns: [{ quays: [{ name: 'A' }, { name: 'B' }, { name: 'C' }], serviceJourneys: [] }] } } }) };
+  };
+  const line = { slug: 'dup-test-tram', code: '3', authority: 'SKY', mode: 'tram', title: 'x', regionId: 'bergen' };
+  await getLineStops(line, fetchFn);
+  assert.ok(queries.at(-1).includes('SKY:Line:tram3'));
+  await getLineStops({ ...line, slug: 'dup-test-bus', mode: 'bus' }, fetchFn);
+  assert.ok(queries.at(-1).includes('SKY:Line:bestilling'));
+});
+
+test('tom kjøretøyliste i ikke-Oslo-region: ingen telling og kort cache', async () => {
+  const r = await fetch(`${base}/bergen/linje/bybanen-1`);
+  assert.equal(r.headers.get('cache-control'), 'no-store');
+  assert.doesNotMatch(await r.text(), /Ute akkurat nå/);
 });

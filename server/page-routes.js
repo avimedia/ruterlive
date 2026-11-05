@@ -74,8 +74,10 @@ export function registerPageRoutes(app, {
           ]),
           getLineText(line.slug, region.id),
         ]);
-        res.set('Cache-Control', stops && vehicles ? 'public, max-age=300' : 'no-store');
-        res.type('html').send(renderLinePage(line, stops, vehicles ? countVehiclesForLine(vehicles, line) : null, text));
+        // Ikke-Oslo-regioner kan være hvilende/avlastet uten ET-turer: tom liste regnes som «ikke lastet ennå»
+        const loaded = vehicles && (region.alwaysActive || vehicles.length > 0);
+        res.set('Cache-Control', stops && loaded ? 'public, max-age=300' : 'no-store');
+        res.type('html').send(renderLinePage(line, stops, loaded ? countVehiclesForLine(vehicles, line) : null, text));
       } catch (err) {
         unavailable(res, 'Linjeside', err);
       }

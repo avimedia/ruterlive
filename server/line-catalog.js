@@ -236,12 +236,14 @@ async function fetchLineIds(regionId, fetchFn, timeoutMs) {
   // alle linjer for regionens operatører (bare id og kode).
   const query = regionId === 'oslo'
     ? `{ lines(publicCodes: ${JSON.stringify([...new Set(LINES.map((l) => l.code))])}) { id publicCode } }`
-    : `{ lines(authorities: ${JSON.stringify(getRegion(regionId).authorities.map((a) => `${a}:Authority:${a}`))}) { id publicCode } }`;
+    : `{ lines(authorities: ${JSON.stringify(getRegion(regionId).authorities.map((a) => `${a}:Authority:${a}`))}) { id publicCode transportMode } }`;
   const data = await jpQuery(query, fetchFn, timeoutMs);
-  const ids = new Map();
+  const ids = new Map(); // "AUTH:KODE" -> id; "AUTH:KODE|modus" -> id (for linjer som deler kode)
   for (const l of data?.lines ?? []) {
     const authority = String(l.id).split(':')[0];
-    ids.set(`${authority}:${String(l.publicCode).toUpperCase()}`, l.id);
+    const key = `${authority}:${String(l.publicCode).toUpperCase()}`;
+    if (l.transportMode) ids.set(`${key}|${String(l.transportMode).toLowerCase()}`, ids.get(`${key}|${String(l.transportMode).toLowerCase()}`) ?? l.id);
+    if (!ids.has(key)) ids.set(key, l.id); // første treff
   }
   idCaches.set(regionId, { at: Date.now(), ids });
   return ids;
@@ -266,10 +268,18 @@ export async function getLineStops(line, fetchFn = fetch, timeoutMs = TIMEOUT_MS
   return promise;
 }
 
+/** Foretrekker JP-linja med samme transportmodus som katalogen (flybuss og buss er begge «bus»/«coach»), ellers første treff. */
+function lookupLineId(ids, line) {
+  const key = `${line.authority}:${line.code.toUpperCase()}`;
+  const modes = { flybuss: ['bus', 'coach'], flytog: ['rail'], water: ['water'] }[line.mode] ?? [line.mode];
+  for (const m of modes) if (ids.has(`${key}|${m}`)) return ids.get(`${key}|${m}`);
+  return ids.get(key);
+}
+
 async function fetchLineStops(line, regionId, fetchFn, timeoutMs) {
   try {
     // JP-linje-id: `ref` når katalogen har den (f.eks. Flybussen), ellers oppslag på operatør + kode
-    const jpId = line.ref ?? (await getLineIds(regionId, fetchFn, timeoutMs)).get(`${line.authority}:${line.code.toUpperCase()}`);
+    const jpId = line.ref ?? lookupLineId(await getLineIds(regionId, fetchFn, timeoutMs), line);
     if (!jpId) return null;
     const data = await jpQuery(
       `{ line(id: ${JSON.stringify(jpId)}) { name journeyPatterns { quays { name } serviceJourneys { id transportMode } } } }`,

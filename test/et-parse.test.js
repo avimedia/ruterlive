@@ -198,29 +198,31 @@ function etXml(journeys) {
   return `<Siri><ServiceDelivery><EstimatedTimetableDelivery><EstimatedJourneyVersionFrame>${body}</EstimatedJourneyVersionFrame></EstimatedTimetableDelivery></ServiceDelivery></Siri>`;
 }
 
-test('relevantWithinMs: samme kjøretøy som uten filter; senere turer for samme VehicleRef og sluttede turer droppes', async () => {
-  const { selectJourneysForVehicles } = await import('../shared/et-journeys.js');
+test('relevantWithinMs: samme kjøretøy som uten filter; fjerne ventende og sluttede turer droppes', async () => {
+  const { selectJourneysForVehicles, WAITING_WINDOW_MS } = await import('../shared/et-journeys.js');
   const now = Date.parse('2026-11-05T12:00:00Z');
   const min = 60_000;
   const xml = etXml([
     { id: 'underveis', ref: 'BUSS-A', rec: [now - 5 * min], est: [now + 5 * min] },
-    { id: 'a-neste', ref: 'BUSS-A', est: [now + 30 * min, now + 50 * min] }, // innen vinduet: beholdes
-    { id: 'a-i-kveld', ref: 'BUSS-A', est: [now + 6 * 60 * min] }, // senere tur for kjøretøy i gang: droppes
-    { id: 'venter-3-t', ref: 'BUSS-B', est: [now + 3 * 60 * min, now + 200 * min] }, // vises på første stopp
-    { id: 'venter-5-t', ref: 'BUSS-B', est: [now + 5 * 60 * min] }, // senere enn den over: droppes
-    { id: 'uten-ref-i-morgen', est: [now + 24 * 60 * min] }, // eget kjøretøy: beholdes
+    { id: 'a-neste', ref: 'BUSS-A', est: [now + 12 * min, now + 30 * min] }, // innen vindu + margin
+    { id: 'a-i-kveld', ref: 'BUSS-A', est: [now + 6 * 60 * min] },
+    { id: 'venter-8-min', ref: 'BUSS-B', est: [now + 8 * min, now + 20 * min] }, // vises på første stopp
+    { id: 'venter-3-t', ref: 'BUSS-C', est: [now + 3 * 60 * min] }, // vises ikke
+    { id: 'uten-ref-i-morgen', est: [now + 24 * 60 * min] }, // vises ikke
     { id: 'sluttet-1-min', rec: [now - 20 * min, now - 1 * min] },
     { id: 'sluttet-5-min', rec: [now - 30 * min, now - 5 * min] }, // vises aldri: droppes
-    { id: 'forsinket-forbi', ref: 'BUSS-C', est: [now - 20 * min, now - 5 * min] }, // vises (ikke registrert)
+    { id: 'forsinket-forbi', ref: 'BUSS-D', est: [now - 20 * min, now - 5 * min] }, // vises (ikke registrert)
   ]);
   const parse = (o) => { const p = createEtStreamParser({ ...o, now: () => now }); p.push(xml); return p; };
-  const p = parse({ relevantWithinMs: 60 * min });
+  const p = parse({ relevantWithinMs: WAITING_WINDOW_MS + 5 * min });
   const kept = p.end();
   assert.deepEqual(kept.map((j) => j.datedVehicleJourneyRef),
-    ['underveis', 'a-neste', 'venter-3-t', 'uten-ref-i-morgen', 'sluttet-1-min', 'forsinket-forbi']);
+    ['underveis', 'a-neste', 'venter-8-min', 'sluttet-1-min', 'forsinket-forbi']);
   assert.equal(p.seen, 9, 'seen teller alle turer i XML-en');
   const all = parse({}).end();
   assert.equal(all.length, 9, 'uten relevantWithinMs: ingen filtrering');
   const ids = (js, at) => selectJourneysForVehicles(js, at).map((j) => j.datedVehicleJourneyRef).sort();
-  for (const at of [now, now + 90_000, now + 40 * min]) assert.deepEqual(ids(kept, at), ids(all, at));
+  // Samme kjøretøy så lenge cachen er yngre enn marginen (5 min)
+  for (const at of [now, now + 90_000, now + 5 * min]) assert.deepEqual(ids(kept, at), ids(all, at), `+${(at - now) / 1000} s`);
+  assert.deepEqual(ids(kept, now), ['forsinket-forbi', 'underveis', 'venter-8-min']);
 });

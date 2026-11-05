@@ -189,45 +189,27 @@ export function createEtStreamParser(opts = {}) {
 const DEFAULT_ENDED_GRACE_MS = 2 * 60 * 1000;
 
 /**
- * Hvilke turer som lagres, slik at et-vehicles-service viser nøyaktig de samme kjøretøyene som med alle
- * turer. selectJourneysForVehicles har ingen øvre tidsgrense: et kjøretøy uten tur i gang vises på første
- * stopp for sin tidligste fremtidige tur, uansett hvor langt frem den er (turer uten VehicleRef er hver sitt
- * kjøretøy). Derfor beholdes:
- * - alle turer med gjenstående kall som er i gang eller starter innen relevantWithinMs (dekker alt som kan
- *   bli «i gang» før neste ET-henting, og gir rutekart og avgangsoppslag for den nærmeste tiden),
- * - for hvert kjøretøy uten slik tur: den tidligste turen lenger frem (samme valg som firstDeparture),
+ * Hvilke turer som lagres (opts.relevantWithinMs satt). selectJourneysForVehicles viser turer i gang og
+ * turer som starter innen WAITING_WINDOW_MS; relevantWithinMs skal være minst det pluss cachens maksimale
+ * alder, så ingen tur som kan vises før neste henting forsvinner. Beholdes:
+ * - turer med gjenstående kall som har passerte kall eller starter innen relevantWithinMs
+ *   (også forsinkede turer med forventede kall i fortiden: de vises på siste stopp),
  * - turer uten gjenstående kall (vises aldri som kjøretøy) bare hvis de sluttet for under endedGraceMs siden.
- * Rekkefølgen fra XML-en beholdes, så likhetsvalgene i selectJourneysForVehicles blir de samme.
  */
 function createJourneyKeeper(opts) {
   const now = (opts.now ?? Date.now)();
   const aheadLimit = now + opts.relevantWithinMs;
   const endedLimit = now - (opts.endedGraceMs ?? DEFAULT_ENDED_GRACE_MS);
-  const near = []; // [seq, tur]
-  const nearIds = new Set();
-  const far = new Map(); // vehicleId → [seq, tur], tidligste første avgang
-  let seq = 0;
+  const kept = [];
   return {
     keep(j) {
-      const i = seq++;
       if (j.estimatedCalls.length === 0) {
-        if (j.recordedCalls[j.recordedCalls.length - 1].time >= endedLimit) near.push([i, j]);
-        return;
+        if (j.recordedCalls[j.recordedCalls.length - 1].time >= endedLimit) kept.push(j);
+      } else if (j.recordedCalls.length > 0 || firstDeparture(j) <= aheadLimit) {
+        kept.push(j);
       }
-      if (j.recordedCalls.length > 0 || firstDeparture(j) <= aheadLimit) {
-        near.push([i, j]);
-        nearIds.add(j.vehicleId);
-        return;
-      }
-      const cur = far.get(j.vehicleId);
-      if (!cur || firstDeparture(j) < firstDeparture(cur[1])) far.set(j.vehicleId, [i, j]);
     },
-    end() {
-      const out = near;
-      for (const [id, entry] of far) if (!nearIds.has(id)) out.push(entry);
-      out.sort((a, b) => a[0] - b[0]);
-      return out.map((e) => e[1]);
-    },
+    end: () => kept,
   };
 }
 

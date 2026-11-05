@@ -11,6 +11,7 @@
  */
 
 import { createEtStreamParser } from './et-parse.js';
+import { WAITING_WINDOW_MS } from '../shared/et-journeys.js';
 import { buildVehiclePath, positionAt } from '../shared/vehicle-path.js';
 import { CLIENT_NAME } from './entur-client.js';
 import { getGtfsQuayCache } from './gtfs-stops-loader.js';
@@ -25,7 +26,7 @@ const QUAY_TTL_MS = 24 * 60 * 60 * 1000;
 const QUAY_MISS_TTL_MS = 60 * 60 * 1000;
 const QUAY_BATCH = 25;
 /** Tog vises fra litt før avgang (står på perrongen) til ankomst. */
-const SHOW_BEFORE_DEPARTURE_MS = 10 * 60 * 1000;
+const SHOW_BEFORE_DEPARTURE_MS = WAITING_WINDOW_MS; // samme regel som ET-kjøretøy ellers
 const SHOW_AFTER_ARRIVAL_MS = 60 * 1000;
 const NO_VEHICLES = Object.freeze([]);
 /** Lange strekninger mellom stasjoner (Nordlandsbanen, Bergensbanen). */

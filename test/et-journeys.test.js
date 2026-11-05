@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { journeyVehicleId, selectJourneysForVehicles } from '../shared/et-journeys.js';
+import { journeyVehicleId, selectJourneysForVehicles, WAITING_WINDOW_MS } from '../shared/et-journeys.js';
 
 const NOW = Date.parse('2026-10-20T10:15:00+02:00');
 const t = (hhmm) => Date.parse(`2026-10-20T${hhmm}:00+02:00`);
@@ -20,8 +20,20 @@ test('samme VehicleRef: fullført + i gang + ikke startet gir bare turen i gang'
 test('samme VehicleRef: bare ikke-startede turer gir den tidligste', () => {
   const kl10 = { vehicleId: 'V2', recordedCalls: [], estimatedCalls: [ec('A', '10:00'), ec('B', '10:10')] };
   const kl1030 = { vehicleId: 'V2', recordedCalls: [], estimatedCalls: [ec('A', '10:30'), ec('B', '10:40')] };
-  const sen = Date.parse('2026-10-20T09:00:00+02:00');
-  assert.deepEqual(selectJourneysForVehicles([kl1030, kl10], sen), [kl10]);
+  const kl1029 = { vehicleId: 'V2', recordedCalls: [], estimatedCalls: [ec('A', '10:29'), ec('B', '10:40')] };
+  const kl0955 = Date.parse('2026-10-20T09:55:00+02:00');
+  assert.deepEqual(selectJourneysForVehicles([kl1030, kl10], kl0955), [kl10]);
+  const kl1025 = Date.parse('2026-10-20T10:25:00+02:00');
+  assert.deepEqual(selectJourneysForVehicles([kl1030, kl1029], kl1025), [kl1029]);
+});
+
+test('ikke startet tur vises bare når første avgang er innen WAITING_WINDOW_MS (10 min)', () => {
+  const kl10 = { vehicleId: 'V4', recordedCalls: [], estimatedCalls: [ec('A', '10:00'), ec('B', '10:10')] };
+  const at = (t) => selectJourneysForVehicles([kl10], Date.parse(`2026-10-20T${t}:00+02:00`));
+  assert.equal(WAITING_WINDOW_MS, 10 * 60 * 1000);
+  assert.deepEqual(at('09:49'), [], '11 min før avgang');
+  assert.deepEqual(at('09:50'), [kl10], '10 min før avgang');
+  assert.deepEqual(at('10:05'), [kl10], 'i gang etter avgangstid uten RecordedCall');
 });
 
 test('fullført tur alene fjernes', () => {

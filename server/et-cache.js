@@ -8,6 +8,7 @@
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { createEtStreamParser } from './et-parse.js';
 import { CLIENT_NAME } from './entur-client.js';
+import { WAITING_WINDOW_MS } from '../shared/et-journeys.js';
 
 const REFRESH_MS = 90000; // 90 sek – færre kall mot Entur
 const BACKOFF_AFTER_429_MS = 300000; // 5 min venting ved 429
@@ -17,7 +18,9 @@ const MORE_DATA_TAG = '<MoreData>true</MoreData>';
 // (undici venter ellers opptil 300 s, og den andre regionens oppdatering står i kø imens)
 const BODY_IDLE_MS = 20000;
 const DEFAULT_MAX_SIZE = 3000; // overstyres per region med etMaxSize
-const RELEVANT_WITHIN_MS = 60 * 60 * 1000; // turer som starter senere enn om en time lagres ikke
+// Turer som ikke er i gang lagres bare når de starter innen visningsvinduet (10 min) + 5 min margin for
+// cachens alder (90 s mellom hentinger, opptil 5 min pause etter 429)
+const RELEVANT_WITHIN_MS = WAITING_WINDOW_MS + 5 * 60 * 1000;
 const ENDED_GRACE_MS = 2 * 60 * 1000; // turer som sluttet for mer enn 2 min siden lagres ikke
 
 /** Leser body bit for bit; avviser og avbryter hvis det går mer enn idleMs mellom bitene. */
@@ -63,7 +66,7 @@ export function createEtCache({
   maxSize = DEFAULT_MAX_SIZE,
 }) {
   const url = `https://api.entur.io/realtime/v1/rest/et?datasetId=${datasetId}&maxSize=${maxSize}`;
-  // Bare turer i gang eller som starter innen en time lagres (posisjoner og rutekart trenger ikke flere)
+  // Bare turer i gang eller som kan vises før neste henting lagres
   const parseOpts = { relevantWithinMs: RELEVANT_WITHIN_MS, endedGraceMs: ENDED_GRACE_MS, now, ...parserOpts };
   /** Frosne turer fra siste vellykkede henting, eller null før første / etter drop(). */
   let journeys = null;

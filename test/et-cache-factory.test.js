@@ -228,6 +228,6 @@ test('like mange turer som maxSize: advarsel om avkutting (Entur sender ikke Mor
       datasetId: 'SKY', fetchFn: makeFetch(), maxSize: 17, waitForFirst: true, now: () => FIXTURE_NOW,
     }).getJourneys();
     assert.ok(warn.mock.calls.some((c) => /17 turer ≥ maxSize=17/.test(c.arguments[0])));
-    assert.ok(log.mock.calls.some((c) => /17 turer lest, 14 beholdt/.test(c.arguments[0])));
+    assert.ok(log.mock.calls.some((c) => /17 turer lest, 8 beholdt/.test(c.arguments[0])));
   } finally { warn.mock.restore(); log.mock.restore(); }
 });

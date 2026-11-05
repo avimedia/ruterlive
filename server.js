@@ -11,26 +11,25 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getCachedVehicles } from './server/vehicles-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache, getStopsInBbox, getGtfsStopsMap } from './server/gtfs-stops-loader.js';
-import { getMergedVehicles, countVehiclesForLine } from './server/live-vehicles.js';
 import { makeJsonEntry, sendJson, memoEntry } from './server/json-cache.js';
 import { getRailShapes, getStaticFlybussShapes, loadRailShapes, loadFlybussShapes, refreshFlybussFromJp, FLYBUSS_REFRESH_MS } from './server/static-shapes.js';
 import { getRegistry } from './server/region-services.js';
 import { registerLiveRoutes, regionServicesFor } from './server/live-routes.js';
-import { LINES, getLineBySlug, getLineStops, getLineText, prewarmLineStops, jpQuery } from './server/line-catalog.js';
+import { LINES, REGION_LINES, prewarmLineStops, jpQuery } from './server/line-catalog.js';
 import { createStopPlaceLookup } from './server/stop-search.js';
 import { createDepartureBoard } from './server/departure-board.js';
 import { createVehicleRouteService, parseVehicleRouteParams } from './server/vehicle-route.js';
-import { renderLinePage } from './server/pages/line-page.js';
-import { getGuideBySlug, loadGuideBody, loadAboutBody, GUIDES } from './server/guide-catalog.js';
-import { renderGuidePage } from './server/pages/guide-page.js';
+import { loadAboutBody, GUIDES } from './server/guide-catalog.js';
+import { registerPageRoutes } from './server/page-routes.js';
+import { serverVisibleRegions } from './server/region-preview.js';
 import { renderGuideIndex, renderAboutPage } from './server/pages/guide-index.js';
 import { buildSitemap, isMapPath } from './server/pages/sitemap.js';
 import { renderNotFound } from './server/pages/not-found.js';
 import { registerEnRoutes } from './server/en-routes.js';
 import { EN_PAGES } from './server/en-catalog.js';
-import { FEATURED_STOPS, findStopForPlace, getStopBySlug, getStopText } from './server/stop-catalog.js';
+import { FEATURED_STOPS, featuredStopsFor, findStopForPlace } from './server/stop-catalog.js';
 import { createStopService } from './server/stop-service.js';
-import { renderStopPage, renderStopIndex } from './server/pages/stop-page.js';
+import { renderStopIndex } from './server/pages/stop-page.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
 import { findJourneyVehicle, SERVICE_JOURNEY_RE } from './server/journey-vehicle.js';
 import { shortVehicleId } from './server/vehicle-id.js';
@@ -48,6 +47,8 @@ const PORT = process.env.PORT || 3000;
 
 // Ett register for alle synlige regioner (offentlige + REGIONS_PREVIEW): ET, rutekart og live-svar per region
 const registry = getRegistry();
+const visible = serverVisibleRegions();
+const otherRegions = visible.filter((r) => r.path);
 
 const app = express();
 app.disable('x-powered-by');
@@ -101,7 +102,13 @@ Sitemap: https://livetrafikk.no/sitemap.xml
 app.get('/sitemap.xml', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=3600');
   res.type('application/xml').send(
-    buildSitemap({ lines: LINES, guides: GUIDES, enPages: EN_PAGES, stops: FEATURED_STOPS })
+    buildSitemap({
+      lines: visible.flatMap((r) => REGION_LINES[r.id] ?? []),
+      guides: GUIDES.filter((g) => visible.some((r) => r.id === g.region)),
+      enPages: EN_PAGES,
+      stops: visible.flatMap((r) => featuredStopsFor(r.id)),
+      regions: visible,
+    })
   );
 });
 
@@ -132,68 +139,23 @@ app.get('/api/static-network-shapes', (req, res) => {
 // /api/route-shapes-all og /api/initial-data. Egne memo-entries per region gir egen ETag og shapesVersion.
 registerLiveRoutes(app, { registry });
 
-// Linjeside med stoppliste (Entur JP) og antall kjøretøy akkurat nå
-app.get('/linje/:slug', async (req, res) => {
-  const line = getLineBySlug(req.params.slug);
-  if (!line) return sendNotFound(res);
-  try {
-    const [stops, vehicles, text] = await Promise.all([
-      getLineStops(line),
-      // Kald start: ikke vent på kjøretøy (GTFS/ET) lenger enn 1,5 s; da rendres siden uten telling.
-      Promise.race([
-        getMergedVehicles().catch(() => null),
-        new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
-      ]),
-      getLineText(line.slug),
-    ]);
-    res.set('Cache-Control', stops && vehicles ? 'public, max-age=300' : 'no-store');
-    res.type('html').send(renderLinePage(line, stops, vehicles ? countVehiclesForLine(vehicles, line) : null, text));
-  } catch (err) {
-    console.warn('[RuterLive] Linjeside:', err.message);
-    res.set('Cache-Control', 'no-store');
-    res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
-  }
-});
-
-// Holdeplassider: statisk info (24 t) og avganger (60 s) fra Entur JP, delt cache for alle brukere.
+// Linje-, holdeplass- og guidesider og regionale kart (/bergen m.fl.) per synlig region
 const stopService = createStopService();
-app.get('/holdeplass/:slug', async (req, res) => {
-  const stop = getStopBySlug(req.params.slug);
-  if (!stop) return sendNotFound(res);
-  try {
-    const [info, departures, text] = await Promise.all([stopService.getInfo(stop), stopService.getDepartures(stop), getStopText(stop.slug)]);
-    res.set('Cache-Control', departures ? 'public, max-age=30' : 'no-store');
-    res.type('html').send(renderStopPage(stop, info, departures, { text }));
-  } catch (err) {
-    console.warn('[RuterLive] Holdeplasside:', err.message);
-    res.set('Cache-Control', 'no-store');
-    res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
-  }
-});
+registerPageRoutes(app, { visible, indexPath: path.join(__dirname, 'dist', 'index.html'), sendNotFound, stopService });
 
 app.get('/holdeplasser', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=3600');
-  res.type('html').send(renderStopIndex(FEATURED_STOPS));
+  res.type('html').send(renderStopIndex(FEATURED_STOPS, otherRegions.map((r) => ({ region: r, stops: featuredStopsFor(r.id) }))));
 });
 
 // Guideoversikt, guider og Om-side (statisk innhold fra content/)
 app.get('/guider', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=3600');
-  res.type('html').send(renderGuideIndex(GUIDES, LINES));
-});
-
-app.get('/guider/:slug', async (req, res) => {
-  const guide = getGuideBySlug(req.params.slug);
-  if (!guide) return sendNotFound(res);
-  try {
-    const body = await loadGuideBody(guide.slug);
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.type('html').send(renderGuidePage(guide, body));
-  } catch (err) {
-    console.warn('[RuterLive] Guide:', err.message);
-    res.set('Cache-Control', 'no-store');
-    res.status(503).type('text').send('Siden er midlertidig utilgjengelig');
-  }
+  res.type('html').send(renderGuideIndex(
+    GUIDES.filter((g) => g.region === 'oslo'),
+    LINES,
+    otherRegions.map((r) => ({ region: r, guides: GUIDES.filter((g) => g.region === r.id), lines: REGION_LINES[r.id] ?? [] }))
+  ));
 });
 
 app.get('/om', async (_req, res) => {
@@ -373,7 +335,7 @@ const DIST_DIR = path.join(__dirname, 'dist');
 app.use(precompressedStatic(DIST_DIR));
 app.use(express.static(DIST_DIR, { setHeaders: (res, file) => setStaticHeaders(res, file, DIST_DIR) }));
 app.get('*', (req, res) => {
-  if (!isMapPath(req.path)) return sendNotFound(res);
+  if (!isMapPath(req.path, visible)) return sendNotFound(res);
   res.set('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });

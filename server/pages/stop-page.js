@@ -1,7 +1,8 @@
 // Server-rendrede holdeplassider: /holdeplass/:slug og oversikten /holdeplasser.
 
-import { LINES } from '../line-catalog.js';
-import { FEATURED_STOPS, nearestStops } from '../stop-catalog.js';
+import { REGION_LINES } from '../line-catalog.js';
+import { FEATURED_STOPS, featuredStopsFor, nearestStops } from '../stop-catalog.js';
+import { findRegion, getRegion, regionPath } from '../../shared/regions.js';
 import { escapeHtml, renderPage } from './layout.js';
 
 const BASE_URL = 'https://livetrafikk.no';
@@ -47,20 +48,20 @@ function badgeMode(line) {
 }
 
 /** Linjesiden i line-catalog for en JP-linje (id «RUT:Line:5»), ellers undefined. */
-export function catalogLineFor(jpLine) {
+export function catalogLineFor(jpLine, regionId = 'oslo') {
   const authority = String(jpLine?.id ?? '').split(':')[0];
   const code = String(jpLine?.publicCode ?? '').toUpperCase();
   if (!authority || !code) return undefined;
-  return LINES.find((l) => l.authority === authority
+  return (REGION_LINES[regionId] ?? []).find((l) => l.authority === authority
     && (l.code.toUpperCase() === code || l.aliases.some((a) => a.toUpperCase() === code)));
 }
 
-function jpLineBadge(jpLine) {
+function jpLineBadge(jpLine, region = getRegion()) {
   const mode = badgeMode(jpLine);
   const code = escapeHtml(jpLine.publicCode || '?');
-  const cat = catalogLineFor(jpLine);
+  const cat = catalogLineFor(jpLine, region.id);
   return cat
-    ? `<a class="line-badge line-badge--sm" data-mode="${mode}" href="/linje/${escapeHtml(cat.slug)}" aria-label="${escapeHtml(cat.title)}">${code}</a>`
+    ? `<a class="line-badge line-badge--sm" data-mode="${mode}" href="${escapeHtml(regionPath(region, `/linje/${cat.slug}`))}" aria-label="${escapeHtml(cat.title)}">${code}</a>`
     : `<span class="line-badge line-badge--sm" data-mode="${mode}">${code}</span>`;
 }
 
@@ -106,7 +107,8 @@ export function buildIntro(stop, info, { listLines = true } = {}) {
       parts.push(`Her stopper ${text}.`);
     }
   }
-  const zone = info?.zones?.length ? `ligger i Ruters sone ${joinNb(info.zones)}` : '';
+  // Sonenavn er bare kjent for Ruter; andre regioner utelater sonen heller enn å gjette
+  const zone = info?.zones?.length && (stop.region ?? 'oslo') === 'oslo' ? `ligger i Ruters sone ${joinNb(info.zones)}` : '';
   const quays = info?.quayCount > 1 ? `har ${info.quayCount} stoppesteder (plattformer og holdeplasser)` : '';
   if (zone || quays) parts.push(`${isStation ? 'Stasjonen' : 'Holdeplassen'} ${joinNb([zone, quays].filter(Boolean))}.`);
   return parts.join(' ');
@@ -128,7 +130,7 @@ function statusBadge(dep) {
   return '<span class="dep-status dep-status--live">I rute</span>';
 }
 
-function departuresHtml(departures, nowMs) {
+function departuresHtml(departures, nowMs, region) {
   if (!departures) {
     return '<p class="note">Avganger er midlertidig utilgjengelige. Prøv igjen om litt.</p>';
   }
@@ -139,7 +141,7 @@ function departuresHtml(departures, nowMs) {
     const late = d.realtime && !d.cancelled && delayMinutes(d) !== 0;
     return `        <tr${d.cancelled ? ' class="dep-cancelled"' : ''}>
           <td class="dep-time"><time datetime="${escapeHtml(d.expected)}">${escapeHtml(formatTime(d.expected))}</time>${late ? ` <s class="dep-aimed">${escapeHtml(formatTime(d.aimed))}</s>` : ''}</td>
-          <td>${jpLineBadge(d.line)}</td>
+          <td>${jpLineBadge(d.line, region)}</td>
           <td class="dep-dest">${escapeHtml(d.destination)}</td>
 ${showPlatform ? `          <td class="dep-platform">${escapeHtml(d.platform)}</td>\n` : ''}          <td>${statusBadge(d)}</td>
         </tr>`;
@@ -164,12 +166,12 @@ export function schemaType(modes) {
   return 'Place';
 }
 
-function jsonLd(stop) {
+function jsonLd(stop, region) {
   const data = {
     '@context': 'https://schema.org',
     '@type': schemaType(stop.modes),
     name: stop.name,
-    url: `${BASE_URL}/holdeplass/${stop.slug}`,
+    url: `${BASE_URL}${regionPath(region, `/holdeplass/${stop.slug}`)}`,
     geo: { '@type': 'GeoCoordinates', latitude: stop.lat, longitude: stop.lon },
   };
   return `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`;
@@ -186,21 +188,22 @@ function formatDistance(m) {
  * @param {{now?: number, text?: string}} opts `text` er håndskrevet HTML fra repoet og escapes ikke
  */
 export function renderStopPage(stop, info, departures, { now = Date.now(), text = '' } = {}) {
-  const mapHref = `/?lat=${stop.lat}&lng=${stop.lon}&z=16`;
+  const region = findRegion(stop.region) ?? getRegion();
+  const mapHref = `${region.path || '/'}?lat=${stop.lat}&lng=${stop.lon}&z=16`;
   const lineGroups = info?.lines?.length ? linesByMode(info.lines) : [];
   const linesHtml = lineGroups.length
     ? `<h2>Linjer</h2>
     <dl class="stop-lines">
 ${lineGroups.map(([mode, lines]) => `      <dt>${escapeHtml(MODE_LABEL[mode])}</dt>
-      <dd><ul class="badge-list">${lines.map((l) => `<li>${jpLineBadge(l)}</li>`).join('')}</ul></dd>`).join('\n')}
+      <dd><ul class="badge-list">${lines.map((l) => `<li>${jpLineBadge(l, region)}</li>`).join('')}</ul></dd>`).join('\n')}
     </dl>`
     : '';
-  const nearby = nearestStops(stop, 3, { maxDistance: NEARBY_MAX_M })
-    .map(({ stop: s, distance }) => `<li><a href="/holdeplass/${escapeHtml(s.slug)}">${escapeHtml(s.name)}</a> <span class="stop-meta">${escapeHtml(formatDistance(distance))} · ${escapeHtml(s.modes.map((m) => MODE_LABEL[m]).join(', '))}</span></li>`)
+  const nearby = nearestStops(stop, 3, { maxDistance: NEARBY_MAX_M, stops: featuredStopsFor(region.id) })
+    .map(({ stop: s, distance }) => `<li><a href="${escapeHtml(regionPath(region, `/holdeplass/${s.slug}`))}">${escapeHtml(s.name)}</a> <span class="stop-meta">${escapeHtml(formatDistance(distance))} · ${escapeHtml(s.modes.map((m) => MODE_LABEL[m]).join(', '))}</span></li>`)
     .join('\n      ');
 
   const body = `    <div class="line-hero stop-hero" data-mode="${escapeHtml(stop.modes[0] ?? 'metro')}">
-      <p class="eyebrow"><a href="/holdeplasser">Holdeplasser</a></p>
+      <p class="eyebrow">${region.path ? `<a href="${escapeHtml(region.path)}">${escapeHtml(region.shortName)}</a> / ` : ''}<a href="/holdeplasser">Holdeplasser</a></p>
       <h1>${escapeHtml(stop.name)}</h1>
       <p class="mode-badges">${modeBadges(stop.modes)}</p>
       <p class="lead">${escapeHtml(buildIntro(stop, info, { listLines: !text }))}</p>
@@ -209,19 +212,20 @@ ${lineGroups.map(([mode, lines]) => `      <dt>${escapeHtml(MODE_LABEL[mode])}</
       </div>
     </div>
 ${text ? `    <div class="prose stop-text">\n${text.trim()}\n    </div>\n` : ''}    <h2>Neste avganger</h2>
-    ${departuresHtml(departures, now)}
+    ${departuresHtml(departures, now, region)}
     ${linesHtml}
 ${nearby ? `    <h2>I nærheten</h2>
     <ul class="nearby-stops">
       ${nearby}
-    </ul>\n` : ''}    ${jsonLd(stop)}`;
+    </ul>\n` : ''}    ${jsonLd(stop, region)}`;
 
   const modeText = joinNb(stop.modes.map((m) => MODE_LABEL[m].toLowerCase())).replace(/^t-bane/, 'T-bane');
   return renderPage({
     title: `${stop.name} – avganger i sanntid | livetrafikk.no`,
     description: `Neste avganger fra ${stop.name} (${modeText}) med sanntid fra Entur, linjene som stopper her og holdeplasser i nærheten.`,
-    path: `/holdeplass/${stop.slug}`,
+    path: regionPath(region, `/holdeplass/${stop.slug}`),
     body,
+    mapPath: regionPath(region),
   });
 }
 
@@ -232,21 +236,30 @@ const INDEX_GROUPS = [
   ['bus', 'Buss- og båtknutepunkter', (s) => !s.modes.some((m) => m === 'metro' || m === 'tram' || m === 'rail')],
 ];
 
-export function renderStopIndex(stops = FEATURED_STOPS) {
-  const groups = INDEX_GROUPS.map(([mode, heading, match]) => {
-    const items = stops.filter(match)
+/**
+ * Oversikt over holdeplassene med egen side. `stops` er Oslo-stoppene; `extraRegions` er
+ * [{ region, stops }] for andre synlige regioner, med en egen seksjon hver (utelatt når regionen ikke har noen).
+ */
+export function renderStopIndex(stops = FEATURED_STOPS, extraRegions = []) {
+  const groupsFor = (list, region, level) => INDEX_GROUPS.map(([mode, heading, match]) => {
+    const items = list.filter(match)
       .sort((a, b) => a.name.localeCompare(b.name, 'nb'))
-      .map((s) => `<li><a href="/holdeplass/${escapeHtml(s.slug)}">${escapeHtml(s.name)}</a></li>`)
+      .map((s) => `<li><a href="${escapeHtml(regionPath(region, `/holdeplass/${s.slug}`))}">${escapeHtml(s.name)}</a></li>`)
       .join('');
     return items ? `    <section class="stop-group" data-mode="${mode}">
-      <h2>${escapeHtml(heading)}</h2>
+      <h${level}>${escapeHtml(heading)}</h${level}>
       <ul class="stop-index">${items}</ul>
     </section>` : '';
   }).filter(Boolean).join('\n');
 
+  const oslo = getRegion();
+  const extra = extraRegions.filter((e) => e.stops.length > 0)
+    .map((e) => `    <section class="region-stops">\n    <h2>${escapeHtml(e.region.name)}</h2>\n${groupsFor(e.stops, e.region, 3)}\n    </section>`)
+    .join('\n');
+
   const body = `    <h1>Holdeplasser</h1>
     <p class="lead">Sentrale knutepunkter for T-bane, trikk, tog, buss og båt i Oslo og omegn. Hver side forteller hva som møtes på stedet, og viser neste avganger i sanntid og linjene som stopper der.</p>
-${groups}`;
+${extra ? `    <h2>${escapeHtml(oslo.name)}</h2>\n` : ''}${groupsFor(stops, oslo, extra ? 3 : 2)}${extra ? `\n${extra}` : ''}`;
 
   return renderPage({
     title: 'Holdeplasser i Oslo – avganger i sanntid | livetrafikk.no',

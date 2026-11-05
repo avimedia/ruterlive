@@ -1,5 +1,7 @@
 // Felles sidemal for server-rendrede innholdssider.
 
+import { findRegion, regionPath } from '../../shared/regions.js';
+
 const BASE_URL = 'https://livetrafikk.no';
 // Samme logo som favicon.svg og kartsiden (index.html).
 const LOGO_SVG = '<svg class="site-logo" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="14" fill="#14213d"/><path d="M13 51 C13 36 29 40 32 32 S51 28 51 13" fill="none" stroke="#2a9d8f" stroke-width="8" stroke-linecap="round"/><circle cx="32" cy="32" r="9.5" fill="#e63946" stroke="#fff" stroke-width="4"/></svg>';
@@ -44,8 +46,9 @@ export function breadcrumbLd(items) {
 export function lineBadge(line, { link = false, size = '' } = {}) {
   const cls = `line-badge${size ? ` line-badge--${size}` : ''}`;
   const code = escapeHtml(line.code);
+  const href = regionPath(findRegion(line.regionId) ?? findRegion('oslo'), `/linje/${line.slug}`);
   return link
-    ? `<a class="${cls}" data-mode="${escapeHtml(line.mode)}" href="/linje/${escapeHtml(line.slug)}" aria-label="${escapeHtml(line.title)}">${code}</a>`
+    ? `<a class="${cls}" data-mode="${escapeHtml(line.mode)}" href="${escapeHtml(href)}" aria-label="${escapeHtml(line.title)}">${code}</a>`
     : `<span class="${cls}" data-mode="${escapeHtml(line.mode)}" aria-hidden="true">${code}</span>`;
 }
 
@@ -65,9 +68,10 @@ function alternateLinks(alternates) {
 /**
  * Bygger et komplett HTML-dokument.
  * `body` er ferdig HTML (kallerens ansvar å escape dynamiske strenger).
+ * `mapPath`: kartsiden i sidens region (standard `/`).
  * `lang`: 'nb' (standard) eller 'en'. `alternates`: [{ hreflang, href }] for språkversjoner.
  */
-export function renderPage({ title, description, path, body, ads = true, noindex = false, mode = '', bodyClass = '', jsonLd: ld = [], lang = 'nb', alternates = [] }) {
+export function renderPage({ title, description, path, body, ads = true, noindex = false, mode = '', bodyClass = '', jsonLd: ld = [], lang = 'nb', alternates = [], mapPath = '/' }) {
   const htmlLang = lang === 'en' ? 'en' : 'nb';
   const t = CHROME_TEXT[htmlLang];
   const url = `${BASE_URL}${path}`;
@@ -114,9 +118,9 @@ ${(noindex ? [] : ld).map((o) => `  ${jsonLd(o)}\n`).join('')}${ads ? `  ${ADSEN
 <body${bodyAttrs}>
   <header class="site-header">
     <div class="site-header-inner">
-      <a class="site-name" href="/">${LOGO_SVG}<span>livetrafikk<span class="site-tld">.no</span></span></a>
+      <a class="site-name" href="${escapeHtml(mapPath)}">${LOGO_SVG}<span>livetrafikk<span class="site-tld">.no</span></span></a>
       <nav aria-label="${t.nav}">
-        <a href="/">${t.map}</a>
+        <a href="${escapeHtml(mapPath)}">${t.map}</a>
         ${navLink('/guider', t.guides)}
         ${navLink('/om', t.about)}
       </nav>

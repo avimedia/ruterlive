@@ -1,12 +1,12 @@
 // Server-rendret side for én linje (/linje/:slug).
 
-import { LINES } from '../line-catalog.js';
-import { getRegion } from '../../shared/regions.js';
+import { REGION_LINES } from '../line-catalog.js';
+import { findRegion, getRegion, regionPath } from '../../shared/regions.js';
 import { findStopByName } from '../stop-catalog.js';
 import { breadcrumbLd, escapeHtml, lineBadge, renderPage } from './layout.js';
 
 const MAP_ZOOM = { metro: 12, tram: 12, rail: 10, flytog: 10, flybuss: 10, bus: 11 };
-const MODE_LABEL = { metro: 'T-bane', tram: 'Trikk', rail: 'Tog', flytog: 'Flytoget', flybuss: 'Flybuss', bus: 'Buss' };
+const MODE_LABEL = { metro: 'T-bane', tram: 'Trikk', rail: 'Tog', flytog: 'Flytoget', flybuss: 'Flybuss', bus: 'Buss', water: 'Båt' };
 
 const MODE_GUIDE = {
   metro: { slug: 't-banen-i-oslo', label: 'T-banen i Oslo' },
@@ -50,9 +50,9 @@ function lineDescription(line, stopsResult, hasStops) {
 }
 
 /** Stoppnavn, lenket til holdeplassiden når stoppet finnes i katalogen. */
-function stopItem(name) {
-  const stop = findStopByName(name);
-  return stop ? `<a href="/holdeplass/${escapeHtml(stop.slug)}">${escapeHtml(name)}</a>` : escapeHtml(name);
+function stopItem(name, region) {
+  const stop = findStopByName(name, region.id);
+  return stop ? `<a href="${escapeHtml(regionPath(region, `/holdeplass/${stop.slug}`))}">${escapeHtml(name)}</a>` : escapeHtml(name);
 }
 
 function formatDate(iso) {
@@ -67,10 +67,14 @@ function formatDate(iso) {
  */
 export function renderLinePage(line, stopsResult, vehicleCount, text) {
   const hasStops = Boolean(stopsResult?.stops?.length);
-  // Linjer utenfor Oslo har eget kartutsnitt (midt i linjen), ellers Oslo-regionens.
-  const { lat, lng } = line.map ?? getRegion().mapLink;
+  const indexed = line.indexed !== false;
+  const region = findRegion(line.regionId) ?? getRegion();
+  const isOslo = !region.path;
+  // Linjer utenfor Oslo har eget kartutsnitt (midt i linjen), ellers regionens.
+  const { lat, lng } = line.map ?? region.mapLink;
   const zoom = line.map?.z ?? MAP_ZOOM[line.mode] ?? 10;
-  const mapHref = `/?lat=${lat}&lng=${lng}&z=${zoom}`;
+  const mapHref = `${isOslo ? '/' : region.path}?lat=${lat}&lng=${lng}&z=${zoom}`;
+  const linePath = regionPath(region, `/linje/${line.slug}`);
 
   const vehicles = vehicleCount != null && (vehicleCount > 0 || line.mode !== 'flybuss')
     ? `<p class="live-count${vehicleCount > 0 ? '' : ' live-count--none'}"><span class="live-dot" aria-hidden="true"></span>Ute akkurat nå: <strong>${escapeHtml(vehicleCount)}</strong> kjøretøy</p>`
@@ -86,20 +90,20 @@ export function renderLinePage(line, stopsResult, vehicleCount, text) {
     ? `<h2>Stopp</h2>
     <p class="stop-summary">Fra <strong>${escapeHtml(stopsResult.from)}</strong> til <strong>${escapeHtml(stopsResult.to)}</strong>, ${escapeHtml(stopsResult.stops.length)} stopp</p>
     <ol class="stop-list">
-${stopsResult.stops.map((s) => `      <li>${stopItem(s)}</li>`).join('\n')}
+${stopsResult.stops.map((s) => `      <li>${stopItem(s, region)}</li>`).join('\n')}
     </ol>`
     : '<p class="note">Stoppliste lastes, prøv igjen om litt.</p>';
 
   // Tog: bare linjene i samme region (fjerntog for seg), ellers alle med samme modus.
-  const others = LINES.filter((l) => l.mode === line.mode && l.slug !== line.slug && l.region === line.region)
+  const others = (REGION_LINES[region.id] ?? []).filter((l) => l.mode === line.mode && l.slug !== line.slug && l.region === line.region && l.indexed !== false)
     .map((l) => `<li>${lineBadge(l, { link: true })}</li>`)
     .join('');
   const othersHtml = others ? `<h2>Andre linjer</h2>\n    <ul class="badge-list">${others}</ul>` : '';
 
   // Togguiden handler om togene fra Oslo (Østlandet og fjerntogene), ikke Bergen eller Trøndelag
-  const guide = line.region && !OSLO_RAIL_REGIONS.has(line.region) ? null : MODE_GUIDE[line.mode];
+  const guide = !isOslo || (line.region && !OSLO_RAIL_REGIONS.has(line.region)) ? null : MODE_GUIDE[line.mode];
   const body = `    <div class="line-hero">
-      <p class="eyebrow"><a href="/guider">Linjer</a> / ${escapeHtml(MODE_LABEL[line.mode] ?? '')}</p>
+      <p class="eyebrow">${isOslo ? '' : `<a href="${escapeHtml(region.path)}">${escapeHtml(region.shortName)}</a> / `}<a href="/guider">Linjer</a> / ${escapeHtml(MODE_LABEL[line.mode] ?? '')}</p>
       <h1 class="line-title">${lineBadge(line, { size: 'lg' })} <span>${escapeHtml(line.title)}</span></h1>
       <p class="byline">livetrafikk.no · oppdatert ${escapeHtml(formatDate(hasStops ? stopsResult.fetchedAt : null))}</p>
       ${line.intro ? `<p class="lead">${escapeHtml(line.intro)}</p>\n      ` : ''}<div class="line-actions">
@@ -117,13 +121,17 @@ ${guide ? `      <li><a href="/guider/${guide.slug}">${escapeHtml(guide.label)}<
   return renderPage({
     title: lineTitle(line, stopsResult),
     description: lineDescription(line, stopsResult, hasStops),
-    path: `/linje/${line.slug}`,
+    path: linePath,
     mode: line.mode,
     body,
+    mapPath: regionPath(region),
+    // Uten egen tekst: ikke i søkemotorer, og ingen annonser på tynt innhold
+    noindex: !indexed,
+    ads: indexed,
     jsonLd: [breadcrumbLd([
-      { name: 'Hjem', path: '/' },
+      { name: isOslo ? 'Hjem' : region.shortName, path: regionPath(region) },
       { name: 'Guider og linjer', path: '/guider' },
-      { name: line.title, path: `/linje/${line.slug}` },
+      { name: line.title, path: linePath },
     ])],
   });
 }

@@ -222,8 +222,10 @@ export function findSituationLine(l, codespace) {
     if ((l?.ref && refs.includes(l.ref)) || (codeKey && codes.includes(codeKey))) return line;
   }
   if (!code) return null;
-  const sameSpace = (a) => !a || !codespace || a === codespace || (CODESPACE_ALIASES[a] || []).includes(codespace);
-  const live = liveCodes.find((e) => normLineCode(e.code) === normLineCode(code) && sameSpace(e.authority));
+  // Eksakt kodeområde (eller alias) først, så live-linjer uten kjent authority
+  const sameSpace = (a) => Boolean(a) && (!codespace || a === codespace || (CODESPACE_ALIASES[a] || []).includes(codespace));
+  const sameCode = liveCodes.filter((e) => normLineCode(e.code) === normLineCode(code));
+  const live = sameCode.find((e) => sameSpace(e.authority)) || sameCode.find((e) => !e.authority);
   return live ? { code: live.code, mode: live.mode, title: `${modeLabel(live.mode)} ${live.code}`, aliases: [], authority: live.authority || null } : null;
 }
 

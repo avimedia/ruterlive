@@ -3,8 +3,10 @@
  * Trykk på et linjemerke uthever linja på kartet; Escape og lukkeknappen lukker, og fokus går tilbake til knappen.
  */
 
+import L from 'leaflet';
 import { getSituations, onSituationsChanged, badgeCount, situationCardHtml, initSituations } from './situations.js';
-import { findSituationLine, selectLine } from './line-search.js';
+import { findSituationLine, selectLine, onRegionLinesLoaded } from './line-search.js';
+import { getMap } from './map.js';
 
 let btn = null;
 let countEl = null;
@@ -13,7 +15,10 @@ let body = null;
 let closeBtn = null;
 let loaded = false;
 let failed = false;
-let lastFocus = null;
+// Avvik med «Vis mer» åpent; beholdes når lista tegnes på nytt
+const expanded = new Set();
+// Under denne bredden lukker trykk på kartet panelet (som avgangstavla)
+const MOBILE_QUERY = '(max-width: 1099px)';
 
 const isOpen = () => Boolean(panel && !panel.hidden);
 
@@ -41,6 +46,7 @@ function render() {
   body.querySelectorAll('.sit-card').forEach((card, i) => {
     const s = list[i];
     card.dataset.index = String(i);
+    if (expanded.has(s.id)) setExpanded(card, true);
     for (const b of card.querySelectorAll('.sit-line')) {
       const l = s.lines[Number(b.dataset.lineIndex)];
       if (!findSituationLine(l, s.codespace)) {
@@ -51,9 +57,17 @@ function render() {
   });
 }
 
+function setExpanded(card, on) {
+  const box = card.querySelector('.sit-more');
+  const more = card.querySelector('.sit-more-btn');
+  if (!box || !more) return;
+  box.hidden = !on;
+  more.setAttribute('aria-expanded', String(on));
+  more.textContent = on ? 'Vis mindre' : 'Vis mer';
+}
+
 function open() {
   if (isOpen()) return;
-  lastFocus = document.activeElement;
   render();
   panel.hidden = false;
   btn.setAttribute('aria-expanded', 'true');
@@ -61,13 +75,12 @@ function open() {
   closeBtn.focus({ preventScroll: true });
 }
 
-function close({ restoreFocus = true } = {}) {
+/** focus: elementet som får fokus etter lukking (standard knappen). */
+function close({ focus = btn } = {}) {
   if (!isOpen()) return;
   panel.hidden = true;
   btn.setAttribute('aria-expanded', 'false');
-  const target = lastFocus && document.contains(lastFocus) ? lastFocus : btn;
-  lastFocus = null;
-  if (restoreFocus) target.focus({ preventScroll: true });
+  focus?.focus({ preventScroll: true });
 }
 
 function onBodyClick(e) {
@@ -75,11 +88,14 @@ function onBodyClick(e) {
   if (!(t instanceof Element)) return;
   const more = t.closest('.sit-more-btn');
   if (more) {
-    const box = more.previousElementSibling;
-    const expanded = more.getAttribute('aria-expanded') === 'true';
-    if (box) box.hidden = expanded;
-    more.setAttribute('aria-expanded', String(!expanded));
-    more.textContent = expanded ? 'Vis mer' : 'Vis mindre';
+    const card = more.closest('.sit-card');
+    const id = getSituations()[Number(card?.dataset.index)]?.id;
+    const on = more.getAttribute('aria-expanded') !== 'true';
+    setExpanded(card, on);
+    if (id) {
+      if (on) expanded.add(id);
+      else expanded.delete(id);
+    }
     return;
   }
   const badge = t.closest('.sit-line');
@@ -87,8 +103,11 @@ function onBodyClick(e) {
   const s = getSituations()[Number(badge.closest('.sit-card')?.dataset.index)];
   const line = s && findSituationLine(s.lines[Number(badge.dataset.lineIndex)], s.codespace);
   if (!line) return;
-  close({ restoreFocus: false });
+  close({ focus: null });
   selectLine(line, { fitMap: true });
+  // Fokus til linjebrikken (fjerner uthevingen), ellers knappen
+  const chip = document.querySelector('.line-chip:not([hidden])');
+  (chip || btn).focus({ preventScroll: true });
 }
 
 function buildPanel() {
@@ -124,7 +143,17 @@ export function initSituationsPanel() {
   buildPanel();
   btn.setAttribute('aria-controls', 'situations-panel');
   btn.setAttribute('aria-expanded', 'false');
+  // Trykk på knappen skal ikke nå kartet (velge bort kjøretøy, starte dra)
+  L.DomEvent.disableClickPropagation(btn);
+  L.DomEvent.disableScrollPropagation(panel);
   btn.addEventListener('click', () => (isOpen() ? close() : open()));
+  getMap()?.on('click', () => {
+    if (isOpen() && window.matchMedia?.(MOBILE_QUERY).matches) close();
+  });
+  // Bergen-katalogen lastes etter oppstart: merkene kan da bli trykkbare
+  onRegionLinesLoaded(() => {
+    if (isOpen()) render();
+  });
   // Fanges før de andre Escape-lytterne (linjevalg, avgangstavle), så Escape bare lukker panelet
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !isOpen()) return;
@@ -133,6 +162,8 @@ export function initSituationsPanel() {
   }, true);
   onSituationsChanged((list) => {
     loaded = true;
+    const ids = new Set(list.map((s) => s.id));
+    for (const id of expanded) if (!ids.has(id)) expanded.delete(id);
     updateButton(list);
     if (isOpen()) render();
   });

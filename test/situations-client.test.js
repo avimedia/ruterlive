@@ -10,6 +10,7 @@ import {
   getSituations,
   onSituationsChanged,
   fetchSituations,
+  situationsSignature,
 } from '../js/situations.js';
 
 const NOW = Date.parse('2026-11-05T12:00:00Z');
@@ -125,4 +126,20 @@ test('setSituations varsler lyttere; fetchSituations er stille ved feil', async 
     return { ok: true, json: async () => ({ updatedAt: 1, situations: [sit({ id: 'z' }), sit({ id: 'w' })] }) };
   }), true);
   assert.equal(getSituations().length, 2);
+});
+
+test('fetchSituations: uendret svar (samme updatedAt og id-er) gir ingen endringshendelse', async () => {
+  const data = { updatedAt: 42, situations: [sit({ id: 'a' }), sit({ id: 'b' })] };
+  const reply = (d) => async () => ({ ok: true, json: async () => d });
+  assert.equal(situationsSignature(data), situationsSignature({ ...data, situations: data.situations.map((s) => ({ ...s })) }));
+  assert.notEqual(situationsSignature(data), situationsSignature({ ...data, updatedAt: 43 }));
+  assert.notEqual(situationsSignature(data), situationsSignature({ ...data, situations: [data.situations[0]] }));
+  let events = 0;
+  const off = onSituationsChanged(() => { events += 1; });
+  assert.equal(await fetchSituations(reply(data)), true);
+  assert.equal(await fetchSituations(reply({ ...data })), true);
+  assert.equal(events, 1);
+  assert.equal(await fetchSituations(reply({ ...data, updatedAt: 43 })), true);
+  assert.equal(events, 2);
+  off();
 });

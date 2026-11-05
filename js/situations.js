@@ -13,7 +13,14 @@ import { SEVERITY_LABEL, formatValidityPeriod } from '../shared/situation-format
 export const POLL_MS = 120_000;
 
 let situations = [];
+let signature = null;
 const listeners = new Set();
+
+/** Kjennetegn for et svar: updatedAt + avvikenes id-er. Likt kjennetegn betyr ingen endring. */
+export function situationsSignature(data) {
+  const list = Array.isArray(data?.situations) ? data.situations : [];
+  return `${data?.updatedAt ?? ''}|${list.map((s) => s?.id).join(',')}`;
+}
 
 export function getSituations() {
   return situations;
@@ -120,14 +127,18 @@ export function situationCardHtml(s, { now = Date.now() } = {}) {
   ].filter(Boolean).join('');
 }
 
-/** Henter lista én gang. Gir true ved ny liste; feil (også manglende endepunkt i dev) beholder den gamle. */
+/** Henter lista én gang. Gir true ved svar (uendret svar varsler ikke lytterne); feil (også manglende endepunkt i dev) beholder den gamle. */
 export async function fetchSituations(fetchImpl = globalThis.fetch) {
   try {
     const res = await fetchImpl(withRegion('/api/situations'));
     if (!res?.ok) return false;
     const data = await res.json();
     if (!data || !Array.isArray(data.situations)) return false;
-    setSituations(data.situations);
+    const sig = situationsSignature(data);
+    if (sig !== signature) {
+      signature = sig;
+      setSituations(data.situations);
+    }
     return true;
   } catch {
     return false;

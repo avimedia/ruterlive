@@ -1909,6 +1909,10 @@ a,
 .btn-situations {
   bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 6.5rem + 104px + var(--sheet-height, 0px));
 }
+/* Uten «Finn meg» (ingen posisjon i nettleseren) tar avviksknappen plassen */
+.btn-locate[hidden] + .btn-situations {
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 6.5rem + 52px + var(--sheet-height, 0px));
+}
 .btn-situations[aria-expanded="true"] {
   background: var(--bg-panel-solid);
   border-color: var(--text-dim);

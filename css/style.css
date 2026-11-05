@@ -1324,6 +1324,17 @@ path.leaflet-interactive:focus {
   color: #2a9d8f;
 }
 
+.departure-place-link,
+.vehicle-popup-link {
+  display: inline-block;
+  margin-top: 0.4rem;
+  font-weight: 600;
+  color: #2a9d8f;
+  text-decoration: none;
+}
+.departure-place-link:hover,
+.vehicle-popup-link:hover { text-decoration: underline; }
+
 .departure-next {
   color: var(--text-dim);
 }

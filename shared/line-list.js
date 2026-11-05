@@ -164,6 +164,27 @@ export function vehicleLineRef(v) {
   return typeof ref === 'string' && ref ? ref : null;
 }
 
+const SLUG_PREFIX = { metro: 't-bane', tram: 'trikk', rail: 'tog', flytog: 'flytoget', flybuss: 'flybuss', bus: 'buss' };
+
+/** URL-slug for linjesiden (/linje/<slug>), samme regel som server/line-catalog.js. */
+export function lineSlug(l) {
+  return `${SLUG_PREFIX[l.mode]}-${String(l.code).toLowerCase()}`;
+}
+
+/**
+ * Linjesiden for et kjøretøy, eller null. Krever samme modus og linjekode (eller alias), og samme
+ * operatør når kjøretøyet har linje-ID (buss 31 fra en annen operatør enn Ruter får ingen lenke).
+ */
+export function linePageFor(v, mode) {
+  const code = normLineCode(v?.line?.publicCode);
+  if (!code) return null;
+  const ref = vehicleLineRef(v);
+  const l = LINE_LIST.find(
+    (x) => x.mode === mode && [x.code, ...(x.aliases || [])].some((c) => normLineCode(c) === code) && !(ref && x.authority && !ref.startsWith(`${x.authority}:`))
+  );
+  return l ? { slug: lineSlug(l), title: l.title } : null;
+}
+
 /** Uthevingen for en valgt linje: { mode, codes (normalisert), authority|null }. */
 export function lineHighlightOf(l) {
   if (!l) return null;

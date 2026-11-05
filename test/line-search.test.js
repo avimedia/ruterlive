@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { LINES } from '../server/line-catalog.js';
 import {
   LINE_LIST,
+  lineSlug,
+  linePageFor,
   matchLines,
   parseLineQuery,
   chipLabel,
@@ -101,4 +103,20 @@ test('live-linjer utenfor listen får authority fra kjøretøyene (RUT først)',
   assert.equal(lineHighlightOf(live).authority, 'RUT');
   const none = matchLines('786', [{ code: '786', mode: 'bus', authority: null }])[0];
   assert.equal(vehicleOnLine(bus('786', 'BRA:Line:786'), 'bus', lineHighlightOf(none)), true);
+});
+
+test('lineSlug gir samme slug som server/line-catalog.js', () => {
+  assert.deepEqual(LINE_LIST.map(lineSlug), LINES.map((l) => l.slug));
+});
+
+test('linePageFor: modus, kode/alias og operatør må stemme', () => {
+  const v = (code, ref) => ({ line: { publicCode: code, ref } });
+  assert.equal(linePageFor(v('31', 'RUT:Line:31'), 'bus')?.slug, 'buss-31');
+  assert.equal(linePageFor(v('31'), 'bus')?.slug, 'buss-31');
+  assert.equal(linePageFor(v('31', 'SKY:Line:31'), 'bus'), null);
+  assert.equal(linePageFor(v('5', 'RUT:Line:5'), 'metro')?.slug, 't-bane-5');
+  assert.equal(linePageFor(v('5', 'RUT:Line:5'), 'bus'), null);
+  assert.equal(linePageFor(v('RX20', 'VYG:Line:RX20'), 'rail')?.slug, 'tog-re20');
+  assert.equal(linePageFor(v('999'), 'bus'), null);
+  assert.equal(linePageFor(v(''), 'bus'), null);
 });

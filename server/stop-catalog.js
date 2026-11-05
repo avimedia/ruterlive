@@ -58,6 +58,23 @@ export function getStopBySlug(slug) {
   return bySlug.get(slug);
 }
 
+const byId = new Map(FEATURED_STOPS.map((s) => [s.id, s]));
+const NEAR_M = 800;
+
+/**
+ * Stopp med egen side for tavla: samme stoppested-ID, ellers samme navn og under 800 m unna
+ * (tavla kjenner ofte bare under-stoppestedet, katalogen har hovedstoppestedet).
+ * @param {{ stopPlaceId?: string, name?: string }} place
+ * @param {{ lat?: number|null, lon?: number|null }[]} quays
+ */
+export function findStopForPlace(place, quays = []) {
+  const direct = byId.get(place?.stopPlaceId);
+  if (direct) return direct;
+  const s = place?.name ? byName.get(normalizeStopName(place.name)) : undefined;
+  if (!s) return undefined;
+  return quays.some((q) => Number.isFinite(q?.lat) && Number.isFinite(q?.lon) && distanceM(q, s) < NEAR_M) ? s : undefined;
+}
+
 /** Stopp med egen side og samme (normaliserte) navn, ellers undefined. */
 export function findStopByName(name) {
   return byName.get(normalizeStopName(name));

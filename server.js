@@ -35,7 +35,7 @@ import { buildSitemap, isMapPath } from './server/pages/sitemap.js';
 import { renderNotFound } from './server/pages/not-found.js';
 import { registerEnRoutes } from './server/en-routes.js';
 import { EN_PAGES } from './server/en-catalog.js';
-import { FEATURED_STOPS, getStopBySlug, getStopText } from './server/stop-catalog.js';
+import { FEATURED_STOPS, findStopForPlace, getStopBySlug, getStopText } from './server/stop-catalog.js';
 import { createStopService } from './server/stop-service.js';
 import { renderStopPage, renderStopIndex } from './server/pages/stop-page.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
@@ -405,7 +405,10 @@ app.get('/api/departures', apiRateLimit, async (req, res) => {
     return res.status(400).json({ error: 'Mangler eller ugyldig quayId' });
   }
   try {
-    const board = await departureBoard.get(ids, { expand: req.query.expand !== '0' });
+    let board = await departureBoard.get(ids, { expand: req.query.expand !== '0' });
+    // Lenke til holdeplassiden når stoppestedet har en
+    const page = findStopForPlace(board.place, board.quays)?.slug;
+    if (page) board = { ...board, place: { ...board.place, page } };
     // Cloudflare holder tavla i 15 s: mange ser på samme holdeplass, ett kall dekker alle
     res.set('Cache-Control', 'public, max-age=15, s-maxage=15');
     res.json(board);

@@ -128,6 +128,8 @@ export function createDepartureBoard({ lookup, jpQueryFn, fetchFn = fetch, now =
         name: q.name ?? null,
         publicCode: String(q.publicCode ?? '').trim() || null,
         description: String(q.description ?? '').trim() || null,
+        lat: Number.isFinite(q.latitude) ? q.latitude : null,
+        lon: Number.isFinite(q.longitude) ? q.longitude : null,
       })),
       estimatedCalls: quays.flatMap((q) => trimmed.get(q.id).map((c) => ({ ...c, quayId: q.id }))),
     };

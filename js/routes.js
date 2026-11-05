@@ -516,6 +516,7 @@ async function showDepartureBoard(popup, quayIds) {
           ${body}
         </table>
         ${groups.length === 0 ? '<p class="departure-empty">Ingen avganger de neste timene.</p>' : '<p class="departure-hint">Trykk på en avgang for å se hvor den er nå.</p>'}
+        ${/^[a-z0-9-]+$/.test(data?.place?.page ?? '') ? `<a class="departure-place-link" href="/holdeplass/${data.place.page}">Om ${escapeHtml(name)} →</a>` : ''}
       </div>`;
     popup.setContent(html);
   } catch (err) {

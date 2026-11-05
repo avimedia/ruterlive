@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { STOPS, FEATURED_STOPS, slugify, getStopBySlug, findStopByName, nearestStops, getStopText } from '../server/stop-catalog.js';
+import { STOPS, FEATURED_STOPS, slugify, getStopBySlug, findStopByName, findStopForPlace, nearestStops, getStopText } from '../server/stop-catalog.js';
 import { createStopService, LruCache, parseStopInfo } from '../server/stop-service.js';
 import { renderStopPage, renderStopIndex, buildIntro, schemaType, catalogLineFor } from '../server/pages/stop-page.js';
 import { renderLinePage } from '../server/pages/line-page.js';
@@ -298,4 +298,14 @@ test('buildIntro lister ikke linjer når siden har håndskrevet tekst', () => {
   const intro = buildIntro(stop, info, { listLines: false });
   assert.doesNotMatch(intro, /Her stopper/);
   assert.match(intro, /sone 1/);
+});
+
+test('findStopForPlace: ID, ellers samme navn og nær nok', () => {
+  const near = [{ lat: 59.9107, lon: 10.7297 }];
+  assert.equal(findStopForPlace({ stopPlaceId: 'NSR:StopPlace:58382' })?.slug, 'aker-brygge');
+  assert.equal(findStopForPlace({ stopPlaceId: 'NSR:StopPlace:4142', name: 'Aker brygge' }, near)?.slug, 'aker-brygge');
+  // Samme navn langt unna (annen by) gir ingen side
+  assert.equal(findStopForPlace({ stopPlaceId: 'X', name: 'Aker brygge' }, [{ lat: 60.39, lon: 5.32 }]), undefined);
+  assert.equal(findStopForPlace({ stopPlaceId: 'X', name: 'Aker brygge' }, []), undefined);
+  assert.equal(findStopForPlace({ name: 'Ukjent' }, near), undefined);
 });

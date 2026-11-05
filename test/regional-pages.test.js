@@ -326,3 +326,36 @@ test('Bergen med lastet ET: telling vises også når den er 0, og siden caches (
     assert.match(await r.text(), /Ute akkurat nå: <strong>0<\/strong>/);
   });
 });
+
+test('holdeplasseside: avvik på quay-ID fra info vises; null eller feilende indeks gir side uten boks', async () => {
+  const { buildSituationIndex } = await import('../server/situations-model.js');
+  const idx = buildSituationIndex([{ id: 'S1', codespace: 'SKY', severity: 'normal', planned: false, validity: [], summary: 'Quay <b>stengt</b>', description: '', advice: '', links: [], lines: [], stops: [{ id: 'NSR:Quay:77', name: 'X' }] }]);
+  const stopService = { getInfo: async () => ({ lines: [], zones: [], quayIds: ['NSR:Quay:77'], quayCount: 1 }), getDepartures: async () => null };
+  const path = `/bergen/holdeplass/${stubStop.slug}`;
+  const run = async (getSituationIndex) => {
+    const app = express();
+    registerPageRoutes(app, {
+      visible, indexPath, sendNotFound: (res) => res.status(404).end(), getLineStops: async () => null, getMergedVehicles: async () => [],
+      stopService, getStop: (slug, regionId) => (regionId === 'bergen' && slug === stubStop.slug ? stubStop : undefined),
+      getStopText: async () => '', etLoaded: () => true, getSituationIndex,
+    });
+    const srv = await new Promise((resolve) => { const x = app.listen(0, () => resolve(x)); });
+    try {
+      const r = await fetch(`http://127.0.0.1:${srv.address().port}${path}`);
+      return { status: r.status, body: await r.text() };
+    } finally {
+      srv.closeAllConnections();
+      srv.close();
+    }
+  };
+  try {
+    const withBox = await run(() => idx);
+    assert.match(withBox.body, /Avvik nå/);
+    assert.match(withBox.body, /Quay &lt;b&gt;stengt&lt;\/b&gt;/);
+    for (const g of [() => null, () => { throw new Error('x'); }]) {
+      const r = await run(g);
+      assert.equal(r.status, 200);
+      assert.doesNotMatch(r.body, /Avvik nå/);
+    }
+  } finally { /* ingenting å rydde */ }
+});

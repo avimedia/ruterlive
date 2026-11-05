@@ -185,7 +185,7 @@ function formatDistance(m) {
  * @param {{fetchedAt, departures: object[]}|null} departures null = Entur utilgjengelig
  * @param {{now?: number, text?: string}} opts `text` er håndskrevet HTML fra repoet og escapes ikke; `situations` er avvik for stoppet
  */
-export function renderStopPage(stop, info, departures, { now = Date.now(), text = '', situations = [] } = {}) {
+export function renderStopPage(stop, info, departures, { now = Date.now(), text = '', situations = [], lineLink } = {}) {
   const region = findRegion(stop.region) ?? getRegion();
   const mapHref = `${region.path || '/'}?lat=${stop.lat}&lng=${stop.lon}&z=16`;
   // Bare linjer i stoppets egne moduser: togbuss-quayer gir ellers «Tog» (F4/R40 på Bergen busstasjon, R31 på Nydalen og Sinsen)
@@ -202,7 +202,7 @@ ${lineGroups.map(([mode, lines]) => `      <dt>${escapeHtml(MODE_LABEL[mode])}</
     .map(({ stop: s, distance }) => `<li><a href="${escapeHtml(regionPath(region, `/holdeplass/${s.slug}`))}">${escapeHtml(s.name)}</a> <span class="stop-meta">${escapeHtml(formatDistance(distance))} · ${escapeHtml(s.modes.map((m) => MODE_LABEL[m]).join(', '))}</span></li>`)
     .join('\n      ');
 
-  const situationBox = renderSituationBox(situations, { now });
+  const situationBox = renderSituationBox(situations, { now, lineLink });
   const box = situationBox ? `${situationBox}\n` : '';
   const body = `    <div class="line-hero stop-hero" data-mode="${escapeHtml(stop.modes[0] ?? 'metro')}">
       <p class="eyebrow">${region.path ? `<a href="${escapeHtml(region.path)}">${escapeHtml(region.shortName)}</a> / ` : ''}<a href="/holdeplasser">Holdeplasser</a></p>

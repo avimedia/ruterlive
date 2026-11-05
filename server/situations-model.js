@@ -2,7 +2,7 @@
  * Avvik (SIRI SX) fra Entur Vehicles-API: normalisering, gyldighet, sortering og indekser.
  * Ren modul uten nettverk.
  */
-import { RAIL_CODESPACES } from '../shared/situation-areas.js';
+import { RAIL_CODESPACES, CODESPACE_ALIASES } from '../shared/situation-areas.js';
 
 export { RAIL_CODESPACES };
 
@@ -123,22 +123,40 @@ export function listableSituations(index) {
   return index.all.filter(hasTargets);
 }
 
-/** Union av avvik for flere quay-/stopPlace-ID-er, uten duplikater. */
 /**
- * Avvik for en katalogelinje: lineRef = katalogens `ref` eller `<authority>:Line:<kode>` (også aliaser),
- * og som reserve kodeområde + publicCode (lineRef-en kan ha en annen intern ID enn koden).
+ * Oppslagsnøkler for en katalogelinje (Ruling 2): `refs` = katalogens `ref` og `<kodeområde>:Line:<kode>`,
+ * `codes` = `<kodeområde>|<KODE>` som reserve når lineRef-en har en annen intern ID enn koden.
+ * Kode omfatter aliaser, kodeområde omfatter CODESPACE_ALIASES (Vy-tog er NSB).
  */
-export function situationsForLine(index, line) {
+export function lineRefKeys(line) {
   const codes = [line.code, ...(line.aliases || [])].map((c) => String(c ?? '').toUpperCase()).filter(Boolean);
-  const refs = new Set([line.ref, ...codes.map((c) => `${line.authority}:Line:${c}`)].filter(Boolean));
+  const spaces = [line.authority, ...(CODESPACE_ALIASES[line.authority] || [])];
+  const refs = new Set(line.ref ? [line.ref] : []);
+  const codeKeys = [];
+  for (const sp of spaces) {
+    for (const c of codes) {
+      refs.add(`${sp}:Line:${c}`);
+      codeKeys.push(`${sp}|${c}`);
+    }
+  }
+  return { refs: [...refs], codes: codeKeys };
+}
+
+/** Avvik for en katalogelinje, se lineRefKeys. */
+export function situationsForLine(index, line) {
+  const { refs, codes } = lineRefKeys(line);
+  const wanted = new Set(codes);
   const seen = new Map();
   for (const ref of refs) for (const s of index.byLine.get(ref) || []) seen.set(s.id, s);
-  for (const s of index.byCodespace.get(line.authority) || []) {
-    if (!seen.has(s.id) && s.lines.some((l) => codes.includes(String(l.code ?? '').toUpperCase()))) seen.set(s.id, s);
+  for (const sp of new Set(codes.map((k) => k.split('|')[0]))) {
+    for (const s of index.byCodespace.get(sp) || []) {
+      if (!seen.has(s.id) && s.lines.some((l) => wanted.has(`${sp}|${String(l.code ?? '').toUpperCase()}`))) seen.set(s.id, s);
+    }
   }
   return [...seen.values()].sort(compareSituations);
 }
 
+/** Union av avvik for flere quay-/stopPlace-ID-er, uten duplikater. */
 export function situationsForStop(index, ids) {
   const seen = new Set();
   const out = [];

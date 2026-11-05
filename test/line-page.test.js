@@ -2,6 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getLineBySlug } from '../server/line-catalog.js';
 import { renderLinePage } from '../server/pages/line-page.js';
+import { buildSituationIndex, situationsForLine, lineRefKeys } from '../server/situations-model.js';
+import { renderSituationBox } from '../server/pages/situations-page.js';
+import { createSituationLinks } from '../server/situation-links.js';
+import { REGIONS } from '../shared/regions.js';
 
 const stops = { stops: ['A & B', 'C', 'D'], from: 'A & B', to: 'D' };
 
@@ -90,8 +94,6 @@ test('tog utenfor Oslo: kartlenke midt på linjen, tittel uten dobbel strekning'
   assert.ok(!renderLinePage(getLineBySlug('tog-l4'), result, 1).includes('/guider/lokaltog-og-regiontog'));
 });
 
-import { buildSituationIndex, situationsForLine } from '../server/situations-model.js';
-import { renderSituationBox } from '../server/pages/situations-page.js';
 
 const NOW_S = Date.parse('2026-11-05T12:00:00Z');
 const mk = (over) => ({ id: 'RUT:1', codespace: 'RUT', severity: 'normal', planned: false, validity: [], summary: 'Omkjøring <b>x</b>', description: '', advice: '', links: [], lines: [], stops: [], ...over });
@@ -125,4 +127,23 @@ test('situationsForLine: katalog-ref, authority:Line:kode og kodeområde+publicC
   const c = mk({ id: 'c', lines: [{ ref: `${line.authority}:Line:9999`, code: '9999' }] });
   const ids = situationsForLine(buildSituationIndex([a, b, c]), line).map((s) => s.id).sort();
   assert.deepEqual(ids, ['a', 'b']);
+});
+
+test('situationsForLine: katalogens ref brukes', () => {
+  const line = { ...getLineBySlug('t-bane-5'), ref: 'RUT:Line:INTERN-5' };
+  const a = mk({ id: 'r', lines: [{ ref: 'RUT:Line:INTERN-5', code: '' }] });
+  assert.deepEqual(situationsForLine(buildSituationIndex([a]), line).map((s) => s.id), ['r']);
+  assert.ok(lineRefKeys(line).refs.includes('RUT:Line:INTERN-5'));
+});
+
+test('Vy-tog (VYG) matcher NSB-avvik: linjeside og lenke fra /avvik', () => {
+  const line = getLineBySlug('tog-l1');
+  const byRef = mk({ id: 'n1', codespace: 'NSB', lines: [{ ref: 'NSB:Line:L1', code: 'L1' }] });
+  const byCode = mk({ id: 'n2', codespace: 'NSB', lines: [{ ref: 'NSB:Line:42', code: 'L1' }] });
+  const other = mk({ id: 'n3', codespace: 'NSB', lines: [{ ref: 'NSB:Line:L9', code: 'L9' }] });
+  const ids = situationsForLine(buildSituationIndex([byRef, byCode, other]), line).map((s) => s.id).sort();
+  assert.deepEqual(ids, ['n1', 'n2']);
+  const links = createSituationLinks({ regions: [REGIONS.oslo] });
+  assert.equal(links.lineLink('NSB:Line:L1', 'L1'), '/linje/tog-l1');
+  assert.equal(links.lineLink('NSB:Line:42', 'L1'), '/linje/tog-l1');
 });

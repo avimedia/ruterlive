@@ -6,6 +6,9 @@
 // Kodeområder som regnes som tog og vises i alle regioner
 export const RAIL_CODESPACES = Object.freeze(['VYG', 'GOA', 'SJN', 'FLT', 'BNR', 'NSB']);
 
+// Kodeområder en linjes avvik kan ligge under i tillegg til linjens eget (Vy-tog meldes som NSB)
+export const CODESPACE_ALIASES = Object.freeze({ VYG: ['NSB'] });
+
 export const SITUATION_AREAS = Object.freeze([
   { id: 'rail', name: 'Tog', codespaces: RAIL_CODESPACES },
   { id: 'RUT', name: 'Ruter (Oslo og Akershus)', codespaces: ['RUT'] },

@@ -5,6 +5,7 @@
 
 import { REGION_LINES } from './line-catalog.js';
 import { featuredStopsFor, normalizeStopName, distanceM } from './stop-catalog.js';
+import { lineRefKeys } from './situations-model.js';
 import { regionPath } from '../shared/regions.js';
 
 const NEAR_M = 800;
@@ -30,14 +31,9 @@ export function createSituationLinks({
     for (const line of linesFor(region.id)) {
       if (line.indexed === false) continue;
       const path = regionPath(region, `/linje/${line.slug}`);
-      const codes = [line.code, ...(line.aliases || [])].map(upper);
-      if (line.ref && !byRef.has(line.ref)) byRef.set(line.ref, path);
-      for (const c of codes) {
-        const ref = `${line.authority}:Line:${c}`;
-        if (!byRef.has(ref)) byRef.set(ref, path);
-        const key = `${line.authority}|${c}`;
-        if (!byCode.has(key)) byCode.set(key, path);
-      }
+      const { refs, codes } = lineRefKeys(line);
+      for (const ref of refs) if (!byRef.has(ref)) byRef.set(ref, path);
+      for (const key of codes) if (!byCode.has(key)) byCode.set(key, path);
     }
     for (const stop of stopsFor(region.id)) {
       const path = regionPath(region, `/holdeplass/${stop.slug}`);

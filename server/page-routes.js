@@ -8,6 +8,7 @@ import { getLineBySlug, getLineStops, getLineText } from './line-catalog.js';
 import { getMergedVehicles, countVehiclesForLine } from './live-vehicles.js';
 import { getGuideBySlug, loadGuideBody, GUIDES } from './guide-catalog.js';
 import { getStopBySlug, getStopText } from './stop-catalog.js';
+import { createSituationLinks } from './situation-links.js';
 import { getSituationService } from './situations.js';
 import { situationsForLine, situationsForStop } from './situations-model.js';
 import { renderLinePage } from './pages/line-page.js';
@@ -49,6 +50,7 @@ export function registerPageRoutes(app, {
   etLoaded = regionEtLoaded,
   getSituationIndex = () => getSituationService().getIndex(),
 }) {
+  const { lineLink } = createSituationLinks({ regions: visible });
   const indexOrNull = () => { try { return getSituationIndex(); } catch { return null; } };
   const situationsFor = (line) => { const i = indexOrNull(); return i ? situationsForLine(i, line) : []; };
   const stopSituations = (stop, info) => { const i = indexOrNull(); return i ? situationsForStop(i, [stop.id, ...(info?.quayIds ?? [])]) : []; };
@@ -108,7 +110,7 @@ export function registerPageRoutes(app, {
       try {
         const [info, departures, text] = await Promise.all([stopService.getInfo(stop), stopService.getDepartures(stop), stopText(stop.slug, region.id)]);
         res.set('Cache-Control', departures ? 'public, max-age=30' : 'no-store');
-        res.type('html').send(renderStopPage(stop, info, departures, { text, situations: stopSituations(stop, info) }));
+        res.type('html').send(renderStopPage(stop, info, departures, { text, situations: stopSituations(stop, info), lineLink }));
       } catch (err) {
         unavailable(res, 'Holdeplasside', err);
       }

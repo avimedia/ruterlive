@@ -169,3 +169,35 @@ test('holdeplassoppslag: stoppested-ID, eller quay med samme navn i nærheten', 
   assert.equal(links.stopLink('NSR:StopPlace:9', 'Oslo S', 'RUT'), '/holdeplass/oslo-s', 'uten koordinater, samme region');
   assert.equal(links.stopLink('NSR:StopPlace:9', 'Oslo S', 'SKY'), null, 'uten koordinater, annen region');
 });
+
+// ---------- Fiks runde 1 ----------
+
+test('holdeplasser uten navn vises ikke i kortet', () => {
+  const s = sit({ id: 'RUT:5', stops: [{ id: 'NSR:Quay:77', name: '' }, { id: 'NSR:Quay:78', name: 'Sinsen' }] });
+  const html = render({ index: buildSituationIndex([s]) });
+  assert.ok(!html.includes('NSR:Quay:77'));
+  assert.ok(html.includes('Sinsen'));
+});
+
+test('linjeskift: escapes først, tom linje gir avsnitt, enkelt linjeskift <br>', () => {
+  const s = sit({ id: 'RUT:6', lines: [{ ref: 'RUT:Line:1', code: '1' }], description: 'a <b>\nb\n\nc' });
+  const html = render({ index: buildSituationIndex([s]) });
+  assert.ok(html.includes('<p>a &lt;b&gt;<br>b</p><p>c</p>'));
+});
+
+test('uten gyldighetsperioder: «Gjelder inntil videre»', () => {
+  const s = sit({ id: 'RUT:7', lines: [{ ref: 'RUT:Line:1', code: '1' }] });
+  assert.ok(render({ index: buildSituationIndex([s]) }).includes('<li>Gjelder inntil videre</li>'));
+});
+
+test('områdelinje: antall, alvorlige og bare linjer med egen side', () => {
+  const list = [
+    sit({ id: 'RUT:a', severity: 'severe', lines: [{ ref: 'RUT:Line:31', code: '31' }, { ref: 'RUT:Line:9999', code: '9999' }] }),
+    sit({ id: 'RUT:b', severity: 'verySevere', lines: [{ ref: 'RUT:Line:31', code: '31' }] }),
+    sit({ id: 'RUT:c', lines: [{ ref: 'RUT:Line:9999', code: '9999' }] }),
+  ];
+  const html = render({ index: buildSituationIndex(list) });
+  assert.ok(html.includes('<p class="situation-summary">3 avvik, 2 alvorlige. Linjer med egen side: <a href="/linje/buss-31">31</a>.</p>'));
+  const one = render({ index: buildSituationIndex([list[2]]) });
+  assert.ok(one.includes('<p class="situation-summary">1 avvik.</p>'));
+});

@@ -1219,3 +1219,8 @@ th {
   list-style: none;
   font-size: 0.9375rem;
 }
+
+.situation-summary {
+  margin: -0.25rem 0 1rem;
+  color: var(--text-muted);
+}

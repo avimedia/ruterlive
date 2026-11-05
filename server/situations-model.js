@@ -17,7 +17,8 @@ function pickText(list) {
   if (!items.length) return '';
   const lang = (t) => (t.language || '').toLowerCase();
   const hit = items.find((t) => !t.language || NO_LANGS.has(lang(t))) || items[0];
-  return hit.value.trim();
+  // Noen selskaper skriver linjeskift som <br>; lagres som \n (teksten er rå og escapes ved visning)
+  return hit.value.replace(/<br\s*\/?>/gi, '\n').trim();
 }
 
 const toMs = (iso) => {

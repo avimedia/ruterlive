@@ -120,3 +120,8 @@ test('avvik uten mål: i indeksen, men ikke i region eller liste', () => {
   assert.ok(!situationsForRegion(idx, REGIONS.oslo).some((s) => s.id === t.id));
   assert.deepEqual(listableSituations(idx).map((s) => s.id).sort(), [norm(2).id, norm(10).id].sort());
 });
+
+test('normalisering: <br> og <br/> blir linjeskift', () => {
+  const s = normalizeSituation({ situationNumber: 'X:1', summary: [{ value: 'Tittel' }], description: [{ value: 'a<br>b<BR/>c<br />d' }] });
+  assert.equal(s.description, 'a\nb\nc\nd');
+});

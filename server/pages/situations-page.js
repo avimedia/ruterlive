@@ -47,15 +47,19 @@ export function formatValidityPeriod({ start, end }, now) {
 const MAX_PERIODS = 3;
 
 function validityHtml(validity, now) {
-  const periods = (validity || []).filter((p) => p.end == null || p.end > now);
+  if (!validity || !validity.length) return '<ul class="situation-validity"><li>Gjelder inntil videre</li></ul>';
+  const periods = validity.filter((p) => p.end == null || p.end > now);
   if (!periods.length) return '';
   const shown = periods.slice(0, MAX_PERIODS).map((p) => `<li>${escapeHtml(formatValidityPeriod(p, now))}</li>`);
   if (periods.length > MAX_PERIODS) shown.push(`<li>og ${periods.length - MAX_PERIODS} perioder til</li>`);
   return `<ul class="situation-validity">${shown.join('')}</ul>`;
 }
 
-/** Operatørtekst: escapet, linjeskift beholdt. */
-const textHtml = (s) => escapeHtml(s).replace(/\r?\n/g, '<br>');
+/** Operatørtekst: escapet først; tom linje gir nytt avsnitt, enkelt linjeskift <br>. */
+const textHtml = (s, cls = '') => String(s).split(/\r?\n\s*\n/)
+  .map((p) => p.trim()).filter(Boolean)
+  .map((p) => `<p${cls ? ` class="${cls}"` : ''}>${escapeHtml(p).replace(/\r?\n/g, '<br>')}</p>`)
+  .join('');
 
 function linesHtml(lines, lineLink) {
   const seen = new Set();
@@ -76,7 +80,8 @@ function stopsHtml(stops, codespace, stopLink) {
   // Flere quayer på samme stoppested har samme navn: vis navnet én gang, med lenke hvis noen av dem har side
   const byName = new Map();
   for (const p of stops) {
-    const name = p.name || p.id;
+    if (!p.name) continue; // uten navn sier ID-en ingenting for leseren
+    const name = p.name;
     const path = stopLink(p.id, p.name, codespace);
     if (!byName.has(name) || (!byName.get(name) && path)) byName.set(name, path);
   }
@@ -98,8 +103,8 @@ function cardHtml(s, { now, lineLink, stopLink, showCodespace }) {
     `<h3>${escapeHtml(s.summary)}</h3>`,
     tags.length ? `<p class="situation-tags">${tags.join(' ')}</p>` : '',
     validityHtml(s.validity, now),
-    s.description ? `<p>${textHtml(s.description)}</p>` : '',
-    s.advice ? `<p class="situation-advice">${textHtml(s.advice)}</p>` : '',
+    s.description ? textHtml(s.description) : '',
+    s.advice ? textHtml(s.advice, 'situation-advice') : '',
     linesHtml(s.lines, lineLink),
     stopsHtml(s.stops, s.codespace, stopLink),
     links ? `<ul class="situation-links">${links}</ul>` : '',
@@ -110,6 +115,24 @@ function cardHtml(s, { now, lineLink, stopLink, showCodespace }) {
 }
 
 const areaAnchor = (area) => `avvik-${area.id.toLowerCase()}`;
+
+/** Én generert linje under områdets overskrift: antall, antall alvorlige og linjer med egen side. */
+export function areaSummaryHtml(list, lineLink) {
+  const parts = [`${list.length} avvik`];
+  const severe = list.filter((s) => s.severity === 'severe' || s.severity === 'verySevere').length;
+  if (severe) parts[0] += `, ${severe} ${severe === 1 ? 'alvorlig' : 'alvorlige'}`;
+  const linked = new Map();
+  for (const s of list) {
+    for (const l of s.lines) {
+      const path = lineLink(l.ref, l.code);
+      if (path && !linked.has(path)) linked.set(path, l.code || String(l.ref).split(':').pop());
+    }
+  }
+  const codes = [...linked].sort((a, b) => a[1].localeCompare(b[1], 'nb', { numeric: true }))
+    .map(([path, code]) => `<a href="${escapeHtml(path)}">${escapeHtml(code)}</a>`);
+  const lines = codes.length ? ` Linjer med egen side: ${codes.join(', ')}.` : '';
+  return `<p class="situation-summary">${parts[0]}.${lines}</p>`;
+}
 
 function listHtml(index, ctx) {
   if (!index) return '    <p class="situations-empty">Avvik er ikke tilgjengelige akkurat nå.</p>';
@@ -124,6 +147,7 @@ function listHtml(index, ctx) {
     .join('');
   const sections = areas.map((a) => `    <section class="situation-area" id="${areaAnchor(a)}">
       <h2>${escapeHtml(a.name)}</h2>
+      ${areaSummaryHtml(groups.get(a.id), ctx.lineLink)}
 ${groups.get(a.id).map((s) => cardHtml(s, { ...ctx, showCodespace: a.id === 'other' })).join('\n')}
     </section>`).join('\n');
   return `    <nav class="situation-jump" aria-label="Områder"><ul>${jump}</ul></nav>

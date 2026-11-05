@@ -4,7 +4,7 @@ import { withRegion } from './region.js';
 import { isFlytogLineCode } from '../config.js';
 import { splitRouteAt, chooseClosestShape } from './route-split.js';
 import { groupStops } from './stop-groups.js';
-import { prefersDepartureSheet, showDepartures } from './departure-sheet.js';
+import { prefersDepartureSheet, showDepartures, onDeparturesClosed } from './departure-sheet.js';
 import { groupDepartures } from './departure-groups.js';
 import { situationsForLine, situationsForQuays, situationNoteHtml, lineKeyFromCall, onSituationsChanged } from './situations.js';
 import { lineBadgesHtml, escapeHtml, placePageHref } from './stop-place-format.js';
@@ -355,6 +355,7 @@ function createStopMarker(lat, lon, quayIds, name, color, stopsLayer) {
   };
   marker.bindPopup(popup, { autoClose: true, closeOnClick: true });
   marker.on('click', (e) => L.DomEvent.stopPropagation(e));
+  marker.on('popupclose', () => { shownBoard = null; });
   marker.on('popupopen', () => {
     showDepartureBoard(marker.getPopup(), ids);
   });
@@ -518,6 +519,8 @@ function departureBoardHtml(data, ids) {
       </div>`;
 }
 
+onDeparturesClosed(() => { shownBoard = null; });
+
 onSituationsChanged(() => {
   if (!shownBoard) return;
   const html = departureBoardHtml(shownBoard.data, shownBoard.ids);
@@ -533,6 +536,7 @@ onSituationsChanged(() => {
  * navn fra serveren, som kan avvike fra markørens etikett.
  */
 async function showDepartureBoard(popup, quayIds) {
+  shownBoard = null;
   popup.setContent('<div class="departure-loading">Henter avganger…</div>');
 
   try {

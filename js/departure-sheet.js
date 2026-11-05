@@ -109,6 +109,12 @@ const DARK_TEXT_COLORS = new Set(['#e9c46a']);
 let state = CLOSED;
 let els = null;
 let currentLoad = null;
+const closeListeners = new Set();
+
+/** Kalles når arket lukkes. */
+export function onDeparturesClosed(cb) {
+  closeListeners.add(cb);
+}
 let lastFocus = null;
 let resizeObserver = null;
 
@@ -333,6 +339,7 @@ export function closeDepartures() {
   dispatch({ type: 'close' });
   scheduler.stop();
   currentLoad = null;
+  for (const cb of closeListeners) cb();
   if (!els) return;
   const { root } = els;
   root.classList.remove('is-open');

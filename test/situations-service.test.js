@@ -88,12 +88,14 @@ test('/api/situations: 400, no-store uten data, ETag stabil og ny etter ny versj
 
     r = await fetch(url);
     assert.equal(r.headers.get('cache-control'), 'no-store');
-    assert.deepEqual(await r.json(), { updatedAt: null, situations: [] });
+    assert.deepEqual(await r.json(), { available: false, situations: [] });
 
     await service.refreshNow();
     r = await fetch(url);
     assert.equal(r.headers.get('cache-control'), 'public, max-age=60');
     const body = await r.json();
+    assert.equal(body.available, true);
+    assert.equal('updatedAt' in body, false);
     assert.equal(body.situations.length, 1);
     const etag = r.headers.get('etag');
     const r2 = await fetch(url);
@@ -108,5 +110,18 @@ test('/api/situations: 400, no-store uten data, ETag stabil og ny etter ny versj
     // Bergen har ingen RUT-avvik
     const r5 = await fetch(`${url}?region=bergen`);
     assert.equal((await r5.json()).situations.length, 0);
+  });
+});
+
+test('/api/situations: identisk Entur-data ved ny henting gir samme ETag (304)', async () => {
+  const { service } = setup([okResponse([raw('RUT:SituationNumber:1')]), okResponse([raw('RUT:SituationNumber:1')])]);
+  await service.refreshNow();
+  await withApp(service, async (url) => {
+    const r = await fetch(url);
+    const etag = r.headers.get('etag');
+    await service.refreshNow();
+    assert.equal(service.getVersion(), 2);
+    const r2 = await fetch(url, { headers: { 'if-none-match': etag } });
+    assert.equal(r2.status, 304);
   });
 });

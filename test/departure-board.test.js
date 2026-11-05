@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   perQuayCount,
+  departuresQuery,
   expandQuayIds,
   trimCalls,
   createDepartureBoard,
@@ -167,4 +168,8 @@ test('board med ekte quay-oppslag: ett JP-kall for stoppestedet, deretter bare a
   const deps = bodies.filter((b) => b.query.includes('estimatedCalls'));
   assert.equal(deps.length, 1);
   assert.equal(bodies.length - deps.length, 1, 'ett quay-oppslag (stoppestedet)');
+});
+
+test('JP-spørringen for avganger henter linje-id (trengs for avviksmerking)', () => {
+  assert.match(departuresQuery(9), /line \{ id /);
 });

@@ -123,23 +123,23 @@ test('setSituations varsler lyttere; fetchSituations er stille ved feil', async 
   assert.equal(getSituations().length, 1, 'feil beholder forrige liste');
   assert.equal(await fetchSituations(async (url) => {
     assert.equal(url, '/api/situations');
-    return { ok: true, json: async () => ({ updatedAt: 1, situations: [sit({ id: 'z' }), sit({ id: 'w' })] }) };
+    return { ok: true, json: async () => ({ available: true, situations: [sit({ id: 'z' }), sit({ id: 'w' })] }) };
   }), true);
   assert.equal(getSituations().length, 2);
 });
 
-test('fetchSituations: uendret svar (samme updatedAt og id-er) gir ingen endringshendelse', async () => {
-  const data = { updatedAt: 42, situations: [sit({ id: 'a' }), sit({ id: 'b' })] };
+test('fetchSituations: uendret svar (samme innhold) gir ingen endringshendelse, ny tekst gir hendelse', async () => {
+  const data = { available: true, situations: [sit({ id: 'a' }), sit({ id: 'b' })] };
   const reply = (d) => async () => ({ ok: true, json: async () => d });
   assert.equal(situationsSignature(data), situationsSignature({ ...data, situations: data.situations.map((s) => ({ ...s })) }));
-  assert.notEqual(situationsSignature(data), situationsSignature({ ...data, updatedAt: 43 }));
+  assert.notEqual(situationsSignature(data), situationsSignature({ ...data, situations: [data.situations[0], { ...data.situations[1], summary: 'Endret' }] }));
   assert.notEqual(situationsSignature(data), situationsSignature({ ...data, situations: [data.situations[0]] }));
   let events = 0;
   const off = onSituationsChanged(() => { events += 1; });
   assert.equal(await fetchSituations(reply(data)), true);
   assert.equal(await fetchSituations(reply({ ...data })), true);
   assert.equal(events, 1);
-  assert.equal(await fetchSituations(reply({ ...data, updatedAt: 43 })), true);
+  assert.equal(await fetchSituations(reply({ ...data, situations: [data.situations[0], { ...data.situations[1], summary: 'Endret' }] })), true);
   assert.equal(events, 2);
   off();
 });
@@ -160,4 +160,26 @@ test('situationNoteHtml: tom uten avvik, maks 2 + «og N til», escaper', async 
   assert.deepEqual(lineKeyFromCall({ serviceJourney: { journeyPattern: { line: { id: 'RUT:Line:31', publicCode: '31' } } } }), { lineRef: 'RUT:Line:31', publicCode: '31' });
   assert.deepEqual(lineKeyFromVehicle({ line: { ref: 'RUT:Line:31', publicCode: '31' } }), { lineRef: 'RUT:Line:31', publicCode: '31' });
   assert.deepEqual(lineKeyFromVehicle({ line: { lineRef: 'X:Line:1', publicCode: '1' } }), { lineRef: 'X:Line:1', publicCode: '1' });
+});
+
+test('fetchSituations: available false gir false, tom liste og isUnavailable; gjenopprettet svar varsler på nytt', async () => {
+  const { isUnavailable } = await import('../js/situations.js');
+  const reply = (d) => async () => ({ ok: true, json: async () => d });
+  const list = [sit({ id: 'q' })];
+  assert.equal(await fetchSituations(reply({ available: true, situations: list })), true);
+  assert.equal(isUnavailable(), false);
+  assert.equal(await fetchSituations(reply({ available: false, situations: [] })), false);
+  assert.equal(isUnavailable(), true);
+  assert.deepEqual(getSituations(), []);
+  let events = 0;
+  const off = onSituationsChanged(() => { events += 1; });
+  assert.equal(await fetchSituations(reply({ available: true, situations: list })), true);
+  assert.equal(isUnavailable(), false);
+  assert.equal(events, 1);
+  off();
+});
+
+test('situationCardHtml: arvede nøkler som alvorlighetsgrad gir ingen merkelapp', () => {
+  const html = situationCardHtml(sit({ severity: 'constructor' }), { now: NOW });
+  assert.ok(!html.includes('sit-tag"'));
 });

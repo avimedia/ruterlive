@@ -78,7 +78,7 @@ export function trimCalls(quays, cap = TOTAL_CAP) {
   return out;
 }
 
-function departuresQuery(numberOfDepartures) {
+export function departuresQuery(numberOfDepartures) {
   return `query($ids: [String]!) {
   quays(ids: $ids) {
     id

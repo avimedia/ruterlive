@@ -4,7 +4,7 @@
  */
 
 import L from 'leaflet';
-import { getSituations, onSituationsChanged, badgeCount, situationCardHtml, initSituations } from './situations.js';
+import { getSituations, onSituationsChanged, badgeCount, situationCardHtml, initSituations, isUnavailable } from './situations.js';
 import { findSituationLine, selectLine, onRegionLinesLoaded } from './line-search.js';
 import { getMap } from './map.js';
 
@@ -162,6 +162,7 @@ export function initSituationsPanel() {
   }, true);
   onSituationsChanged((list) => {
     loaded = true;
+    failed = false;
     const ids = new Set(list.map((s) => s.id));
     for (const id of expanded) if (!ids.has(id)) expanded.delete(id);
     updateButton(list);
@@ -171,6 +172,10 @@ export function initSituationsPanel() {
   initSituations({
     onError: () => {
       failed = true;
+      if (isUnavailable()) {
+        loaded = false;
+        updateButton([]);
+      }
       if (isOpen()) render();
     },
   });

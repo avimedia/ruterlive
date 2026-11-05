@@ -14,7 +14,7 @@ export function registerSituationRoutes(app, { service, visible, now = Date.now 
       m = memoEntry((index, _version, minute) => {
         const t = minute * 60_000;
         const situations = situationsForRegion(index, region).filter((s) => isRelevant(s, t));
-        prev = makeJsonEntry({ updatedAt: service.getUpdatedAt(), situations }, prev);
+        prev = makeJsonEntry({ available: true, situations }, prev);
         return prev;
       });
       memos.set(region.id, m);
@@ -30,8 +30,9 @@ export function registerSituationRoutes(app, { service, visible, now = Date.now 
     }
     const index = service.getIndex();
     if (!index) {
+      // Ingen ferske data (Entur nede lenge): panelet viser feiltekst i stedet for «ingen avvik»
       res.set('Cache-Control', 'no-store');
-      return res.json({ updatedAt: null, situations: [] });
+      return res.json({ available: false, situations: [] });
     }
     const entry = memoFor(region)(index, service.getVersion(), Math.floor(now() / 60_000));
     return sendJson(req, res, entry, { cacheControl: 'public, max-age=60' });

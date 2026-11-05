@@ -8,18 +8,22 @@ import { withRegion } from './region.js';
 import { runWhenVisible } from './visibility.js';
 import { escapeHtml } from './stop-place-format.js';
 import { lineRefKeys, situationOnLine } from '../shared/situation-areas.js';
-import { SEVERITY_LABEL, formatValidityPeriod } from '../shared/situation-format.js';
+import { severityLabel, textHtml, formatValidityPeriod } from '../shared/situation-format.js';
 
 export const POLL_MS = 120_000;
 
 let situations = [];
 let signature = null;
+let unavailable = false;
+
+/** Serveren melder at avvik ikke er tilgjengelige (Entur nede lenge). */
+export const isUnavailable = () => unavailable;
 const listeners = new Set();
 
-/** Kjennetegn for et svar: updatedAt + avvikenes id-er. Likt kjennetegn betyr ingen endring. */
+/** Kjennetegn for et svar: innholdet i avvikene. Likt kjennetegn betyr ingen endring. */
 export function situationsSignature(data) {
   const list = Array.isArray(data?.situations) ? data.situations : [];
-  return `${data?.updatedAt ?? ''}|${list.map((s) => s?.id).join(',')}`;
+  return JSON.stringify(list);
 }
 
 export function getSituations() {
@@ -103,19 +107,13 @@ export function lineKeyFromVehicle(v) {
 
 const isHttp = (u) => typeof u === 'string' && /^https?:\/\//i.test(u);
 
-/** Operatørtekst: escapet; tom linje gir nytt avsnitt, enkelt linjeskift <br>. */
-const textHtml = (s, cls) => String(s).split(/\r?\n\s*\n/)
-  .map((p) => p.trim()).filter(Boolean)
-  .map((p) => `<p class="${cls}">${escapeHtml(p).replace(/\r?\n/g, '<br>')}</p>`)
-  .join('');
-
 /**
  * Ett kort i panelet som HTML-streng. Alt fra operatøren escapes; lenker bare http(s).
  * Linjemerkene er knapper med data-line-index (indeks i s.lines), som panelet kobler til linjevalg.
  */
 export function situationCardHtml(s, { now = Date.now() } = {}) {
   const tags = [];
-  const label = SEVERITY_LABEL[s.severity];
+  const label = severityLabel(s.severity);
   if (label && s.severity !== 'normal') tags.push(`<span class="sit-tag" data-severity="${escapeHtml(s.severity)}">${label}</span>`);
   if (s.planned) tags.push('<span class="sit-tag">Planlagt</span>');
 
@@ -157,6 +155,14 @@ export async function fetchSituations(fetchImpl = globalThis.fetch) {
     if (!res?.ok) return false;
     const data = await res.json();
     if (!data || !Array.isArray(data.situations)) return false;
+    // Entur utilgjengelig lenge: serveren svarer available: false, og panelet viser feiltekst
+    if (data.available === false) {
+      unavailable = true;
+      situations = [];
+      signature = null;
+      return false;
+    }
+    unavailable = false;
     const sig = situationsSignature(data);
     if (sig !== signature) {
       signature = sig;

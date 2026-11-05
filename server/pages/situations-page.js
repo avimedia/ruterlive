@@ -3,7 +3,7 @@
 import { breadcrumbLd, escapeHtml, renderPage } from './layout.js';
 import { listableSituations, isRelevant } from '../situations-model.js';
 import { SITUATION_AREAS, areaFor } from '../../shared/situation-areas.js';
-import { SEVERITY_LABEL, formatValidityPeriod, timeOf } from '../../shared/situation-format.js';
+import { severityLabel, textHtml, formatValidityPeriod, timeOf } from '../../shared/situation-format.js';
 
 export { formatValidityPeriod };
 
@@ -19,12 +19,6 @@ function validityHtml(validity, now) {
   if (periods.length > MAX_PERIODS) shown.push(`<li>og ${periods.length - MAX_PERIODS} perioder til</li>`);
   return `<ul class="situation-validity">${shown.join('')}</ul>`;
 }
-
-/** Operatørtekst: escapet først; tom linje gir nytt avsnitt, enkelt linjeskift <br>. */
-const textHtml = (s, cls = '') => String(s).split(/\r?\n\s*\n/)
-  .map((p) => p.trim()).filter(Boolean)
-  .map((p) => `<p${cls ? ` class="${cls}"` : ''}>${escapeHtml(p).replace(/\r?\n/g, '<br>')}</p>`)
-  .join('');
 
 function linesHtml(lines, lineLink) {
   const seen = new Set();
@@ -59,7 +53,7 @@ function stopsHtml(stops, codespace, stopLink) {
 
 function cardHtml(s, { now, lineLink, stopLink, showCodespace }) {
   const tags = [];
-  const label = SEVERITY_LABEL[s.severity];
+  const label = severityLabel(s.severity);
   if (label) tags.push(`<span class="situation-tag" data-severity="${escapeHtml(s.severity)}">${label}</span>`);
   if (s.planned) tags.push('<span class="situation-tag">Planlagt</span>');
   if (showCodespace) tags.push(`<span class="situation-tag">${escapeHtml(s.codespace)}</span>`);

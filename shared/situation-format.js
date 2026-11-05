@@ -15,6 +15,18 @@ export const SEVERITY_LABEL = Object.freeze({
   noImpact: 'Ingen påvirkning',
 });
 
+const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
+
+/** Merkelapp for en alvorlighetsgrad, eller null (ukjent, «undefined», arvede nøkler som «constructor»). */
+export const severityLabel = (sev) => (typeof sev === 'string' && Object.hasOwn(SEVERITY_LABEL, sev) ? SEVERITY_LABEL[sev] : null);
+
+/** Operatørtekst: escapet først; tom linje gir nytt avsnitt, enkelt linjeskift <br>. */
+export const textHtml = (s, cls = '') => String(s).split(/\r?\n\s*\n/)
+  .map((p) => p.trim()).filter(Boolean)
+  .map((p) => `<p${cls ? ` class="${cls}"` : ''}>${esc(p).replace(/\r?\n/g, '<br>')}</p>`)
+  .join('');
+
 const dateFmt = new Intl.DateTimeFormat('nb-NO', { timeZone: TZ, day: 'numeric', month: 'short', year: 'numeric' });
 const timeFmt = new Intl.DateTimeFormat('nb-NO', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 

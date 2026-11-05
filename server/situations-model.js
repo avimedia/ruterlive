@@ -2,7 +2,7 @@
  * Avvik (SIRI SX) fra Entur Vehicles-API: normalisering, gyldighet, sortering og indekser.
  * Ren modul uten nettverk.
  */
-import { RAIL_CODESPACES, lineRefKeys } from '../shared/situation-areas.js';
+import { RAIL_CODESPACES, lineRefKeys, situationOnLine } from '../shared/situation-areas.js';
 
 export { RAIL_CODESPACES, lineRefKeys };
 
@@ -125,16 +125,8 @@ export function listableSituations(index) {
 
 /** Avvik for en katalogelinje, se lineRefKeys. */
 export function situationsForLine(index, line) {
-  const { refs, codes } = lineRefKeys(line);
-  const wanted = new Set(codes);
-  const seen = new Map();
-  for (const ref of refs) for (const s of index.byLine.get(ref) || []) seen.set(s.id, s);
-  for (const sp of new Set(codes.map((k) => k.split('|')[0]))) {
-    for (const s of index.byCodespace.get(sp) || []) {
-      if (!seen.has(s.id) && s.lines.some((l) => wanted.has(`${sp}|${String(l.code ?? '').toUpperCase()}`))) seen.set(s.id, s);
-    }
-  }
-  return [...seen.values()].sort(compareSituations);
+  const keys = lineRefKeys(line);
+  return index.all.filter((s) => situationOnLine(s, keys)).sort(compareSituations);
 }
 
 /** Union av avvik for flere quay-/stopPlace-ID-er, uten duplikater. */

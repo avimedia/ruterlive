@@ -93,7 +93,7 @@ function departuresQuery(numberOfDepartures) {
       aimedDepartureTime
       expectedDepartureTime
       destinationDisplay { frontText }
-      serviceJourney { id journeyPattern { line { publicCode transportMode } } }
+      serviceJourney { id journeyPattern { line { id publicCode transportMode } } }
     }
   }
 }`;

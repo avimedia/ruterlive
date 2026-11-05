@@ -6,6 +6,7 @@ import { splitRouteAt, chooseClosestShape } from './route-split.js';
 import { groupStops } from './stop-groups.js';
 import { prefersDepartureSheet, showDepartures } from './departure-sheet.js';
 import { groupDepartures } from './departure-groups.js';
+import { situationsForLine, situationsForQuays, situationNoteHtml, lineKeyFromCall, onSituationsChanged } from './situations.js';
 import { lineBadgesHtml, escapeHtml, placePageHref } from './stop-place-format.js';
 
 const MODE_COLORS = {
@@ -474,14 +475,57 @@ function departureRowHtml(c, now) {
     c.expectedDepartureTime &&
     c.aimedDepartureTime &&
     new Date(c.expectedDepartureTime).getTime() > new Date(c.aimedDepartureTime).getTime() + 60000;
+  const hasSit = situationsForLine(lineKeyFromCall(c)).length > 0;
+  const sitBadge = hasSit ? ' <span class="departure-sit" title="Avvik på linja">⚠ Avvik</span>' : '';
   const delayBadge = isDelayed ? ' <span class="departure-delayed">Forsinket</span>' : '';
   const realtime = c.realtime && !isDelayed ? ' <span class="departure-realtime">Sanntid</span>' : '';
   const next = c.next?.length ? ` <span class="departure-next">Neste ${c.next.map((n) => nextTimeText(n, now)).join(', ')}</span>` : '';
   // Trykk på raden viser kjøretøyet på kartet (js/departure-focus.js)
   const sj = c.serviceJourney?.id;
   const rowAttrs = sj ? ` class="departure-row--tap" data-sj="${escapeHtml(sj)}" tabindex="0" title="Vis på kartet"` : '';
-  return `<tr${rowAttrs}><td class="departure-line" style="color:${lineColor}">${escapeHtml(line)}</td><td class="departure-dest">${escapeHtml(dest)}${sj ? PIN_ICON : ''}</td><td class="departure-time">${dep}</td><td class="departure-mins">${minsText}</td><td class="departure-badges">${realtime}${delayBadge}${next}</td></tr>`;
+  return `<tr${rowAttrs}><td class="departure-line" style="color:${lineColor}">${escapeHtml(line)}</td><td class="departure-dest">${escapeHtml(dest)}${sj ? PIN_ICON : ''}</td><td class="departure-time">${dep}</td><td class="departure-mins">${minsText}</td><td class="departure-badges">${sitBadge}${realtime}${delayBadge}${next}</td></tr>`;
 }
+
+let shownBoard = null; // {popup, data, ids}: tavla som vises nå, tegnes på nytt når avvik endres
+
+function departureBoardHtml(data, ids) {
+  const name = data?.place?.name || data?.name || 'Holdeplass';
+  const locality = data?.place?.locality || '';
+  const groups = groupDepartures(data?.estimatedCalls ?? [], data?.quays ?? []);
+  const now = Date.now();
+  const body = groups
+    .map(
+      (g) =>
+        `<tbody>${g.header ? `<tr class="departure-group"><th colspan="5" scope="colgroup">${escapeHtml(g.header)}</th></tr>` : ''}${g.calls.map((c) => departureRowHtml(c, now)).join('')}</tbody>`
+    )
+    .join('');
+  const badges = lineBadgesHtml(data?.place?.lines ?? [], { max: 24 });
+  const stopIds = data?.place?.id ? [...ids, data.place.id] : ids;
+  const stopNote = situationNoteHtml(situationsForQuays(stopIds), { title: '⚠ Avvik ved holdeplassen' });
+  return `
+      <div class="departure-board${groups.length > 1 ? ' departure-board--grouped' : ''}">
+        <div class="departure-place">
+          <h4 class="departure-stop-name" data-name="${escapeHtml(name)}" data-locality="${escapeHtml(locality)}">${escapeHtml(name)}${locality ? ` <span class="departure-locality">· ${escapeHtml(locality)}</span>` : ''}</h4>
+          ${badges ? `<div class="departure-place-lines">${badges}</div>` : ''}
+        </div>
+        ${stopNote}
+        <table class="departure-table">
+          <thead><tr><th>Linje</th><th>Destinasjon</th><th>Kl</th><th></th><th></th></tr></thead>
+          ${body}
+        </table>
+        ${groups.length === 0 ? '<p class="departure-empty">Ingen avganger de neste timene.</p>' : '<p class="departure-hint">Trykk på en avgang for å se hvor den er nå.</p>'}
+        ${placePageHref(data?.place) ? `<a class="departure-place-link" href="${escapeHtml(placePageHref(data.place))}">Om ${escapeHtml(name)} →</a>` : ''}
+      </div>`;
+}
+
+onSituationsChanged(() => {
+  if (!shownBoard) return;
+  const html = departureBoardHtml(shownBoard.data, shownBoard.ids);
+  if (html !== shownBoard.html) {
+    shownBoard.html = html;
+    shownBoard.popup.setContent(html);
+  }
+});
 
 /**
  * Avgangstavle (popup på desktop, bunnark på mobil – samme HTML): stoppested med kommune og linjer,
@@ -495,30 +539,8 @@ async function showDepartureBoard(popup, quayIds) {
     const ids = (Array.isArray(quayIds) ? quayIds : [quayIds]).slice(0, DEPARTURE_MAX_QUAYS);
     const res = await fetch(`/api/departures?quayId=${ids.map(encodeURIComponent).join(',')}`);
     const data = await res.json();
-    const name = data?.place?.name || data?.name || 'Holdeplass';
-    const locality = data?.place?.locality || '';
-    const groups = groupDepartures(data?.estimatedCalls ?? [], data?.quays ?? []);
-    const now = Date.now();
-    const body = groups
-      .map(
-        (g) =>
-          `<tbody>${g.header ? `<tr class="departure-group"><th colspan="5" scope="colgroup">${escapeHtml(g.header)}</th></tr>` : ''}${g.calls.map((c) => departureRowHtml(c, now)).join('')}</tbody>`
-      )
-      .join('');
-    const badges = lineBadgesHtml(data?.place?.lines ?? [], { max: 24 });
-    const html = `
-      <div class="departure-board${groups.length > 1 ? ' departure-board--grouped' : ''}">
-        <div class="departure-place">
-          <h4 class="departure-stop-name" data-name="${escapeHtml(name)}" data-locality="${escapeHtml(locality)}">${escapeHtml(name)}${locality ? ` <span class="departure-locality">· ${escapeHtml(locality)}</span>` : ''}</h4>
-          ${badges ? `<div class="departure-place-lines">${badges}</div>` : ''}
-        </div>
-        <table class="departure-table">
-          <thead><tr><th>Linje</th><th>Destinasjon</th><th>Kl</th><th></th><th></th></tr></thead>
-          ${body}
-        </table>
-        ${groups.length === 0 ? '<p class="departure-empty">Ingen avganger de neste timene.</p>' : '<p class="departure-hint">Trykk på en avgang for å se hvor den er nå.</p>'}
-        ${placePageHref(data?.place) ? `<a class="departure-place-link" href="${escapeHtml(placePageHref(data.place))}">Om ${escapeHtml(name)} →</a>` : ''}
-      </div>`;
+    const html = departureBoardHtml(data, ids);
+    shownBoard = { popup, data, ids, html };
     popup.setContent(html);
   } catch (err) {
     popup.setContent(

@@ -2086,3 +2086,26 @@ a,
   cursor: pointer;
 }
 .sit-more-btn:focus-visible { outline: 2px solid #2b7fff; outline-offset: 2px; }
+
+/* Avviksnotat i popup og avgangstavle */
+.sit-note {
+  margin: 6px 0 2px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border-left: 3px solid #e9a23b;
+  background: rgba(233, 162, 59, 0.14);
+  color: var(--text, inherit);
+  font-size: 0.85em;
+  line-height: 1.35;
+}
+.sit-note ul { margin: 2px 0 0; padding-left: 16px; }
+.sit-note-more { list-style: none; margin-left: -16px; opacity: 0.8; }
+.departure-sit {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(233, 162, 59, 0.22);
+  color: var(--text, inherit);
+  font-size: 0.75em;
+  white-space: nowrap;
+}

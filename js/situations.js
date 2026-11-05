@@ -78,6 +78,29 @@ export function formatValidity(validity, now = Date.now()) {
   return rest ? `${text} (og ${rest} ${rest === 1 ? 'periode' : 'perioder'} til)` : text;
 }
 
+/**
+ * Kompakt avviksnotat (popup, tavle): tittel + maks `max` oppsummeringer, så «og N til».
+ * Tom streng uten avvik. Alt escapes.
+ */
+export function situationNoteHtml(list, { title = '⚠ Avvik på linja', max = 2 } = {}) {
+  if (!Array.isArray(list) || !list.length) return '';
+  const shown = list.slice(0, max).map((s) => `<li>${escapeHtml(s.summary)}</li>`).join('');
+  const rest = list.length - max;
+  const more = rest > 0 ? `<li class="sit-note-more">og ${rest} til</li>` : '';
+  return `<div class="sit-note"><strong class="sit-note-title">${escapeHtml(title)}</strong><ul>${shown}${more}</ul></div>`;
+}
+
+/** Linjenøkkel for situationsForLine fra en avgang (JP-linje: id «RUT:Line:31», publicCode). */
+export function lineKeyFromCall(c) {
+  const line = c?.serviceJourney?.journeyPattern?.line;
+  return { lineRef: line?.id, publicCode: line?.publicCode };
+}
+
+/** Linjenøkkel fra et kjøretøy i /api/vehicles-live (line.ref) eller klient-fallback (line.lineRef). */
+export function lineKeyFromVehicle(v) {
+  return { lineRef: v?.line?.ref || v?.line?.lineRef, publicCode: v?.line?.publicCode };
+}
+
 const isHttp = (u) => typeof u === 'string' && /^https?:\/\//i.test(u);
 
 /** Operatørtekst: escapet; tom linje gir nytt avsnitt, enkelt linjeskift <br>. */

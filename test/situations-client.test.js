@@ -143,3 +143,21 @@ test('fetchSituations: uendret svar (samme updatedAt og id-er) gir ingen endring
   assert.equal(events, 2);
   off();
 });
+
+test('situationNoteHtml: tom uten avvik, maks 2 + «og N til», escaper', async () => {
+  const { situationNoteHtml, lineKeyFromCall, lineKeyFromVehicle } = await import('../js/situations.js');
+  assert.equal(situationNoteHtml([]), '');
+  assert.equal(situationNoteHtml(null), '');
+  const three = [sit({ summary: 'A' }), sit({ summary: 'B' }), sit({ summary: 'C' })];
+  const html = situationNoteHtml(three);
+  assert.match(html, /Avvik på linja/);
+  assert.match(html, /<li>A<\/li><li>B<\/li>/);
+  assert.doesNotMatch(html, /<li>C<\/li>/);
+  assert.match(html, /og 1 til/);
+  assert.doesNotMatch(situationNoteHtml(three.slice(0, 2)), /og \d+ til/);
+  const evil = situationNoteHtml([sit({ summary: '<img onerror=x>' })], { title: '<b>' });
+  assert.doesNotMatch(evil, /<img|<b>/);
+  assert.deepEqual(lineKeyFromCall({ serviceJourney: { journeyPattern: { line: { id: 'RUT:Line:31', publicCode: '31' } } } }), { lineRef: 'RUT:Line:31', publicCode: '31' });
+  assert.deepEqual(lineKeyFromVehicle({ line: { ref: 'RUT:Line:31', publicCode: '31' } }), { lineRef: 'RUT:Line:31', publicCode: '31' });
+  assert.deepEqual(lineKeyFromVehicle({ line: { lineRef: 'X:Line:1', publicCode: '1' } }), { lineRef: 'X:Line:1', publicCode: '1' });
+});

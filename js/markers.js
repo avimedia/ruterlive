@@ -8,6 +8,7 @@ import { delayLabel, shownDelay, DELAY_MAJOR_S } from '../shared/vehicle-delay.j
 import { headingFromMove, angleDiff, MIN_HEADING_CHANGE_DEG } from './vehicle-heading.js';
 import { linePageFor, vehicleOnLine } from '../shared/line-list.js';
 import { currentRegion } from './region.js';
+import { situationsForLine, situationNoteHtml, lineKeyFromVehicle, onSituationsChanged } from './situations.js';
 
 const MODE_TO_CLASS = {
   bus: 'bus',
@@ -544,6 +545,17 @@ export function focusVehicle(vehicleId) {
   return true;
 }
 
+// Nye avvik oppdaterer åpne og lukkede popuper uten å lukke eller flytte noe
+onSituationsChanged(() => {
+  for (const marker of vehicleMarkers.values()) {
+    if (marker._rlPopupBase == null) continue;
+    const html = marker._rlPopupBase + situationNoteHtml(situationsForLine(marker._rlLineKey));
+    if (html === marker._rlPopupHtml) continue;
+    marker._rlPopupHtml = html;
+    marker.getPopup()?.setContent(html);
+  }
+});
+
 export function updateMarkers(vehicles, visibleModes, opts = {}) {
   const map = getMap();
   if (!map) return;
@@ -630,7 +642,9 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
     // Lenke til linjesiden når linja har en (innholdssidene er der annonsene vises)
     const page = linePageFor(v, vehicleModeClass(v), currentRegion().id);
     if (page) popupParts.push(`<a class="vehicle-popup-link" href="${page.path}">Om ${e(page.title)} →</a>`);
-    const popupHtml = popupParts.join('<br>');
+    const popupBaseHtml = popupParts.join('<br>');
+    const lineKey = lineKeyFromVehicle(v);
+    const popupHtml = popupBaseHtml + situationNoteHtml(situationsForLine(lineKey));
     const tooltipText = e(late ? `${title} · ${late}` : title);
 
     const path = Array.isArray(v.path) && v.path.length >= 2 ? v.path : null;
@@ -650,6 +664,8 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
       if (!popup) bindVehiclePopup(marker, popupHtml);
       else if (marker._rlPopupHtml !== popupHtml) popup.setContent(popupHtml);
       marker._rlPopupHtml = popupHtml;
+      marker._rlPopupBase = popupBaseHtml;
+      marker._rlLineKey = lineKey;
     } else {
       const start = (path && positionAt(path, Date.now())) || [lat, lon];
       marker = L.marker(start, {
@@ -663,6 +679,8 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
         });
       bindVehiclePopup(marker, popupHtml);
       marker._rlPopupHtml = popupHtml;
+      marker._rlPopupBase = popupBaseHtml;
+      marker._rlLineKey = lineKey;
       marker._rlTooltip = tooltipText;
       marker._rlIconKey = `${mode}|${lineCode}|${showLine ? 1 : 0}`;
       marker._rlWanted = true;

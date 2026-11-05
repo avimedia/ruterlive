@@ -38,7 +38,24 @@ export const GUIDES = [
     title: 'Slik bruker du kartet',
     description: 'En gjennomgang av lagvelgeren, søk, holdeplasser, avgangstavler og de andre funksjonene på kartet.',
   },
-].map((g) => ({ published: PUBLISHED, updated: PUBLISHED, region: 'oslo', ...g }));
+].map((g) => ({ published: PUBLISHED, updated: PUBLISHED, region: 'oslo', ...g })).concat([
+  // Bergen: content/bergen/guider/<slug>.html
+  {
+    slug: 'bybanen-i-bergen',
+    title: 'Bybanen i Bergen',
+    description: 'Bybanens to linjer, hvor de deler spor, hvor de skiller lag og hvor du bytter til buss.',
+  },
+  {
+    slug: 'til-og-fra-flesland',
+    title: 'Til og fra Flesland',
+    description: 'Bybanen, flybussene FB50 og FB51 og de andre bussene mellom Bergen sentrum og Bergen lufthavn.',
+  },
+  {
+    slug: 'bat-og-ferje-skyss',
+    title: 'Båt og ferje i Skyss-området',
+    description: 'Båtrutene fra Strandkaiterminalen og ferjesambandene med flest avganger, med bussene ved kaiene.',
+  },
+].map((g) => ({ published: '2026-11-05', updated: '2026-11-05', region: 'bergen', ...g })));
 
 export function getGuideBySlug(slug, regionId = 'oslo') {
   return GUIDES.find((g) => g.slug === slug && g.region === regionId);

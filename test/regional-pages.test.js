@@ -69,13 +69,23 @@ test('/bergen: kartet med Bergens tittel, canonical og uten AdSense', async () =
   assert.equal((await get('/bergen/')).status, 200);
 });
 
-test('/bergen/linje/bybanen-1: 200 og noindex uten tekst, ingen AdSense, Bergens kjøretøy', async () => {
-  const { status, body } = await get('/bergen/linje/bybanen-1');
+test('/bergen/linje/buss-23: 200 og noindex uten tekst, ingen AdSense, Bergens kjøretøy', async () => {
+  const { status, body } = await get('/bergen/linje/buss-23');
   assert.equal(status, 200);
   assert.match(body, /<meta name="robots" content="noindex">/);
   assert.doesNotMatch(body, /adsbygoogle/);
   assert.deepEqual(calls.vehicles.at(-1), 'bergen');
-  assert.match(body, /Bybanen linje 1/);
+  assert.match(body, /Buss 23/);
+});
+
+test('/bergen/linje/bybanen-1 med egen tekst: indeksert, AdSense, canonical og Bergen-guide', async () => {
+  const { status, body } = await get('/bergen/linje/bybanen-1');
+  assert.equal(status, 200);
+  assert.doesNotMatch(body, /name="robots"/);
+  assert.match(body, /adsbygoogle/);
+  assert.match(body, /<link rel="canonical" href="https:\/\/livetrafikk\.no\/bergen\/linje\/bybanen-1">/);
+  assert.match(body, /<div class="prose line-text">/);
+  assert.match(body, /href="\/bergen\/guider\/bybanen-i-bergen">Bybanen i Bergen</);
 });
 
 test('linjesider: riktig region, aldri på tvers', async () => {
@@ -178,7 +188,7 @@ test('stoppside og stoppoversikt for Bergen: region-sti, ingen Ruter-sone', () =
 });
 
 test('guideoversikt viser regionseksjon bare når regionen har innhold', () => {
-  const none = renderGuideIndex([], REGION_LINES.oslo, [{ region: bergen, guides: [], lines: REGION_LINES.bergen }]);
+  const none = renderGuideIndex([], REGION_LINES.oslo, [{ region: bergen, guides: [], lines: REGION_LINES.bergen.map((l) => ({ ...l, indexed: false })) }]);
   assert.doesNotMatch(none, /\/bergen\//); // ingen indekserte Bergen-linjer
   const withGuide = renderGuideIndex([], REGION_LINES.oslo, [{ region: bergen, guides: [stubGuide], lines: [{ ...getLineBySlug('bybanen-1', 'bergen'), indexed: true }] }]);
   assert.match(withGuide, /href="\/bergen\/guider\/bybanen"/);
@@ -194,7 +204,10 @@ test('linjeside for Bergen: brødsmuler, region-lenker og kartlenke', () => {
   const html = renderLinePage(line, { stops: ['Byparken', 'B', 'Lagunen'], from: 'Byparken', to: 'Lagunen', fetchedAt: null }, 2, '<p>tekst</p>');
   assert.match(html, /<a href="\/bergen">Bergen<\/a>/);
   assert.match(html, /href="\/bergen\?lat=60\.3925&amp;lng=5\.324&amp;z=12"/);
-  assert.doesNotMatch(html, /bybanen-2/); // andre linjer: bare de med egen tekst
+  assert.match(html, /href="\/bergen\/linje\/bybanen-2"/); // andre linjer: bare de med egen tekst
+  const bus = renderLinePage(getLineBySlug('buss-3', 'bergen'), null, null, '<p>tekst</p>');
+  assert.match(bus, /href="\/bergen\/linje\/buss-4"/);
+  assert.doesNotMatch(bus, /\/bergen\/linje\/buss-23"/);
   assert.match(html, /rel="canonical" href="https:\/\/livetrafikk\.no\/bergen\/linje\/bybanen-1"/);
   assert.match(html, /"name":"Bergen"/);
   assert.doesNotMatch(html, /t-banen-i-oslo|trikken-i-oslo/);

@@ -11,6 +11,7 @@ const MODE_GROUPS = [
   ['flytog', 'Flytoget'],
   ['flybuss', 'Flybuss'],
   ['bus', 'Buss'],
+  ['water', 'Båt'],
 ];
 
 /**

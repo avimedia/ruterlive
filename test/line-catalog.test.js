@@ -223,11 +223,12 @@ test('getLineBySlug er regionbevisst', () => {
 
 test('indexed: Oslo alltid, Bergen bare med tekst', () => {
   assert.ok(LINES.every((l) => l.indexed === true));
-  assert.equal(getLineBySlug('buss-3', 'bergen').indexed, false);
+  assert.equal(getLineBySlug('buss-23', 'bergen').indexed, false);
+  assert.equal(getLineBySlug('buss-3', 'bergen').indexed, true);
 });
 
 test('getLineText for Bergen uten tekstfil gir undefined, ukjent slug likeså', async () => {
-  assert.equal(await getLineText('buss-3', 'bergen'), undefined);
+  assert.equal(await getLineText('buss-23', 'bergen'), undefined);
   assert.equal(await getLineText('tog-r12', 'bergen'), undefined);
   assert.ok(await getLineText('t-bane-5'));
 });

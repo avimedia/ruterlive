@@ -16,6 +16,14 @@ const MODE_GUIDE = {
   flybuss: { slug: 'flytoget-eller-flybussen', label: 'Flytoget eller flybussen' },
   bus: { slug: 'slik-bruker-du-kartet', label: 'Slik bruker du kartet' },
 };
+// Guider for andre regioner (content/<region>/guider/<slug>.html)
+const REGION_MODE_GUIDE = {
+  bergen: {
+    tram: { slug: 'bybanen-i-bergen', label: 'Bybanen i Bergen' },
+    flybuss: { slug: 'til-og-fra-flesland', label: 'Til og fra Flesland' },
+    water: { slug: 'bat-og-ferje-skyss', label: 'Båt og ferje i Skyss-området' },
+  },
+};
 const OSLO_RAIL_REGIONS = new Set(['ostlandet', 'fjerntog']);
 const MAX_TITLE = 68;
 const SUFFIX = ' | livetrafikk.no';
@@ -101,7 +109,9 @@ ${stopsResult.stops.map((s) => `      <li>${stopItem(s, region)}</li>`).join('\n
   const othersHtml = others ? `<h2>Andre linjer</h2>\n    <ul class="badge-list">${others}</ul>` : '';
 
   // Togguiden handler om togene fra Oslo (Østlandet og fjerntogene), ikke Bergen eller Trøndelag
-  const guide = !isOslo || (line.region && !OSLO_RAIL_REGIONS.has(line.region)) ? null : MODE_GUIDE[line.mode];
+  const guide = !isOslo
+    ? REGION_MODE_GUIDE[region.id]?.[line.mode] ?? null
+    : (line.region && !OSLO_RAIL_REGIONS.has(line.region)) ? null : MODE_GUIDE[line.mode];
   const body = `    <div class="line-hero">
       <p class="eyebrow">${isOslo ? '' : `<a href="${escapeHtml(region.path)}">${escapeHtml(region.shortName)}</a> / `}<a href="/guider">Linjer</a> / ${escapeHtml(MODE_LABEL[line.mode] ?? '')}</p>
       <h1 class="line-title">${lineBadge(line, { size: 'lg' })} <span>${escapeHtml(line.title)}</span></h1>
@@ -115,7 +125,7 @@ ${text ? `    <div class="prose line-text">\n${text.trim()}\n    </div>\n` : ''}
     ${othersHtml}
     <h2>Les mer</h2>
     <ul class="link-list">
-${guide ? `      <li><a href="/guider/${guide.slug}">${escapeHtml(guide.label)}</a></li>\n` : ''}      <li><a href="/guider/sanntidsposisjoner">Slik fungerer sanntidsposisjonene</a></li>
+${guide ? `      <li><a href="${escapeHtml(regionPath(region, `/guider/${guide.slug}`))}">${escapeHtml(guide.label)}</a></li>\n` : ''}      <li><a href="/guider/sanntidsposisjoner">Slik fungerer sanntidsposisjonene</a></li>
     </ul>`;
 
   return renderPage({

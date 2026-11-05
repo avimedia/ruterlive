@@ -7,8 +7,9 @@ import { LINES } from '../server/line-catalog.js';
 
 const FORBUDT = ['I en verden', 'Det er viktig å merke seg', 'Oppsummering', 'Konklusjon', 'Alt i alt', 'Kort fortalt'];
 
-test('GUIDES har seks guider med påkrevde felt', () => {
-  assert.equal(GUIDES.length, 6);
+test('GUIDES har seks Oslo-guider og tre Bergen-guider med påkrevde felt', () => {
+  assert.equal(GUIDES.filter((g) => g.region === 'oslo').length, 6);
+  assert.equal(GUIDES.filter((g) => g.region === 'bergen').length, 3);
   for (const g of GUIDES) {
     assert.ok(g.slug && g.title && g.description);
     assert.match(g.published, /^\d{4}-\d{2}-\d{2}$/);
@@ -18,8 +19,8 @@ test('GUIDES har seks guider med påkrevde felt', () => {
 });
 
 for (const guide of GUIDES) {
-  test(`guide ${guide.slug}: 600–1200 ord og ingen fyllfraser`, async () => {
-    const body = await loadGuideBody(guide.slug);
+  test(`guide ${guide.region}/${guide.slug}: 600–1200 ord og ingen fyllfraser`, async () => {
+    const body = await loadGuideBody(guide.slug, guide.region);
     const words = body.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length;
     assert.ok(words >= 600 && words <= 1200, `${words} ord`);
     for (const frase of FORBUDT) assert.ok(!body.includes(frase), frase);
@@ -37,8 +38,9 @@ test('renderGuidePage har h1, byline, annonsescript og Les også', async () => {
 });
 
 test('renderGuideIndex lenker til alle guider og linjer', () => {
-  const html = renderGuideIndex(GUIDES, LINES);
-  for (const g of GUIDES) assert.ok(html.includes(`/guider/${g.slug}`));
+  const osloGuides = GUIDES.filter((g) => g.region === 'oslo');
+  const html = renderGuideIndex(osloGuides, LINES);
+  for (const g of osloGuides) assert.ok(html.includes(`/guider/${g.slug}`));
   for (const l of LINES) assert.ok(html.includes(`/linje/${l.slug}`));
   assert.ok(html.includes('<h2>Linjer</h2>'));
   for (const h of ['T-bane', 'Trikk', 'Flytoget', 'Flybuss']) assert.ok(html.includes(`<h3>${h}</h3>`), h);

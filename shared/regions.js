@@ -6,7 +6,7 @@
 export const REGIONS = Object.freeze({
   oslo: Object.freeze({
     id: 'oslo',
-    name: 'Oslo og Viken',
+    name: 'Oslo og Akershus',
     shortName: 'Oslo', // brødsmuler
     path: '', // URL-prefiks; Oslo ligger på roten
     public: true,

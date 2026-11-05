@@ -49,7 +49,9 @@ function rangeFetch(buf, log) {
 test('loadGtfsStops: leser stops.txt via Range uten full nedlasting', async () => {
   const mod = await import('../server/gtfs-stops-loader.js?range');
   const log = [];
-  const cache = await mod.loadGtfsStops(rangeFetch(lagZip(), log));
+  const { REGIONS, visibleRegions } = await import('../shared/regions.js');
+  // Bare Oslo synlig: Bergen-quayen filtreres bort (Bergen-tilfellet dekkes av testen under)
+  const cache = await mod.loadGtfsStops(rangeFetch(lagZip(), log), visibleRegions([], { oslo: REGIONS.oslo }));
   assert.ok(log.length > 0 && log.every((r) => r !== null), 'ingen kall uten Range');
   assert.equal(cache.size, 1);
   assert.deepEqual(mod.getGtfsQuayCache().get('NSR:Quay:1'), [59.911, 10.75]);

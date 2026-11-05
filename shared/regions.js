@@ -1,6 +1,6 @@
 /**
  * Regioninnstillinger, delt av server og nettleser (ingen process.env her).
- * Å legge til en region er en ny oppføring i REGIONS. Bergen er med, men skjult til lansering (public: false).
+ * Å legge til en region er en ny oppføring i REGIONS. Bergen er offentlig; en ny region kan skjules med public: false og forhåndsvises via REGIONS_PREVIEW.
  */
 
 export const REGIONS = Object.freeze({
@@ -34,7 +34,7 @@ export const REGIONS = Object.freeze({
     name: 'Bergen og Vestland',
     shortName: 'Bergen',
     path: '/bergen',
-    public: false,
+    public: true,
     alwaysActive: false,
     authorities: Object.freeze(['SKY']),
     center: Object.freeze([60.3925, 5.3240]), // Byparken

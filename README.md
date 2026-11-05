@@ -1,8 +1,8 @@
 # livetrafikk.no (RuterLive)
 
-Realtidskart for kollektivtrafikk i Stor-Oslo. **Live:** [livetrafikk.no](https://livetrafikk.no)
+Realtidskart for kollektivtrafikk i Stor-Oslo og Bergen/Vestland (`/bergen`). **Live:** [livetrafikk.no](https://livetrafikk.no)
 
-Viser buss, T-bane, trikk, båt, regiontog og Flytoget basert på Entur API. Ruter leverer ikke GPS til Entur; buss/T-bane/trikk bruker beregnet posisjon fra avgangsdata.
+Viser buss, T-bane, trikk, båt, regiontog og Flytoget basert på Entur API. I Bergen: buss, båt, tog og Bybanen (Skyss leverer ikke sanntid for Bybanen, så banen vises uten bevegelige vogner). Ruter leverer ikke GPS til Entur; buss/T-bane/trikk bruker beregnet posisjon fra avgangsdata.
 
 ## Funksjoner
 
@@ -10,6 +10,7 @@ Viser buss, T-bane, trikk, båt, regiontog og Flytoget basert på Entur API. Rut
 - **Rutelinjer** – T-bane, trikk og jernbane vises alltid; buss og båt ved valgt kjøretøy
 - **Holdeplasser** – vises ved zoom 15+, klikk for avgangstavle
 - **Søk** – finn holdeplass etter navn
+- **Regioner** – Oslo på `/`, Bergen på `/bergen`; velger i lagpanelet. Nye regioner legges til i `shared/regions.js`; skjul dem med `public: false` og prøv lokalt med `REGIONS_PREVIEW=<id>` (server) og `VITE_REGIONS_PREVIEW=<id>` (bygg)
 - **Guider og linjesider** – `/guider`, én side per T-bane-, trikk-, tog-, Flytoget- og flybusslinje (`/linje/<slug>`) med stoppliste fra Entur
 
 ## Transporttyper

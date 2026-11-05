@@ -39,7 +39,7 @@ test('spørringen har ett alias per region', () => {
 });
 
 test('skjult region er ikke med uten forhåndsvisning', () => {
-  assert.doesNotMatch(buildVehiclesQuery(visibleRegions([])), /bergen:/);
+  assert.doesNotMatch(buildVehiclesQuery(visibleRegions([], { oslo: REGIONS.oslo })), /bergen:/);
 });
 
 test('svar med to alias gir riktig liste per region, ett kall', async () => {

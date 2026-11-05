@@ -10,7 +10,7 @@ import { buildSitemap } from '../server/pages/sitemap.js';
 import { renderLinePage } from '../server/pages/line-page.js';
 import { renderGuidePage } from '../server/pages/guide-page.js';
 import { renderGuideIndex } from '../server/pages/guide-index.js';
-import { visibleRegions } from '../shared/regions.js';
+import { REGIONS, visibleRegions } from '../shared/regions.js';
 
 const BANNED = [
   /velkommen til/i, /her finner du/i, /i denne guiden/i, /det er viktig å merke seg/i, /i en travel hverdag/i,
@@ -110,7 +110,7 @@ test('sitemap med Bergen synlig: alle linjer med tekst og guidene, ingen linjer 
   const bergenLines = (xml.match(/\/bergen\/linje\//g) || []).length;
   assert.equal(bergenLines, slugs.length);
   // Skjult Bergen: ingen Bergen-sider i sitemap
-  const hidden = visibleRegions([]);
+  const hidden = visibleRegions([], { oslo: REGIONS.oslo });
   const xmlHidden = buildSitemap({
     lines: hidden.flatMap((r) => REGION_LINES[r.id] ?? []),
     guides: GUIDES.filter((g) => hidden.some((r) => r.id === g.region)),

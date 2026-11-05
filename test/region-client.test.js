@@ -4,7 +4,7 @@ import { parsePreview, currentRegion, withRegion, viewKeyFor } from '../js/regio
 import { REGIONS, visibleRegions } from '../shared/regions.js';
 
 const withBergen = visibleRegions(['bergen']);
-const bare = visibleRegions([]);
+const bare = visibleRegions([], { oslo: REGIONS.oslo });
 
 test('parsePreview: kommaseparert liste, tomt og ugyldig gir tom liste', () => {
   assert.deepEqual(parsePreview('bergen, oslo ,'), ['bergen', 'oslo']);

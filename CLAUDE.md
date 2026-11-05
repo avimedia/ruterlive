@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-livetrafikk.no (repo name RuterLive) is a real-time map of public transport in Greater Oslo, built on Entur's APIs. It is a plain-JS web app: Leaflet frontend bundled by Vite, plus an Express production server that also renders the content pages. No framework, no TypeScript, no linter. Tests use Node's built-in `node:test` (`npm test`, files in `test/`). Code comments, log messages and UI text are in Norwegian, so keep new ones in Norwegian too.
+livetrafikk.no (repo name RuterLive) is a real-time map of public transport in Greater Oslo and Bergen/Vestland, built on Entur's APIs. It is a plain-JS web app: Leaflet frontend bundled by Vite, plus an Express production server that also renders the content pages. No framework, no TypeScript, no linter. Tests use Node's built-in `node:test` (`npm test`, files in `test/`). Code comments, log messages and UI text are in Norwegian, so keep new ones in Norwegian too.
 
 Note: `../AGENTS.md` (Swift/SwiftUI guidelines) belongs to the parent `Developer/` folder and does **not** apply to this repo.
 
@@ -16,7 +16,9 @@ npm run dev      # Vite dev server, http://localhost:5173
 npm run build    # Vite build → dist/
 npm run start    # Express server (serves dist/ + API + content pages), http://localhost:3000
 npm test         # node --test (all of test/)
-npm run memcheck # starts the server, samples RSS for 200 s (needs dist/; --max-mb, --seconds)
+npm run memcheck # starts the server, samples RSS for 200 s (needs dist/; --max-mb, --seconds, --regions oslo,bergen, --log)
+node scripts/build-line-catalog.mjs --region bergen   # regenerates shared/lines/<region>.js from Journey Planner
+node scripts/build-stop-catalog.mjs --region bergen   # regenerates server/stop-catalog-<region>.json
 node --test test/line-catalog.test.js   # single test file
 ```
 
@@ -37,7 +39,7 @@ The client takes different data paths depending on `import.meta.env.DEV`:
 
 Ruter does not publish GPS to Entur, so there are several vehicle sources, merged by `vehicleId`:
 1. **Entur Vehicles GraphQL** (`server/vehicles-cache.js`, 20 s cache): real GPS for the operators that provide it.
-2. **SIRI ET (Estimated Timetable)**: bus, metro, tram and boat positions are *interpolated* between stops from departure times. Server: `server/et-cache.js` fetches the large ET XML (~25 MB) at most every 90 s, with a 5-minute backoff after a 429, and parses it as it streams in (`server/et-parse.js`, no DOM); only the parsed journeys are kept, never the XML. `/api/et-cached` is gone (410). `server/et-vehicles-service.js` computes positions and caches the result for 15 s. Line modes come from `server/line-modes.js` (shared module cache, 24 h, failures 10 min, unknown lines fetched in batches of 50). Quay coordinates come from the Entur GTFS zip (`server/gtfs-stops-loader.js`, about 95 MB, downloaded at most once every 23 h).
+2. **SIRI ET (Estimated Timetable)**: bus, metro, tram and boat positions are *interpolated* between stops from departure times. Server: `server/et-cache.js` fetches the large ET XML (Oslo ~25 MB, Bergen/SKY ~95 MB) at most every 90 s per region, with a 5-minute backoff after a 429, and parses it as it streams in (`server/et-parse.js`, no DOM); only the parsed journeys are kept, never the XML. The parser drops journeys that are not underway, start within `WAITING_WINDOW_MS` (10 min, `shared/et-journeys.js`) or ended < 2 min ago, so a cache holds only what `et-vehicles-service` would show; the cache size limit is per region (`etMaxSize`: Oslo 5000, Bergen 10000, so SKY's ~6800 journeys are not cut off). Two ET parses never run at the same time. Vehicles that have not started their trip are shown only when the first departure is within 10 min (same rule as BNR trains). SKY ET has no `VehicleMode`/`PublishedLineName`: for regions without a Ruter line-number fallback, journeys with unknown mode are kept and the mode comes from JP (`line-modes.js`); journeys still without mode after the lookup are dropped. `/api/et-cached` is gone (410). `server/et-vehicles-service.js` computes positions and caches the result for 15 s. Line modes come from `server/line-modes.js` (shared module cache, 24 h, failures 10 min, unknown lines fetched in batches of 50). Quay coordinates come from the Entur GTFS zip (`server/gtfs-stops-loader.js`, about 95 MB, downloaded at most once every 23 h).
 3. **Trains nationwide** (`server/rail-live.js`, merged into every region's GPS list in `getLiveSources` (`server/region-services.js`), deduped by `vehicleId`): `server/rail-vehicles-cache.js` queries `vehicles(mode: RAIL)` without bbox every 30 s (Vy, Go-Ahead, Flytoget; ~100 trains). Operators without GPS (SJ Norge, SJ, Tågkompaniet) come from SIRI ET dataset `BNR` (`server/rail-et-service.js`, ~1.5 MB, every 4 min, 10 min backoff after 429, parsed with `createEtStreamParser({ mode: 'rail', skipCancelled: true })`); only trains underway or departing within 10 min are shown, and a BNR train is skipped when a GPS train has the same train number + date (`trainKey`: `441:2026-10-26` ≈ `441-2026-10-26`). Ids are `BNR:<DatedVehicleJourneyRef>`, mode is always `rail`. Quays outside the Oslo GTFS bbox are looked up with JP `quay(id)` (25 per call, cached 24 h).
 
 The ET parsing, interpolation and mode-detection logic exists **twice**: server-side (`server/et-vehicles-service.js`, `server/shape-service.js`) and client-side (`js/et-api.js`, the dev/fallback path). Helpers such as `getModeFromLineNumFallback` and `mapJpTransportMode` are copy-pasted across these files. A behaviour change usually has to be made in every copy.
@@ -59,9 +61,17 @@ The client (`js/main.js`) has its own `mergeRouteShapes` with the same key logic
 
 ET shapes for buses are often partial trips, so for a selected bus/boat (and flybuss without a matching shape) `js/routes.js` fetches `/api/vehicle-route?line=&mode=&dest=&ref=` and draws that instead. `server/vehicle-route.js` picks the Journey Planner pattern whose sign text (`destinationDisplay.frontText` from one sample service journey) or last stop matches `dest`; 2 JP calls per line (3 without `ref`), cached 24 h in a 300-line LRU (failures 10 min). `ref` is the JP line id (`line.ref` in `/api/vehicles-live`, from ET/GPS `lineRef`); without it a line code like 22 is ambiguous across operators, and RUT is preferred.
 
+### Regions (server and client)
+
+- `server/region-services.js` builds per region the ET cache, vehicles cache, shape/geometry services and live data (`createRegionRegistry`, `getRegionServices(id)`); `server/region-runtime.js` tracks visits per region. States: **active** (visited in the last 10 min, or `alwaysActive` = Oslo), **resting** (10-60 min: no new ET fetches), **unloaded** (> 60 min: ET journeys are dropped; route lines and stops are kept). Each ET cache makes one fetch at `start()` regardless of state, then only while active. `getJourneys()` waits for the first fetch only for `alwaysActive` regions; others return `[]` and fetch in the background.
+- Endpoints take `?region=<id>` (`/api/vehicles-live`, `/api/route-shapes-all`, `/api/initial-data`, stops, departures ...). Missing parameter = `oslo` (old cached clients); unknown or hidden region = 400 (`parseRegionParam`). `/api/route-shapes-all` is budgeted per region (~500 KB br). Linje geometry from JP (`pointsOnLink`) outside Oslo is fetched only for lines with `geometry: true` in the generated catalog (Bybanen, flybuss); buses and boats get their route on selection via `/api/vehicle-route`.
+- Client: `js/region.js` picks the region from the URL (`/bergen`), remembered choice and, with permission, position; the region picker sits in the layer panel above Tema (`#map-menu` is hidden at >= 1100 px).
+- Bybanen (tram) has no realtime at Skyss (Entur has no tram positions for SKY), so Bergen shows tram lines and stops but no moving trams.
+- Generated catalogs: `shared/lines/<region>.js` (`scripts/build-line-catalog.mjs --region`) and `server/stop-catalog-<region>.json` (`scripts/build-stop-catalog.mjs --region`). Re-run them when Skyss changes lines; texts stay hand-written.
+
 ### Shared code
 
-`shared/regions.js` holds the region settings (center, zoom, vehicle/stops/geometry bounds, ET dataset, map link); Oslo is the only region so far, and server and client read their Oslo values from it instead of hard-coded copies. `shared/line-mode.js` has `getModeFromLineNumFallback` (Ruter lines `RUT:` only; other operators give null) and `mapJpTransportMode`, replacing the old copies.
+`shared/regions.js` holds the region settings (`id`, `path`, `public`, `alwaysActive`, `authorities`, center, zoom, vehicle/stops/geometry bounds, ET dataset, `etMaxSize`, map link). Oslo (root path) and Bergen (`/bergen`, "Bergen og Vestland", whole Skyss area) are public; server and client read region values from it. `visibleRegions(preview)` = `public: true` plus ids in a preview list, so a new region can be hidden (`public: false`) and tried locally with `REGIONS_PREVIEW=<id>` (server env) and `VITE_REGIONS_PREVIEW=<id>` (client, at build time). `regionFromPath`/`regionAt` take the visible list. `shared/line-mode.js` has `getModeFromLineNumFallback` (Ruter lines `RUT:` only; other operators give null) and `mapJpTransportMode`, replacing the old copies.
 
 `config.js` (e.g. `MAX_ROUTE_SPAN_KM`, `isFlytogLineCode`) and `shared/et-journeys.js` (ET vehicle id + one journey per vehicle) are imported by both server and client. Flytoget's line codes are `FLY1`/`FLY2`; `F1`, `F4`, `F6` are Vy/SJ trains.
 
@@ -69,10 +79,12 @@ ET contains several journeys per physical vehicle (previous, current, next trip)
 
 ### Content pages (for AdSense)
 
+URLs: Oslo is unchanged (`/linje/…`, `/guider/…`, `/holdeplass/…`); other regions use `/<region>`, `/<region>/linje/<slug>`, `/<region>/holdeplass/<slug>`, `/<region>/guider/<slug>`. Content lives in `content/<region>/linje|guider|holdeplass/…` (Oslo in `content/linje|guider|holdeplass`). A region map page (`/bergen`) never loads AdSense and gets its own title/description/canonical (`server/pages/region-map.js`). **Indexed rule**: a Bergen line page with its own text is indexed and in the sitemap; one without text (~410 bus lines) gets `noindex`, `ads: false` and no sitemap entry (thin automatic pages are what AdSense rejected). Booking lines ("Skyss Bestilling") get no page.
+
 Server-rendered by Express, all through `server/pages/layout.js` (`renderPage`, `escapeHtml`), which adds the AdSense Auto ads script unless `ads: false`. The map (`/`) must never load AdSense: it is a navigation screen, which is why AdSense rejected the site in Oct 2026.
 - `/linje/:slug`: `server/line-catalog.js` (`LINES`, 62 lines, 28 of them trains: 12 Oslo lines + 16 `national` lines from VYG/GOA/SJN with `region` and their own `map` center; Vy Tåg's F1 is left out) + intros in `content/line-intros.json` + prose in `content/linje/<slug>.html`. `shared/line-list.js` is a hand copy of the catalog. Stop list = Entur JP journey pattern with the highest journeys × stops (cached 24 h, failures 60 s; for rail, replacement-bus patterns are skipped and patterns with the same end stops are summed); lines with < 3 stops show the route from the line name instead. Vehicle count from `server/live-vehicles.js` (same merge as `/api/initial-data`), filtered by line code and mode.
 - `/guider`, `/guider/:slug`, `/om`: `server/guide-catalog.js` + HTML fragments in `content/` (Norwegian prose: short, no filler, no closing summary, no invented author; facts checked against Entur).
-- `/sitemap.xml`, `robots.txt`; the catch-all serves the map only for `/` and `/index.html` (`isMapPath`), everything else gets a 404 page.
+- `/sitemap.xml`, `robots.txt`; the catch-all serves the map only for `/`, `/index.html` and the paths of visible regions (`isMapPath`), everything else gets a 404 page.
 
 ### Entur API usage
 

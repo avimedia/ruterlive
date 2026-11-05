@@ -125,7 +125,7 @@ test('regionale guider og holdeplasser (stub), 404 på tvers av regioner', async
 
 test('skjult region: ingen ruter', async () => {
   const hidden = express();
-  registerPageRoutes(hidden, { visible: visibleRegions([]), indexPath, sendNotFound: (res) => res.status(404).end(), getLineStops: async () => null, getMergedVehicles: async () => [], stopService: {} });
+  registerPageRoutes(hidden, { visible: visibleRegions([], { oslo: REGIONS.oslo }), indexPath, sendNotFound: (res) => res.status(404).end(), getLineStops: async () => null, getMergedVehicles: async () => [], stopService: {} });
   const s = hidden.listen(0);
   const r = await fetch(`http://127.0.0.1:${s.address().port}/bergen/linje/bybanen-1`);
   assert.equal(r.status, 404);
@@ -135,7 +135,7 @@ test('skjult region: ingen ruter', async () => {
 test('isMapPath: Oslo alltid, regionstier bare for synlige regioner', () => {
   assert.ok(isMapPath('/') && isMapPath('/index.html'));
   assert.ok(isMapPath('/bergen', visible) && isMapPath('/bergen/', visible));
-  assert.ok(!isMapPath('/bergen'));
+  assert.ok(!isMapPath('/bergen', visibleRegions([], { oslo: REGIONS.oslo })));
   assert.ok(!isMapPath('/bergen/linje/buss-3', visible));
   assert.ok(!isMapPath('/linje/buss-3', visible));
 });

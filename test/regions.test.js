@@ -47,10 +47,10 @@ test('mapJpTransportMode (delt)', () => {
   assert.equal(mapJpTransportMode('coach'), null);
 });
 
-test('Bergen i regionmodellen, ikke offentlig', () => {
+test('Bergen i regionmodellen, offentlig', () => {
   const b = REGIONS.bergen;
   assert.equal(b.id, 'bergen');
-  assert.equal(b.public, false);
+  assert.equal(b.public, true);
   assert.equal(b.path, '/bergen');
   assert.equal(b.alwaysActive, false);
   assert.deepEqual([...b.etDatasets], ['SKY']);
@@ -77,10 +77,14 @@ test('findRegion kjenner bare egne id-er', () => {
 });
 
 test('publicRegions og visibleRegions', () => {
-  assert.deepEqual(publicRegions().map(r => r.id), ['oslo']);
-  assert.deepEqual(visibleRegions().map(r => r.id), ['oslo']);
-  assert.deepEqual(visibleRegions(['bergen']).map(r => r.id), ['oslo', 'bergen']);
-  assert.deepEqual(visibleRegions(['finnes-ikke']).map(r => r.id), ['oslo']);
+  assert.deepEqual(publicRegions().map(r => r.id), ['oslo', 'bergen']);
+  assert.deepEqual(visibleRegions().map(r => r.id), ['oslo', 'bergen']);
+  // Skjult region (public: false) vises bare når den står i forhåndsvisningslisten
+  const skjult = { oslo: REGIONS.oslo, bergen: { ...REGIONS.bergen, public: false } };
+  assert.deepEqual(publicRegions(skjult).map(r => r.id), ['oslo']);
+  assert.deepEqual(visibleRegions([], skjult).map(r => r.id), ['oslo']);
+  assert.deepEqual(visibleRegions(['bergen'], skjult).map(r => r.id), ['oslo', 'bergen']);
+  assert.deepEqual(visibleRegions(['finnes-ikke'], skjult).map(r => r.id), ['oslo']);
 });
 
 test('regionFromPath', () => {
@@ -101,7 +105,7 @@ test('regionFromPath', () => {
   assert.equal(r.region.id, 'oslo');
   assert.equal(r.rest, '/bergensbanen');
   // Ikke synlig: Oslo og hele stien
-  r = regionFromPath('/bergen/linje/buss-2');
+  r = regionFromPath('/bergen/linje/buss-2', visibleRegions([], { oslo: REGIONS.oslo }));
   assert.equal(r.region.id, 'oslo');
   assert.equal(r.rest, '/bergen/linje/buss-2');
 });
@@ -119,5 +123,6 @@ test('regionAt', () => {
   assert.equal(regionAt(61.45, 5.85, vis).id, 'bergen'); // Førde, utenfor byen men i Vestland
   assert.equal(regionAt(59.91, 10.75, vis).id, 'oslo');
   assert.equal(regionAt(63.4, 10.4, vis), null);
-  assert.equal(regionAt(60.39, 5.32), null); // Bergen ikke synlig
+  assert.equal(regionAt(60.39, 5.32, visibleRegions([], { oslo: REGIONS.oslo })), null); // Bergen ikke synlig
+  assert.equal(regionAt(60.39, 5.32).id, 'bergen'); // standard: Bergen er offentlig
 });

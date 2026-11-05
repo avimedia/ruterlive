@@ -1,6 +1,6 @@
 # livetrafikk.no (RuterLive) – roadmap
 
-**Sist oppdatert:** 2026-10-31
+**Sist oppdatert:** 2026-11-05
 
 ---
 
@@ -28,11 +28,16 @@ Utenfor Oslo leverer nesten alle operatører GPS til Entur, så interpolering fr
 |---|---|---|
 | 0 Grunnmur ✅ | Kartverket-fliser (over); strømmende ET-parser i stedet for xmldom-DOM (RUT bruker ~145 MB heap per parsing); les bare `stops.txt` fra GTFS-zip; ikke kopier quay-Map ved hvert kall; filtrer GPS-kjøretøy med gammel `lastUpdated` | 3–5 dager |
 | 1 Region-config, kun Oslo ✅ | bbox, datasett, hubber, senter, tekster i config; modus-/linjelogikk samlet i `shared/`; linjenummer fra JP `publicCode` i stedet for regex på LineRef; tester som viser uendret Oslo | 3–4 dager |
-| 2 Bergen | GPS først, ET bare for fra/til/rutekart og Bybanen; dedup på `serviceJourney.id`; `/bergen`-kart, 10–20 linjesider, 2–3 guider, regionvelger; be Entur om høyere ET-kvote | 4–6 dager + innhold |
+| 2 Bergen ✅ | Lansert på `/bergen` (hele Vestland): GPS + ET (SKY), Bybanen uten sanntid hos Skyss, linjesider og guider, regionvelger. Opprinnelig plan: GPS først, ET bare for fra/til/rutekart og Bybanen; dedup på `serviceJourney.id`; `/bergen`-kart, 10–20 linjesider, 2–3 guider, regionvelger; be Entur om høyere ET-kvote | 4–6 dager + innhold |
 | 3 Trondheim, Stavanger | Gjenbruk; AtB-linjeformat `2_11`, Kolumbus-ET uten VehicleRef | 2–3 dager hver + innhold |
 | 4 Hele Norge | Tog er gjort (se over). Resten: Vehicles nasjonalt filtrert på viewport, ET/rutekart ved behov, ET-delta med `requestorId`, trolig betalt Render | 1–2 uker |
 
 Største risikoer: minne (ET-parsing, 384 MB heap), Entur sin ET-kvote (felles for klientnavnet, ikke per datasett), og feil data utenfor Oslo (linjenummer-regex og 1–6 = T-bane-regelen slår feil; doble kjøretøy der ET mangler VehicleRef; parkerte busser).
+
+### Neste
+
+- Resten av Norge via Entur sin vehicles-API (viewport-basert), med regioner som lastes ved behov
+- «Avvik» – driftsmeldinger fra Entur sitt situations-API i kartet og på linjesidene
 
 ### Andre mulige utvidelser
 

@@ -8,7 +8,7 @@
 
 import { journeyVehicleId } from '../shared/et-journeys.js';
 import { callDelaySeconds } from '../shared/vehicle-delay.js';
-import { getModeFromLineNumFallback } from '../shared/line-mode.js';
+import { getModeFromLineNumFallback, mapJpTransportMode } from '../shared/line-mode.js';
 
 function parseIsoTime(str) {
   if (!str) return null;
@@ -199,6 +199,8 @@ const isCallCancelled = (cel) => {
 };
 
 /**
+ * opts.useVehicleMode: modus fra ET-ens VehicleMode når linjenummer ikke gir noen (regioner uten
+ *   linjenummer-fallback, f.eks. Bergen). Oslo bruker det ikke, så ikke-Ruter-turer hoppes over som før.
  * opts.mode: fast modus for alle turer (f.eks. 'rail' for BNR, der linjekoder som R70 ikke er tall).
  * opts.skipCancelled: hopper over innstilte turer og innstilte kall.
  */
@@ -207,7 +209,8 @@ function parseInto(xmlText, journeys, intern, opts = {}) {
 
   for (const jel of eachElement(xmlText, 'EstimatedVehicleJourney')) {
     const lineRef = text(jel, 'LineRef');
-    const mode = opts.mode || getModeFromLineNumFallback(lineRef);
+    const mode = opts.mode || getModeFromLineNumFallback(lineRef)
+      || (opts.useVehicleMode ? mapJpTransportMode(text(jel, 'VehicleMode')) : null);
     if (!mode) continue;
     if (opts.skipCancelled && isJourneyCancelled(jel)) continue;
 

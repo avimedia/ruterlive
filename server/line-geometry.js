@@ -247,12 +247,15 @@ export function applyLineGeometry(shapes, geometryShapes) {
 }
 
 /**
- * @param {{ fetchFn?: Function, now?: () => number, lines?: object[], ttlMs?: number,
+ * `region.geometryBounds` klipper trasene. `lines` velges av kalleren: Oslo bruker katalogen, andre
+ * regioner bare linjer med `geometry: true` (færre JP-kall og mindre payload).
+ * @param {{ fetchFn?: Function, now?: () => number, region?: object, lines?: object[], ttlMs?: number,
  *   failureTtlMs?: number, timeoutMs?: number, tolDeg?: number }} opts
  */
 export function createLineGeometryService({
   fetchFn = (...a) => fetch(...a),
   now = () => Date.now(),
+  region = getRegion(),
   // Tog utenfor Oslo (national) har trasé fra rail-network.js, og her ville de bare blitt klippet bort.
   lines = LINES.filter((l) => !l.national),
   ttlMs = DAY_MS,
@@ -304,7 +307,10 @@ export function createLineGeometryService({
     const id = idFor(map, line);
     if (!id) return [];
     const data = await query(LINE_QUERY, { id });
-    return buildLineShapes(line, data?.line?.journeyPatterns, tolDeg ? { tolDeg } : {});
+    return buildLineShapes(line, data?.line?.journeyPatterns, {
+      bbox: region.geometryBounds,
+      ...(tolDeg ? { tolDeg } : {}),
+    });
   }
 
   function rebuild() {

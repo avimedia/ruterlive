@@ -20,6 +20,7 @@ const MORE_DATA_TAG = '<MoreData>true</MoreData>';
  * @param {string} o.datasetId ET-datasett (f.eks. RUT, SKY)
  * @param {() => boolean} o.isActive henter i bakgrunnen bare mens regionen er aktiv
  * @param {(fn: () => Promise<any>) => Promise<any>} o.runExclusive global kø for nedlasting + parsing
+ * @param {object} [o.parserOpts] valg til createEtStreamParser (f.eks. { useVehicleMode: true } for Bergen)
  * @param {boolean} [o.waitForFirst] true: getJourneys() venter på første henting (alwaysActive-regioner)
  */
 export function createEtCache({
@@ -30,6 +31,7 @@ export function createEtCache({
   now = () => Date.now(),
   refreshMs = REFRESH_MS,
   waitForFirst = false,
+  parserOpts = {},
 }) {
   const url = `https://api.entur.io/realtime/v1/rest/et?datasetId=${datasetId}&maxSize=3000`;
   /** Frosne turer fra siste vellykkede henting, eller null før første / etter drop(). */
@@ -59,7 +61,7 @@ export function createEtCache({
       throw new Error(`ET ${res.status}`);
     }
     await runExclusive(async () => {
-      const parser = createEtStreamParser();
+      const parser = createEtStreamParser(parserOpts);
       const decoder = new TextDecoder();
       let tail = '';
       let moreData = false;

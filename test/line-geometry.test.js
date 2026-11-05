@@ -14,6 +14,7 @@ import {
   traceFromEncoded,
 } from '../server/line-geometry.js';
 import { LINES } from '../server/line-catalog.js';
+import { getRegion } from '../shared/regions.js';
 
 function encodeNum(v) {
   let n = v < 0 ? ~(v << 1) : v << 1;
@@ -195,5 +196,92 @@ test('bytebudsjett: trasé for alle katalog-linjer fra fixture', () => {
   for (const s of shapes) {
     assert.ok(s.points.length >= 2 && s.quayStops.length >= 1, `${s.line} ${s.from}`);
     for (const p of s.points) assert.ok(p[0] >= 58.9 && p[0] <= 60.6, 'klippet til regionen');
+  }
+});
+
+// --- Regioner ---
+
+const BERGEN_TRACE = [];
+for (let i = 0; i <= 40; i++) BERGEN_TRACE.push([60.3 + i * 0.001, 5.3 + (i === 20 ? 0.002 : 0)]);
+const bq = (id, name, lat, lon) => quay(id, name, lat, lon);
+const BA = bq('NSR:Quay:101', 'Byparken', 60.3, 5.3);
+const BB = bq('NSR:Quay:102', 'Midt', 60.32, 5.302);
+const BC = bq('NSR:Quay:103', 'Flesland', 60.34, 5.3);
+const bybanen = { slug: 'bybanen', code: '1', mode: 'tram', authority: 'SKY' };
+
+function serviceFor(regionId, lines, patterns) {
+  const fetchFn = async (url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.query.includes('lines(')) {
+      return { ok: true, json: async () => ({ data: { lines: lines.map((l) => ({
+        id: `${l.authority}:Line:${l.code}`, publicCode: l.code, transportMode: l.mode })) } }) };
+    }
+    return { ok: true, json: async () => ({ data: { line: { journeyPatterns: patterns } } }) };
+  };
+  return createLineGeometryService({ fetchFn, region: getRegion(regionId), lines });
+}
+
+test('Bergen-trasé klippes til Bergens geometryBounds (ikke Oslos)', async () => {
+  // Spor som fortsetter langt øst for Bergens boks (lon > 8.3)
+  const long = [...BERGEN_TRACE, [60.34, 7.0], [60.36, 8.0], [60.34, 8.4], [60.36, 9.0], [60.34, 9.5], [60.36, 10.0]];
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const svc = serviceFor('bergen', [bybanen], [pattern([BA, BB, BC], 100, long)]);
+    await svc.refresh();
+    const [shape] = svc.getShapes();
+    assert.ok(shape, 'Bergen-trasé beholdes');
+    const maxLon = Math.max(...shape.points.map((p) => p[1]));
+    const bb = getRegion('bergen').geometryBounds;
+    assert.ok(maxLon < 9.0, `klippet øst, maks lon ${maxLon}`);
+    assert.equal(shape.points.filter((p) => p[1] > bb.e).length, 1, 'ett punkt utenfor kanten er med');
+  } finally {
+    console.log = log;
+  }
+});
+
+test('Oslo-trasé gir ingenting i Bergen-region (utenfor boksen)', async () => {
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const svc = serviceFor('bergen', [bybanen], [pattern([A, B, C], 100)]);
+    await svc.refresh();
+    assert.deepEqual(svc.getShapes(), []);
+  } finally {
+    console.log = log;
+  }
+});
+
+test('Oslo-region er standard og klipper som før', async () => {
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const svc = createLineGeometryService({
+      lines: [metroLine],
+      fetchFn: async (url, init) => {
+        const body = JSON.parse(init.body);
+        if (body.query.includes('lines(')) return { ok: true, json: async () => ({ data: { lines: [{ id: 'RUT:Line:9', publicCode: '9', transportMode: 'metro' }] } }) };
+        return { ok: true, json: async () => ({ data: { line: { journeyPatterns: [pattern([A, B, C], 100)] } } }) };
+      },
+    });
+    await svc.refresh();
+    assert.equal(svc.getShapes().length, 1);
+  } finally {
+    console.log = log;
+  }
+});
+
+test('bytebudsjett per region: Bergen-trasé holder seg under budsjettet', async () => {
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const svc = serviceFor('bergen', [bybanen], [pattern([BA, BB, BC], 100, BERGEN_TRACE)]);
+    await svc.refresh();
+    const json = JSON.stringify(svc.getShapes());
+    const br = zlib.brotliCompressSync(Buffer.from(json), { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } }).length;
+    assert.ok(br < 70 * 1024, `Bergen trasé br ${br} B`);
+    assert.ok(json.length < 700 * 1024);
+  } finally {
+    console.log = log;
   }
 });

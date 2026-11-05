@@ -9,14 +9,13 @@ import { getEtJourneys } from './et-cache.js';
 import { ensureGtfsStopsLoaded, getGtfsQuayCache } from './gtfs-stops-loader.js';
 import { fetchJpRoutes } from './jp-route-fetcher.js';
 import { ensureLineModes, getLineMode } from './line-modes.js';
+import { getRegion } from '../shared/regions.js';
 import { CLIENT_NAME } from './entur-client.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 
 const MAX_QUAYS_TO_FETCH = 500;
 const JP_BATCH_SIZE = 25;
-
-const quayCoordCache = new Map();
 
 async function fetchJpGraphql(query) {
   const res = await fetchWithRetry(
@@ -32,8 +31,7 @@ async function fetchJpGraphql(query) {
   return data?.data;
 }
 
-async function fetchQuayCoordsBatch(quayIds) {
-  const gtfs = getGtfsQuayCache();
+async function fetchQuayCoordsBatch(quayIds, quayCoordCache, gtfs) {
   const ids = quayIds.filter((id) => /^NSR:Quay:\d+$/.test(id)).slice(0, MAX_QUAYS_TO_FETCH);
 
   for (const id of ids) {
@@ -59,8 +57,13 @@ async function fetchQuayCoordsBatch(quayIds) {
   }
 }
 
-function getLinePublicCode(lineRef) {
-  const m = /:Line:(\d+)/.exec(lineRef || '');
+/**
+ * Linjekode fra lineRef. Ruter: bare tall (som før). Andre regioner: alt etter «:Line:»,
+ * siden linjenummer-reglene er Ruter-spesifikke og kodene hos andre operatører kan ha bokstaver.
+ */
+export function getLinePublicCode(lineRef, region = getRegion()) {
+  const re = region.lineNumberFallback === 'ruter' ? /:Line:(\d+)/ : /:Line:([^:\s]+)$/;
+  const m = re.exec(lineRef || '');
   return m ? m[1] : '?';
 }
 
@@ -111,7 +114,7 @@ function removeGeoOutliers(points, maxNeighborDistKm = MAX_ROUTE_SPAN_KM) {
   return current;
 }
 
-function buildRouteShapes(journeys) {
+function buildRouteShapes(journeys, quayCoordCache, region) {
   const seen = new Set();
   const shapes = [];
   const routeModes = new Set(['metro', 'tram', 'water', 'bus']);
@@ -144,7 +147,7 @@ function buildRouteShapes(journeys) {
 
     shapes.push({
       mode: j.mode,
-      line: getLinePublicCode(j.lineRef),
+      line: getLinePublicCode(j.lineRef, region),
       from: first?.name || '',
       to: last?.name || '',
       via: viaStop || null,
@@ -154,66 +157,87 @@ function buildRouteShapes(journeys) {
   return shapes;
 }
 
-let cachedShapes = [];
-let lastFetch = 0;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 1 døgn
 
-export function getCachedShapes() {
-  return cachedShapes;
-}
+/**
+ * Rutekarttjeneste for én region. JP-togruter fra Oslo S hentes bare når region.jpRailFallback.
+ * @param {{ region: object, etCache: { getJourneys: Function }, deps?: object }} opts
+ *   deps kan overstyre eksterne avhengigheter (tester).
+ */
+export function createShapeService({ region, etCache, deps = {} }) {
+  const {
+    ensureGtfs = deps.ensureGtfsStopsLoaded ?? ensureGtfsStopsLoaded,
+    getGtfs = deps.getGtfsQuayCache ?? getGtfsQuayCache,
+    ensureModes = deps.ensureLineModes ?? ensureLineModes,
+    lineMode = deps.getLineMode ?? getLineMode,
+    fetchJp = deps.fetchJpRoutes ?? fetchJpRoutes,
+    now = deps.now ?? Date.now,
+  } = {};
+  const quayCoordCache = new Map();
+  let cachedShapes = [];
+  let lastFetch = 0;
 
-export function isCacheFresh() {
-  return cachedShapes.length > 0 && Date.now() - lastFetch < CACHE_TTL_MS;
-}
+  const isCacheFresh = () => cachedShapes.length > 0 && now() - lastFetch < CACHE_TTL_MS;
 
-export async function refreshRouteShapes() {
-  if (isCacheFresh()) return cachedShapes;
-  let shapes = [];
-  const jpPromise = fetchJpRoutes(quayCoordCache).catch((err) => {
-    console.warn('[RuterLive] JP routes fetch:', err.message);
-    return [];
-  });
+  async function refresh() {
+    if (isCacheFresh()) return cachedShapes;
+    let shapes = [];
+    const jpPromise = region.jpRailFallback === true
+      ? fetchJp(quayCoordCache).catch((err) => {
+          console.warn('[RuterLive] JP routes fetch:', err.message);
+          return [];
+        })
+      : Promise.resolve([]);
 
-  await ensureGtfsStopsLoaded();
+    await ensureGtfs();
 
-  try {
-    // Delte, frosne turer fra et-cache – lag kopi ved ny modus i stedet for å mutere
-    const parsed = await getEtJourneys();
+    try {
+      // Delte, frosne turer fra et-cache – lag kopi ved ny modus i stedet for å mutere
+      const parsed = await etCache.getJourneys();
 
-    const uniqueLineRefs = [...new Set(parsed.map((j) => j.lineRef).filter(Boolean))];
-    await ensureLineModes(uniqueLineRefs);
+      const uniqueLineRefs = [...new Set(parsed.map((j) => j.lineRef).filter(Boolean))];
+      await ensureModes(uniqueLineRefs);
 
-    const journeys = parsed.map((j) => {
-      const jpMode = getLineMode(j.lineRef);
-      return jpMode && jpMode !== j.mode ? { ...j, mode: jpMode } : j;
-    });
+      const journeys = parsed.map((j) => {
+        const jpMode = lineMode(j.lineRef);
+        return jpMode && jpMode !== j.mode ? { ...j, mode: jpMode } : j;
+      });
 
-    const quayToMode = new Map();
-    for (const j of journeys) {
-      for (const c of [...j.recordedCalls, ...j.estimatedCalls]) {
-        if (c?.quayId) quayToMode.set(c.quayId, j.mode);
+      const quayToMode = new Map();
+      for (const j of journeys) {
+        for (const c of [...j.recordedCalls, ...j.estimatedCalls]) {
+          if (c?.quayId) quayToMode.set(c.quayId, j.mode);
+        }
       }
+      const quayIds = [...quayToMode.entries()]
+        .sort((a, b) => {
+          const pm = (m) => (m === 'metro' ? 0 : m === 'tram' ? 1 : 2);
+          return pm(a[1]) - pm(b[1]);
+        })
+        .map(([id]) => id)
+        .slice(0, MAX_QUAYS_TO_FETCH);
+      await fetchQuayCoordsBatch(quayIds, quayCoordCache, getGtfs());
+
+      shapes = buildRouteShapes(journeys, quayCoordCache, region);
+    } catch (err) {
+      console.warn('[RuterLive] shape-service ET:', err.message);
     }
-    const quayIds = [...quayToMode.entries()]
-      .sort((a, b) => {
-        const pm = (m) => (m === 'metro' ? 0 : m === 'tram' ? 1 : 2);
-        return pm(a[1]) - pm(b[1]);
-      })
-      .map(([id]) => id)
-      .slice(0, MAX_QUAYS_TO_FETCH);
-    await fetchQuayCoordsBatch(quayIds);
 
-    shapes = buildRouteShapes(journeys);
-  } catch (err) {
-    console.warn('[RuterLive] shape-service ET:', err.message);
+    const jpShapes = await jpPromise;
+    shapes = [...shapes, ...jpShapes];
+
+    if (shapes.length > 0) {
+      cachedShapes = shapes;
+      lastFetch = now();
+    }
+    return cachedShapes;
   }
 
-  const jpShapes = await jpPromise;
-  shapes = [...shapes, ...jpShapes];
-
-  if (shapes.length > 0) {
-    cachedShapes = shapes;
-    lastFetch = Date.now();
-  }
-  return cachedShapes;
+  return { getCachedShapes: () => cachedShapes, isCacheFresh, refresh };
 }
+
+// Oslo-instans for server.js
+const oslo = createShapeService({ region: getRegion('oslo'), etCache: { getJourneys: getEtJourneys } });
+export const getCachedShapes = () => oslo.getCachedShapes();
+export const isCacheFresh = () => oslo.isCacheFresh();
+export const refreshRouteShapes = () => oslo.refresh();

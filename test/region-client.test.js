@@ -119,3 +119,17 @@ test('hasLinkParams: lat+lng eller linje', () => {
   assert.equal(hasLinkParams(''), false);
   assert.equal(hasLinkParams(undefined), false);
 });
+
+import { readdirSync, readFileSync } from 'node:fs';
+
+test('klienten sender region på alle regionavhengige API-kall (holdeplass-id-er og bbox er felles)', () => {
+  const dir = new URL('../js/', import.meta.url);
+  const raw = [];
+  for (const f of readdirSync(dir).filter((n) => n.endsWith('.js'))) {
+    const src = readFileSync(new URL(f, dir), 'utf8');
+    for (const m of src.matchAll(/fetch(?:Json)?\(\s*[`'"](\/api\/[\w-]+)/g)) {
+      if (!['/api/departures', '/api/quay-coords', '/api/stops-in-bbox'].includes(m[1])) raw.push(`${f}: ${m[1]}`);
+    }
+  }
+  assert.deepEqual(raw, []);
+});

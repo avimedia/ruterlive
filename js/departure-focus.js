@@ -5,6 +5,7 @@
 
 import { focusVehicle } from './markers.js';
 import { closeDepartures, isDepartureSheetOpen } from './departure-sheet.js';
+import { withRegion } from './region.js';
 
 const NOT_FOUND_MS = 2500;
 
@@ -29,7 +30,7 @@ async function showVehicleFor(row) {
   if (!sj || row.dataset.busy) return;
   row.dataset.busy = '1';
   try {
-    const res = await fetch(`/api/journey-vehicle?sj=${encodeURIComponent(sj)}`);
+    const res = await fetch(withRegion(`/api/journey-vehicle?sj=${encodeURIComponent(sj)}`));
     const data = res.ok ? await res.json() : null;
     if (data?.vehicleId && focusVehicle(data.vehicleId)) {
       if (isDepartureSheetOpen()) closeDepartures();

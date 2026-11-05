@@ -31,8 +31,7 @@ import { FEATURED_STOPS, featuredStopsFor, findStopForPlace, placePageFields } f
 import { createStopService } from './server/stop-service.js';
 import { renderStopIndex } from './server/pages/stop-page.js';
 import { precompressedStatic, setStaticHeaders, compressTextResponses } from './server/static-assets.js';
-import { findJourneyVehicle, SERVICE_JOURNEY_RE } from './server/journey-vehicle.js';
-import { shortVehicleId } from './server/vehicle-id.js';
+import { registerJourneyVehicleRoute } from './server/journey-vehicle.js';
 import { getCachedRailVehicles } from './server/rail-vehicles-cache.js';
 import { securityHeaders, canonicalHost, createRateLimiter, createUpstreamBudget, budgetedFetch } from './server/security.js';
 import { prewarmNationalRail } from './server/rail-live.js';
@@ -231,24 +230,8 @@ app.get('/api/departures', apiRateLimit, async (req, res) => {
   }
 });
 
-// Kjøretøyet som kjører en avgang fra tavla (?sj=serviceJourney.id), slått opp i data serveren alt har
-app.get('/api/journey-vehicle', apiRateLimit, async (req, res) => {
-  const sj = String(req.query.sj || '');
-  if (!SERVICE_JOURNEY_RE.test(sj)) return res.status(400).json({ error: 'ugyldig sj' });
-  try {
-    const [oslo, rail, etJourneys] = await Promise.all([
-      getCachedVehicles().catch(() => null),
-      getCachedRailVehicles().catch(() => null),
-      registry.get('oslo').etCache.getJourneys().catch(() => []),
-    ]);
-    const vehicleId = findJourneyVehicle(sj, { gps: [oslo?.data?.vehicles, rail?.data?.vehicles], etJourneys });
-    res.set('Cache-Control', 'public, max-age=15');
-    if (!vehicleId) return res.status(404).json({ vehicleId: null });
-    res.json({ vehicleId: shortVehicleId(vehicleId) }); // samme korte id som i /api/vehicles-live
-  } catch {
-    res.status(503).json({ vehicleId: null });
-  }
-});
+// Kjøretøyet som kjører en avgang fra tavla (?sj=serviceJourney.id[&region=]), slått opp i data serveren alt har
+registerJourneyVehicleRoute(app, { registry, getGps: getCachedVehicles, getRail: getCachedRailVehicles, middleware: [apiRateLimit] });
 
 // Quay-koordinater fra GTFS – brukes av klient for buss-posisjoner
 app.post('/api/quay-coords', apiRateLimit, express.json({ limit: '100kb' }), async (req, res) => {

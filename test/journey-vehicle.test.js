@@ -33,3 +33,46 @@ test('SERVICE_JOURNEY_RE godtar Entur-id-er og avviser annet', () => {
   assert.ok(!SERVICE_JOURNEY_RE.test('<script>'));
   assert.ok(!SERVICE_JOURNEY_RE.test('RUT:Line:31'));
 });
+
+import express from 'express';
+import { registerJourneyVehicleRoute } from '../server/journey-vehicle.js';
+import { REGIONS } from '../shared/regions.js';
+import { parseRegionParam } from '../server/region-services.js';
+
+test('/api/journey-vehicle: regionens GPS og ET, Oslo uten ?region=, ukjent region 400, besøk merkes', async () => {
+  const regions = [REGIONS.oslo, REGIONS.bergen];
+  const touched = [];
+  const et = {
+    oslo: [{ vehicleId: 'RUTBUS', datedVehicleJourneyRef: 'RUT:ServiceJourney:a' }],
+    bergen: [{ vehicleId: 'SKYBUS', datedVehicleJourneyRef: 'SKY:ServiceJourney:b' }],
+  };
+  const gps = {
+    oslo: { data: { vehicles: [] } },
+    bergen: { data: { vehicles: [{ vehicleId: 'SKYGPS', journeyIds: ['SKY:ServiceJourney:g'] }] } },
+  };
+  const registry = {
+    runtime: { touch: (id) => touched.push(id) },
+    parseRegionParam: (q) => parseRegionParam(q, regions),
+    get: (id) => ({ region: REGIONS[id], etCache: { getJourneys: async () => et[id] } }),
+  };
+  const app = express();
+  registerJourneyVehicleRoute(app, {
+    registry,
+    getGps: async (id) => gps[id],
+    getRail: async () => ({ data: { vehicles: [{ vehicleId: 'tog1', journeyIds: ['VYG:ServiceJourney:1'] }] } }),
+  });
+  const srv = app.listen(0);
+  await new Promise((r) => srv.once('listening', r));
+  const base = `http://127.0.0.1:${srv.address().port}/api/journey-vehicle`;
+  const get = async (q) => { const r = await fetch(`${base}?${q}`); return { status: r.status, body: await r.json() }; };
+  try {
+    assert.deepEqual(await get('sj=RUT:ServiceJourney:a'), { status: 200, body: { vehicleId: 'RUTBUS' } });
+    assert.equal((await get('sj=SKY:ServiceJourney:b')).status, 404, 'Bergen-tur finnes ikke i Oslo');
+    assert.deepEqual(await get('sj=SKY:ServiceJourney:b&region=bergen'), { status: 200, body: { vehicleId: 'SKYBUS' } });
+    assert.deepEqual(await get('sj=SKY:ServiceJourney:g&region=bergen'), { status: 200, body: { vehicleId: 'SKYGPS' } });
+    assert.deepEqual(await get('sj=VYG:ServiceJourney:1&region=bergen'), { status: 200, body: { vehicleId: 'tog1' } }, 'tog i hele landet');
+    assert.equal((await get('sj=RUT:ServiceJourney:a&region=xyz')).status, 400);
+    assert.equal((await get('sj=<x>&region=bergen')).status, 400);
+    assert.deepEqual([...new Set(touched)], ['oslo', 'bergen']);
+  } finally { await new Promise((r) => srv.close(r)); }
+});

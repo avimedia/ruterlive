@@ -13,6 +13,17 @@ import { mergeShapes } from './live-vehicles.js';
 let railShapesCache = [];
 let flybussShapesCache = [];
 
+/** Færre punkter enn dette er rette streker mellom noen få stasjoner (f.eks. Flytoget fra JP-søket). */
+export const MIN_RAIL_POINTS = 10;
+
+/**
+ * Tar bort togruter som bare er rette streker mellom stasjoner. De vises ellers et par minutter
+ * etter oppstart, til rail-network.js har lagt Flytoget og de andre linjene på sporene.
+ */
+export function withoutStraightRail(shapes) {
+  return (shapes ?? []).filter((s) => s.pointsAreTrace || (s.points?.length ?? 0) >= MIN_RAIL_POINTS);
+}
+
 export const getRailShapes = () => railShapesCache;
 export const getStaticFlybussShapes = () => flybussShapesCache;
 
@@ -20,7 +31,7 @@ export async function loadRailShapes() {
   try {
     const enturShapes = await fetchRailShapesOnly();
     if (enturShapes.length > 0) {
-      railShapesCache = enturShapes;
+      railShapesCache = withoutStraightRail(enturShapes);
       console.log(`[RuterLive] Jernbanekart (Entur): ${enturShapes.length} linjer`);
       return true;
     }
@@ -38,7 +49,7 @@ export async function loadRailShapes() {
     console.warn('[RuterLive] OSM jernbane:', e.message);
   }
   if (railShapesCache.length === 0) {
-    railShapesCache = getFallbackRailShapes();
+    railShapesCache = withoutStraightRail(getFallbackRailShapes());
     console.log('[RuterLive] Jernbanekart (fallback): ' + railShapesCache.length + ' linjer');
   }
   return railShapesCache.length > 0;

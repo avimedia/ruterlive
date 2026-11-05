@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   normalizeSituation, isRelevant, buildSituationIndex, compareSituations,
-  situationsForRegion, situationsForStop, countsTowardBadge,
+  situationsForRegion, situationsForStop, countsTowardBadge, hasTargets, listableSituations,
 } from '../server/situations-model.js';
 import { REGIONS } from '../shared/regions.js';
 import { areaFor, SITUATION_AREAS } from '../shared/situation-areas.js';
@@ -95,4 +95,28 @@ test('områder', () => {
   assert.equal(areaFor('SKY').name, 'Skyss (Vestland)');
   assert.equal(areaFor('ZZZ').id, 'other');
   assert.ok(SITUATION_AREAS.every((a) => a.id && a.name && Array.isArray(a.codespaces)));
+});
+
+const noTarget = { situationNumber: 'NSB:SituationNumber:99', severity: 'normal', progress: 'open', validityPeriods: [],
+  summary: [{ value: 'Færre vogner', language: 'NO' }], affects: { stopPoints: [], affectedLines: [] } };
+
+test('NSB regnes som tog', () => {
+  assert.equal(areaFor('NSB').id, 'rail');
+});
+
+test('kodeområde: raw.codespace foretrekkes, ellers prefiks', () => {
+  assert.equal(normalizeSituation({ ...noTarget, codespace: 'VYG' }).codespace, 'VYG');
+  assert.equal(normalizeSituation(noTarget).codespace, 'NSB');
+});
+
+test('avvik uten mål: i indeksen, men ikke i region eller liste', () => {
+  const t = normalizeSituation(noTarget);
+  assert.equal(hasTargets(t), false);
+  assert.equal(hasTargets(norm(2)), true);
+  assert.equal(hasTargets(norm(8)), true);
+  const idx = buildSituationIndex([t, norm(2), norm(10)]);
+  assert.equal(idx.all.length, 3);
+  assert.equal(idx.byCodespace.get('NSB').length, 1);
+  assert.ok(!situationsForRegion(idx, REGIONS.oslo).some((s) => s.id === t.id));
+  assert.deepEqual(listableSituations(idx).map((s) => s.id).sort(), [norm(2).id, norm(10).id].sort());
 });

@@ -111,7 +111,15 @@ export function buildSituationIndex(situations) {
 /** Regionens kodeområder pluss tog. */
 export function situationsForRegion(index, region) {
   const codespaces = new Set([...(region.situationCodespaces || []), ...RAIL_CODESPACES]);
-  return index.all.filter((s) => codespaces.has(s.codespace));
+  return index.all.filter((s) => codespaces.has(s.codespace) && hasTargets(s));
+}
+
+/** Rammer avviket linjer eller holdeplasser? Uten mål gjelder det enkeltavganger og listes ikke. */
+export const hasTargets = (s) => s.lines.length > 0 || s.stops.length > 0;
+
+/** Avvik som kan listes per område (med linjer eller holdeplasser). */
+export function listableSituations(index) {
+  return index.all.filter(hasTargets);
 }
 
 /** Union av avvik for flere quay-/stopPlace-ID-er, uten duplikater. */

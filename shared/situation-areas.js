@@ -4,7 +4,7 @@
  */
 
 // Kodeområder som regnes som tog og vises i alle regioner
-export const RAIL_CODESPACES = Object.freeze(['VYG', 'GOA', 'SJN', 'FLT', 'BNR']);
+export const RAIL_CODESPACES = Object.freeze(['VYG', 'GOA', 'SJN', 'FLT', 'BNR', 'NSB']);
 
 export const SITUATION_AREAS = Object.freeze([
   { id: 'rail', name: 'Tog', codespaces: RAIL_CODESPACES },

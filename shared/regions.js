@@ -35,9 +35,10 @@ export const REGIONS = Object.freeze({
     authorities: Object.freeze(['SKY']),
     center: Object.freeze([60.3925, 5.3240]), // Byparken
     defaultZoom: 14,
-    vehicleBounds: Object.freeze({ minLat: 60.15, maxLat: 60.65, minLon: 4.85, maxLon: 5.75 }),
-    stopsBounds: Object.freeze({ minLat: 60.0, maxLat: 60.8, minLon: 4.7, maxLon: 5.9 }),
-    geometryBounds: Object.freeze({ s: 59.95, n: 60.85, w: 4.6, e: 6.0 }),
+    // Dekker hele Skyss-området (Vestland); målt SKY-kjøretøy: lat 59.39-62.47, lon 4.62-7.81
+    vehicleBounds: Object.freeze({ minLat: 59.3, maxLat: 62.6, minLon: 4.5, maxLon: 7.9 }),
+    stopsBounds: Object.freeze({ minLat: 59.1, maxLat: 62.8, minLon: 4.3, maxLon: 8.1 }),
+    geometryBounds: Object.freeze({ s: 58.9, n: 63.0, w: 4.1, e: 8.3 }),
     etDatasets: Object.freeze(['SKY']),
     lineNumberFallback: null,
     mapLink: Object.freeze({ lat: 60.3925, lng: 5.324 }),

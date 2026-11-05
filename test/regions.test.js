@@ -57,9 +57,9 @@ test('Bergen i regionmodellen, ikke offentlig', () => {
   assert.deepEqual([...b.authorities], ['SKY']);
   assert.equal(b.lineNumberFallback, null);
   assert.deepEqual([...b.center], [60.3925, 5.3240]);
-  assert.deepEqual(b.vehicleBounds, { minLat: 60.15, maxLat: 60.65, minLon: 4.85, maxLon: 5.75 });
-  assert.deepEqual(b.stopsBounds, { minLat: 60.0, maxLat: 60.8, minLon: 4.7, maxLon: 5.9 });
-  assert.deepEqual(b.geometryBounds, { s: 59.95, n: 60.85, w: 4.6, e: 6.0 });
+  assert.deepEqual(b.vehicleBounds, { minLat: 59.3, maxLat: 62.6, minLon: 4.5, maxLon: 7.9 });
+  assert.deepEqual(b.stopsBounds, { minLat: 59.1, maxLat: 62.8, minLon: 4.3, maxLon: 8.1 });
+  assert.deepEqual(b.geometryBounds, { s: 58.9, n: 63.0, w: 4.1, e: 8.3 });
   const o = REGIONS.oslo;
   assert.equal(o.path, '');
   assert.equal(o.public, true);
@@ -116,6 +116,7 @@ test('regionPath', () => {
 test('regionAt', () => {
   const vis = visibleRegions(['bergen']);
   assert.equal(regionAt(60.39, 5.32, vis).id, 'bergen');
+  assert.equal(regionAt(61.45, 5.85, vis).id, 'bergen'); // Førde, utenfor byen men i Vestland
   assert.equal(regionAt(59.91, 10.75, vis).id, 'oslo');
   assert.equal(regionAt(63.4, 10.4, vis), null);
   assert.equal(regionAt(60.39, 5.32), null); // Bergen ikke synlig

@@ -29,6 +29,11 @@ const ET_SHAPES_MIN_INTERVAL_MS = 30 * 60 * 1000;
 const ET_WAIT_MS = 1500;
 const SHAPES_REFRESH_MS = 60 * 60 * 1000;
 const TICK_MS = 60_000;
+// Oppstart: Oslo (RUT) henter straks og BNR etter 20 s. Andre regioner henter første ET etter 90 s, og et
+// besøk tidligst etter 60 s, så oppstarten ikke gir flere enn ~2 ET-kall i minuttet (Entur-kvoten er 4/min,
+// og den gamle instansen henter fortsatt under en Render-deploy).
+const ET_START_DELAY_MS = 90_000;
+const ET_MIN_START_DELAY_MS = 60_000;
 
 export const shapesVersionOf = (entry) => entry.etag.slice(1, 13);
 
@@ -74,6 +79,8 @@ export function defaultRegionServices(region, { runtime, etFetchFn, deps = {}, l
     // Ny data etter avlasting (f.eks. en henting som var i gang) slippes igjen ved neste tick
     onLoad: () => runtime.loaded?.(region.id),
     waitForFirst: region.alwaysActive === true,
+    startDelayMs: region.alwaysActive ? 0 : ET_START_DELAY_MS,
+    minStartDelayMs: region.alwaysActive ? 0 : ET_MIN_START_DELAY_MS,
     // Uten Ruter-fallback for linjenummer: behold turer uten modus, modus settes fra JP (Ruling 8)
     parserOpts: region.lineNumberFallback === 'ruter' ? {} : { keepUnknownMode: true, useVehicleMode: true },
     ...(etFetchFn ? { fetchFn: etFetchFn } : {}),
@@ -216,9 +223,11 @@ export function createRegionRegistry({
     setInterval(runtime.tick, tickMs).unref?.();
     for (const s of byId.values()) {
       const id = s.region.id;
-      s.etCache.start(); // én henting nå uansett tilstand, deretter bare når aktiv
+      // Én henting uansett tilstand (Oslo straks, andre etter 90 s), deretter bare når aktiv.
+      // start() henter gjennom refreshNow(), så en samtidig getJourneys()/refreshNow() deler samme henting.
+      const startup = s.etCache.start();
       // Alltid aktive regioner venter selv på første ET i rutekarttjenesten; andre venter på startkallet
-      const first = s.region.alwaysActive ? Promise.resolve() : s.etCache.refreshNow().catch(() => {});
+      const first = s.region.alwaysActive ? Promise.resolve() : Promise.resolve(startup);
       first
         .then(() => s.shapes.refresh())
         .then((shapes) => console.log(`[RuterLive] Rutekart ${id}: ${shapes?.length ?? 0} linjer`))

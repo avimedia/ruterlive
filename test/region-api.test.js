@@ -276,3 +276,34 @@ test('avlastet Bergen: linjesidens kjøretøyoppslag starter ingen ET-henting, o
   runtime.tick();
   assert.equal(s.etCache.getAge(), null, 'avlastet på nytt');
 });
+
+test('registry.start(): Oslo-ET straks, Bergen etter 90 s, én henting per region (start + første rutekart deler hentingen)', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: 0 });
+  const regions = [oslo, bergen];
+  const runtime = createRegionRuntime({ regions });
+  const xml = readFileSync(new URL('./fixtures/et-sample.xml', import.meta.url), 'utf8');
+  const calls = [];
+  const etFetchFn = async (url) => { calls.push(new URL(url).searchParams.get('datasetId')); return new Response(xml, { status: 200 }); };
+  const refreshed = [];
+  const registry = makeRegistry({
+    regions,
+    runtime,
+    createServices: (region, ctx) => ({
+      ...defaultRegionServices(region, { ...ctx, etFetchFn, lines: [] }),
+      shapes: { getCachedShapes: () => [], refresh: async () => { refreshed.push(region.id); return []; } },
+    }),
+  });
+  const log = t.mock.method(console, 'log', () => {});
+  registry.start({ shapesRefreshMs: 10 * 3_600_000, tickMs: 10 * 3_600_000 });
+  for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+  assert.deepEqual(calls, ['RUT']);
+  t.mock.timers.tick(60_000);
+  for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+  assert.deepEqual(calls, ['RUT'], 'Bergen venter fortsatt');
+  t.mock.timers.tick(30_000);
+  for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+  assert.equal(calls.filter((d) => d === 'SKY').length, 1, 'én SKY-henting');
+  assert.ok(refreshed.includes('bergen'), 'Bergen-rutekart etter første ET');
+  log.mock.restore();
+  for (const s of regions.map((r) => registry.get(r.id))) s.etCache.stop();
+});

@@ -66,6 +66,8 @@ async function readBody(body, idleMs, onChunk, totalMs = BODY_TOTAL_MS) {
  * @param {boolean} [o.waitForFirst] true: getJourneys() venter på første henting (alwaysActive-regioner)
  * @param {number} [o.bodyIdleMs] maks tid mellom to biter av body før nedlastingen avbrytes
  * @param {number} [o.bodyTotalMs] maks tid for hele body
+ * @param {number} [o.startDelayMs] start(): første henting så lenge etter oppstart (0 = straks)
+ * @param {number} [o.minStartDelayMs] ingen henting (heller ikke ved besøk) før så lenge etter start()
  * @param {() => void} [o.onLoad] kalles etter hver vellykkede henting (region-runtime kan da avlaste på nytt)
  */
 export function createEtCache({
@@ -81,6 +83,8 @@ export function createEtCache({
   bodyTotalMs = BODY_TOTAL_MS,
   maxSize = DEFAULT_MAX_SIZE,
   onLoad = () => {},
+  startDelayMs = 0,
+  minStartDelayMs = 0,
 }) {
   const url = `https://api.entur.io/realtime/v1/rest/et?datasetId=${datasetId}&maxSize=${maxSize}`;
   // Bare turer i gang eller som kan vises før neste henting lagres
@@ -95,6 +99,8 @@ export function createEtCache({
   let lastFailAt = 0;
   let generation = 0; // Øker ved drop(); pågående henting forkastes
   let timer = null;
+  let startTimer = null;
+  let notBefore = 0; // satt av start(): ingen henting før dette tidspunktet
 
   async function doRefresh() {
     const gen = generation;
@@ -179,6 +185,7 @@ export function createEtCache({
 
   // Feil i bakgrunnshenting (429, timeout) logges; uhåndtert rejection ville drept prosessen.
   function refreshInBackground() {
+    if (now() < notBefore) return; // Oppstart: vent, så regionene ikke henter ET samtidig (429)
     if (last429At && now() - last429At < BACKOFF_AFTER_429_MS) return; // Vent etter 429
     if (!journeys && lastFailAt && now() - lastFailAt < FAILURE_BACKOFF_MS) return; // Vent etter feil uten data
     refreshNow().catch((e) => console.warn(`[RuterLive] ET-henting ${datasetId}:`, e.message));
@@ -213,16 +220,34 @@ export function createEtCache({
       lastFetch = 0;
       generation++;
     },
-    /** Én henting nå, deretter intervall som bare henter mens regionen er aktiv. */
+    /**
+     * Én henting uansett tilstand (straks, eller etter startDelayMs), deretter intervall som bare henter
+     * mens regionen er aktiv. Gir et løfte som løses etter første henting (avvises aldri).
+     * Første henting går gjennom refreshNow(), så et samtidig refreshNow()/getJourneys() deler den.
+     */
     start() {
-      refreshInBackground();
-      if (timer) return;
-      timer = setInterval(() => { if (isActive()) refreshInBackground(); }, refreshMs);
-      timer.unref?.();
+      if (timer || startTimer) return Promise.resolve();
+      notBefore = now() + minStartDelayMs;
+      // Intervallet starter ved første henting, så en forsinket region ikke henter to ganger da
+      const begin = () => {
+        timer = setInterval(() => { if (isActive()) refreshInBackground(); }, refreshMs);
+        timer.unref?.();
+        // Et besøk kan alt ha hentet turene: da ingen ekstra henting
+        return (journeys ? Promise.resolve() : refreshNow()).catch((e) => {
+          console.warn(`[RuterLive] ET-henting ${datasetId}:`, e.message);
+        });
+      };
+      if (!startDelayMs) return begin();
+      return new Promise((resolve) => {
+        startTimer = setTimeout(() => { startTimer = null; resolve(begin()); }, startDelayMs);
+        startTimer.unref?.();
+      });
     },
     stop() {
       if (timer) clearInterval(timer);
+      if (startTimer) clearTimeout(startTimer);
       timer = null;
+      startTimer = null;
     },
   };
 }

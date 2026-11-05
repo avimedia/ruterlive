@@ -311,3 +311,38 @@ test('429 og gammel cache: samme kjøretøy med og uten filter ved +7,5 og +15 m
     }
   } finally { warn.mock.restore(); }
 });
+
+test('startforsinkelse: første henting etter startDelayMs, besøk tidligst etter minStartDelayMs, aldri dobbelt', async () => {
+  mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: 1_000_000 });
+  try {
+    const fetchFn = makeFetch();
+    const cache = createEtCache({
+      datasetId: 'SKY', isActive: () => true, runExclusive: pass, fetchFn, now: () => Date.now(),
+      refreshMs: 90_000, waitForFirst: false, parserOpts: { relevantWithinMs: null },
+      startDelayMs: 90_000, minStartDelayMs: 60_000,
+    });
+    cache.start();
+    await tickIO();
+    assert.equal(fetchFn.calls, 0, 'ingen henting ved oppstart');
+    mock.timers.tick(30_000);
+    assert.deepEqual(await cache.getJourneys(), []);
+    await tickIO();
+    assert.equal(fetchFn.calls, 0, 'besøk før 60 s: venter');
+    mock.timers.tick(31_000);
+    await cache.getJourneys();
+    await tickIO(); await tickIO();
+    assert.equal(fetchFn.calls, 1, 'besøk etter 60 s: henter');
+    mock.timers.tick(29_000); // 90 s: planlagt første henting, men turene finnes alt
+    await tickIO(); await tickIO();
+    assert.equal(fetchFn.calls, 1);
+    cache.stop();
+  } finally { mock.timers.reset(); }
+});
+
+test('start() og samtidig refreshNow()/getJourneys() deler én henting', async () => {
+  const { cache, fetchFn } = make({ waitForFirst: false });
+  const startup = cache.start();
+  await Promise.all([startup, cache.refreshNow(), cache.getJourneys()]);
+  assert.equal(fetchFn.calls, 1);
+  cache.stop();
+});

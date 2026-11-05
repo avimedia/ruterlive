@@ -31,31 +31,54 @@ export function normalizeStopName(name) {
   return slugify(stripStopSuffix(name));
 }
 
-function loadCatalog() {
+/**
+ * Katalogen for en region (server/stop-catalog.json for Oslo, server/stop-catalog-<region>.json ellers).
+ * Hver oppføring får `region`. Mangler filen, gis en tom liste (Oslo logger i tillegg en advarsel).
+ */
+export function loadStops(regionId = 'oslo') {
+  const file = regionId === 'oslo' ? 'stop-catalog.json' : `stop-catalog-${regionId}.json`;
   try {
-    return JSON.parse(readFileSync(new URL('./stop-catalog.json', import.meta.url), 'utf8'));
+    return JSON.parse(readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')).map((s) => ({ region: regionId, ...s }));
   } catch (e) {
-    console.warn('[RuterLive] Mangler server/stop-catalog.json:', e.message);
+    if (regionId === 'oslo') console.warn(`[RuterLive] Mangler server/${file}:`, e.message);
     return [];
   }
 }
 
-/** Hele katalogen, også stopp uten egen side. */
-export const STOPS = loadCatalog();
+/** Hele Oslo-katalogen, også stopp uten egen side. */
+export const STOPS = loadStops('oslo');
 
-/** Stoppene som har egen side. */
+/** Oslo-stoppene som har egen side. */
 export const FEATURED_STOPS = STOPS.filter((s) => s.featured);
 
-const bySlug = new Map(FEATURED_STOPS.map((s) => [s.slug, s]));
-const byName = new Map();
-for (const s of FEATURED_STOPS) {
-  const key = normalizeStopName(s.name);
-  if (!byName.has(key)) byName.set(key, s);
+const CATALOGS = { oslo: STOPS, bergen: loadStops('bergen') };
+
+/** Hele katalogen for regionen (tom for ukjente regioner). */
+export function stopsFor(regionId = 'oslo') {
+  return Object.hasOwn(CATALOGS, regionId) ? CATALOGS[regionId] : [];
 }
 
-/** Stopp med egen side, ellers undefined (også for stopp som bare ligger i katalogen). */
-export function getStopBySlug(slug) {
-  return bySlug.get(slug);
+const FEATURED = Object.fromEntries(Object.entries(CATALOGS).map(([id, list]) => [id, list.filter((s) => s.featured)]));
+
+/** Stoppene med egen side i regionen. */
+export function featuredStopsFor(regionId = 'oslo') {
+  return Object.hasOwn(FEATURED, regionId) ? FEATURED[regionId] : [];
+}
+
+const bySlugByRegion = Object.fromEntries(Object.entries(FEATURED).map(([id, list]) => [id, new Map(list.map((s) => [s.slug, s]))]));
+const byNameByRegion = Object.fromEntries(Object.entries(FEATURED).map(([id, list]) => {
+  const m = new Map();
+  for (const s of list) {
+    const key = normalizeStopName(s.name);
+    if (!m.has(key)) m.set(key, s);
+  }
+  return [id, m];
+}));
+const byName = byNameByRegion.oslo;
+
+/** Stopp med egen side i regionen, ellers undefined (også for stopp som bare ligger i katalogen). */
+export function getStopBySlug(slug, regionId = 'oslo') {
+  return bySlugByRegion[Object.hasOwn(bySlugByRegion, regionId) ? regionId : '']?.get(slug);
 }
 
 const byId = new Map(FEATURED_STOPS.map((s) => [s.id, s]));
@@ -76,19 +99,24 @@ export function findStopForPlace(place, quays = []) {
 }
 
 /** Stopp med egen side og samme (normaliserte) navn, ellers undefined. */
-export function findStopByName(name) {
-  return byName.get(normalizeStopName(name));
+export function findStopByName(name, regionId = 'oslo') {
+  return byNameByRegion[Object.hasOwn(byNameByRegion, regionId) ? regionId : '']?.get(normalizeStopName(name));
 }
 
 const textCache = new Map();
 
-/** Håndskrevet tekst fra content/holdeplass/<slug>.html (cachet). Bare stopp med egen side godtas. */
-export async function getStopText(slug) {
-  if (!bySlug.has(slug)) return undefined;
-  if (!textCache.has(slug)) {
-    textCache.set(slug, await readFile(new URL(`../content/holdeplass/${slug}.html`, import.meta.url), 'utf8'));
+/**
+ * Håndskrevet tekst fra content/holdeplass/<slug>.html (Oslo) eller content/<region>/holdeplass/<slug>.html (cachet).
+ * Bare stopp med egen side godtas.
+ */
+export async function getStopText(slug, regionId = 'oslo') {
+  if (!getStopBySlug(slug, regionId)) return undefined;
+  const key = `${regionId}:${slug}`;
+  if (!textCache.has(key)) {
+    const dir = regionId === 'oslo' ? 'holdeplass' : `${regionId}/holdeplass`;
+    textCache.set(key, await readFile(new URL(`../content/${dir}/${slug}.html`, import.meta.url), 'utf8'));
   }
-  return textCache.get(slug);
+  return textCache.get(key);
 }
 
 /** Avstand i meter (haversine). */

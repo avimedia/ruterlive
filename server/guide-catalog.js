@@ -38,21 +38,26 @@ export const GUIDES = [
     title: 'Slik bruker du kartet',
     description: 'En gjennomgang av lagvelgeren, søk, holdeplasser, avgangstavler og de andre funksjonene på kartet.',
   },
-].map((g) => ({ published: PUBLISHED, updated: PUBLISHED, ...g }));
+].map((g) => ({ published: PUBLISHED, updated: PUBLISHED, region: 'oslo', ...g }));
 
-export function getGuideBySlug(slug) {
-  return GUIDES.find((g) => g.slug === slug);
+export function getGuideBySlug(slug, regionId = 'oslo') {
+  return GUIDES.find((g) => g.slug === slug && g.region === regionId);
 }
 
 const bodyCache = new Map();
 
-/** Leser content/guider/<slug>.html og cacher i minnet. Kun kjente slugs godtas. */
-export async function loadGuideBody(slug) {
-  if (!getGuideBySlug(slug)) throw new Error(`Ukjent guide: ${slug}`);
-  if (!bodyCache.has(slug)) {
-    bodyCache.set(slug, await readFile(new URL(`../content/guider/${slug}.html`, import.meta.url), 'utf8'));
+/**
+ * Leser content/guider/<slug>.html (Oslo) eller content/<region>/guider/<slug>.html og cacher i minnet.
+ * Kun kjente guider godtas.
+ */
+export async function loadGuideBody(slug, regionId = 'oslo') {
+  if (!getGuideBySlug(slug, regionId)) throw new Error(`Ukjent guide: ${regionId}/${slug}`);
+  const key = `${regionId}:${slug}`;
+  if (!bodyCache.has(key)) {
+    const dir = regionId === 'oslo' ? 'guider' : `${regionId}/guider`;
+    bodyCache.set(key, await readFile(new URL(`../content/${dir}/${slug}.html`, import.meta.url), 'utf8'));
   }
-  return bodyCache.get(slug);
+  return bodyCache.get(key);
 }
 
 /** Leser content/om.html (cachet). */

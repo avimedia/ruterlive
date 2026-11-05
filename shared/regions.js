@@ -7,6 +7,7 @@ export const REGIONS = Object.freeze({
   oslo: Object.freeze({
     id: 'oslo',
     name: 'Oslo og Viken',
+    shortName: 'Oslo', // brødsmuler
     path: '', // URL-prefiks; Oslo ligger på roten
     public: true,
     alwaysActive: true, // ET-data holdes varme uavhengig av besøk
@@ -29,6 +30,7 @@ export const REGIONS = Object.freeze({
   bergen: Object.freeze({
     id: 'bergen',
     name: 'Bergen og Vestland',
+    shortName: 'Bergen',
     path: '/bergen',
     public: false,
     alwaysActive: false,

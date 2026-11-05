@@ -7,6 +7,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { CLIENT_NAME } from './entur-client.js';
 import bergenCatalog from '../shared/lines/bergen.js';
+import { getRegion } from '../shared/regions.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -215,55 +216,60 @@ export async function jpQuery(query, fetchFn, timeoutMs = TIMEOUT_MS, variables 
   }
 }
 
-let idCache = null; // { at, ids: Map<"AUTH:CODE", jpId> }
-const stopsCache = new Map(); // slug -> { at, value } (value null = feil, cachet kort)
-let idsInFlight = null;
-const inFlight = new Map(); // slug -> Promise
+const idCaches = new Map(); // regionId -> { at, ids: Map<"AUTH:CODE", jpId> }
+const stopsCache = new Map(); // regionId:slug -> { at, value } (value null = feil, cachet kort)
+const idsInFlight = new Map(); // regionId -> Promise
+const inFlight = new Map(); // regionId:slug -> Promise
 const FAILURE_TTL_MS = 60 * 1000;
 
-async function getLineIds(fetchFn, timeoutMs) {
-  if (idCache && Date.now() - idCache.at < CACHE_TTL_MS) return idCache.ids;
-  if (idsInFlight) return idsInFlight;
-  idsInFlight = fetchLineIds(fetchFn, timeoutMs).finally(() => { idsInFlight = null; });
-  return idsInFlight;
+async function getLineIds(regionId, fetchFn, timeoutMs) {
+  const cached = idCaches.get(regionId);
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.ids;
+  if (idsInFlight.has(regionId)) return idsInFlight.get(regionId);
+  const p = fetchLineIds(regionId, fetchFn, timeoutMs).finally(() => idsInFlight.delete(regionId));
+  idsInFlight.set(regionId, p);
+  return p;
 }
 
-async function fetchLineIds(fetchFn, timeoutMs) {
-  const codes = [...new Set(LINES.map((l) => l.code))];
-  const data = await jpQuery(
-    `{ lines(publicCodes: ${JSON.stringify(codes)}) { id publicCode } }`,
-    fetchFn,
-    timeoutMs
-  );
+async function fetchLineIds(regionId, fetchFn, timeoutMs) {
+  // Oslo: oppslag på linjekodene i katalogen. Andre regioner har hundrevis av koder, så der hentes
+  // alle linjer for regionens operatører (bare id og kode).
+  const query = regionId === 'oslo'
+    ? `{ lines(publicCodes: ${JSON.stringify([...new Set(LINES.map((l) => l.code))])}) { id publicCode } }`
+    : `{ lines(authorities: ${JSON.stringify(getRegion(regionId).authorities.map((a) => `${a}:Authority:${a}`))}) { id publicCode } }`;
+  const data = await jpQuery(query, fetchFn, timeoutMs);
   const ids = new Map();
   for (const l of data?.lines ?? []) {
     const authority = String(l.id).split(':')[0];
     ids.set(`${authority}:${String(l.publicCode).toUpperCase()}`, l.id);
   }
-  idCache = { at: Date.now(), ids };
+  idCaches.set(regionId, { at: Date.now(), ids });
   return ids;
 }
 
 /**
  * Henter stoppliste for en linje fra Entur JP (cache 24 t). Gir null ved feil.
+ * Cachen er per region + slug, så like slugs i ulike regioner ikke kolliderer.
  * @returns {Promise<{ stops: string[], from: string, to: string, name: string, fetchedAt: string } | null>}
  */
 export async function getLineStops(line, fetchFn = fetch, timeoutMs = TIMEOUT_MS) {
-  const cached = stopsCache.get(line.slug);
+  const regionId = line.regionId ?? 'oslo';
+  const key = `${regionId}:${line.slug}`;
+  const cached = stopsCache.get(key);
   if (cached && Date.now() - cached.at < (cached.value ? CACHE_TTL_MS : FAILURE_TTL_MS)) return cached.value;
-  if (inFlight.has(line.slug)) return inFlight.get(line.slug);
-  const promise = fetchLineStops(line, fetchFn, timeoutMs).then((value) => {
-    stopsCache.set(line.slug, { at: Date.now(), value });
+  if (inFlight.has(key)) return inFlight.get(key);
+  const promise = fetchLineStops(line, regionId, fetchFn, timeoutMs).then((value) => {
+    stopsCache.set(key, { at: Date.now(), value });
     return value;
-  }).finally(() => inFlight.delete(line.slug));
-  inFlight.set(line.slug, promise);
+  }).finally(() => inFlight.delete(key));
+  inFlight.set(key, promise);
   return promise;
 }
 
-async function fetchLineStops(line, fetchFn, timeoutMs) {
+async function fetchLineStops(line, regionId, fetchFn, timeoutMs) {
   try {
-    const ids = await getLineIds(fetchFn, timeoutMs);
-    const jpId = ids.get(`${line.authority}:${line.code.toUpperCase()}`);
+    // JP-linje-id: `ref` når katalogen har den (f.eks. Flybussen), ellers oppslag på operatør + kode
+    const jpId = line.ref ?? (await getLineIds(regionId, fetchFn, timeoutMs)).get(`${line.authority}:${line.code.toUpperCase()}`);
     if (!jpId) return null;
     const data = await jpQuery(
       `{ line(id: ${JSON.stringify(jpId)}) { name journeyPatterns { quays { name } serviceJourneys { id transportMode } } } }`,
@@ -275,7 +281,7 @@ async function fetchLineStops(line, fetchFn, timeoutMs) {
     const value = { ...main, name: data?.line?.name ?? '', fetchedAt: new Date().toISOString() };
     return value;
   } catch (e) {
-    console.warn(`[RuterLive] Stoppliste ${line.slug}:`, e.message);
+    console.warn(`[RuterLive] Stoppliste ${regionId}/${line.slug}:`, e.message);
     return null;
   }
 }

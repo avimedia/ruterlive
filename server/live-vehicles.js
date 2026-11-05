@@ -103,6 +103,7 @@ const VEHICLE_MODES = {
   flytog: ['rail', 'flytog'],
   flybuss: ['bus', 'coach'],
   bus: ['bus'],
+  water: ['water', 'boat'],
 };
 
 /** Teller kjøretøy som kjører linjen, inkl. x-varianter (aliaser). Filtrerer også på transportmåte, siden

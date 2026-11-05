@@ -12,6 +12,7 @@ export const REGIONS = Object.freeze({
     public: true,
     alwaysActive: true, // ET-data holdes varme uavhengig av besøk
     authorities: Object.freeze(['RUT']),
+    situationCodespaces: Object.freeze(['RUT']), // avvik (SIRI SX); tog kommer i tillegg
     jpRailFallback: true, // tog-rutefallback via Journey Planner fra Oslo S
     center: Object.freeze([59.9110, 10.7525]), // Oslo S / Jernbanetorget
     defaultZoom: 14,
@@ -37,6 +38,7 @@ export const REGIONS = Object.freeze({
     public: true,
     alwaysActive: false,
     authorities: Object.freeze(['SKY']),
+    situationCodespaces: Object.freeze(['SKY']),
     center: Object.freeze([60.3925, 5.3240]), // Byparken
     defaultZoom: 14,
     // Dekker hele Skyss-området (Vestland); målt SKY-kjøretøy: lat 59.39-62.47, lon 4.62-7.81

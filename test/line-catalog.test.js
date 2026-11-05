@@ -156,3 +156,87 @@ test('toglinjer utenfor Oslo: slug, region, myndighet og kartutsnitt', () => {
   }
   for (const [id] of RAIL_REGIONS) assert.ok(LINES.some((l) => l.region === id), id);
 });
+
+// --- Bergen: generert katalog ---
+
+import { buildRegionLines, renderCatalogModule } from '../scripts/build-line-catalog.mjs';
+import { linesForRegion } from '../server/region-services.js';
+import { getRegion } from '../shared/regions.js';
+import { getLineText } from '../server/line-catalog.js';
+import bergenLines from '../shared/lines/bergen.js';
+
+const jp = (id, publicCode, name, transportMode) => ({ id, publicCode, name, transportMode });
+
+test('buildRegionLines: dropper bestilling og linjer uten publicCode, sorterer og lager slugs/titler', () => {
+  const { lines, mismatches } = buildRegionLines('bergen', [
+    jp('SKY:Line:1047', '1047', 'Manheller-Fodnes', 'water'),
+    jp('SKY:Line:10', '10', 'Bus A', 'bus'),
+    jp('SKY:Line:2', '2', 'Bus B', 'bus'),
+    jp('SKY:Line:1', '1', 'Bergen lufthavn Flesland - Byparken', 'tram'),
+    jp('SKY:FlexibleLine:x', 'Skyss Bestilling', 'Firda - 31b', 'bus'),
+    jp('SKY:Line:99', null, 'Uten kode', 'bus'),
+    jp('SKY:Line:98', '98', 'Skyss Bestilling Ålesund', 'bus'),
+    jp('NWY:Line:uuid-1', 'FB50', 'Flybussen Bergen', 'bus'),
+  ]);
+  assert.deepEqual(lines.map((l) => l.slug), ['bybanen-1', 'flybuss-fb50', 'buss-2', 'buss-10', 'baat-1047']);
+  assert.deepEqual(lines.map((l) => l.title), ['Bybanen linje 1', 'Flybuss FB50', 'Buss 2', 'Buss 10', 'Båt 1047']);
+  assert.deepEqual(lines.map((l) => !!l.geometry), [true, true, false, false, false]);
+  assert.equal(lines[1].ref, 'NWY:Line:uuid-1');
+  assert.equal(lines[1].authority, 'NWY');
+  assert.equal(lines[0].authority, 'SKY');
+  assert.deepEqual(mismatches, [{ id: 'NWY:Line:uuid-1', publicCode: 'FB50' }]);
+});
+
+test('buildRegionLines: slugs er unike (samme kode i to moduser/operatører)', () => {
+  const { lines } = buildRegionLines('bergen', [
+    jp('SKY:Line:5', '5', 'a', 'bus'),
+    jp('SKY:Line:5b', '5', 'b', 'bus'),
+  ]);
+  assert.equal(new Set(lines.map((l) => l.slug)).size, lines.length);
+});
+
+test('renderCatalogModule gir gyldig modul med én linje per rad', async () => {
+  const src = renderCatalogModule([{ slug: 'buss-2', code: '2', mode: 'bus', authority: 'SKY', title: 'Buss 2' }], 'bergen');
+  assert.match(src, /export default \[\n\{ "slug":"buss-2"[^\n]*\},\n\];/);
+});
+
+test('generert Bergen-katalog: unike slugs, ingen bestilling, tram og båt finnes', () => {
+  assert.ok(bergenLines.length > 100);
+  assert.equal(new Set(bergenLines.map((l) => l.slug)).size, bergenLines.length);
+  assert.ok(bergenLines.every((l) => !/bestilling/i.test(l.title) && l.code));
+  assert.ok(bergenLines.some((l) => l.slug === 'bybanen-1' && l.mode === 'tram'));
+  assert.ok(bergenLines.some((l) => l.mode === 'water' && l.title.startsWith('Båt ')));
+});
+
+test('getLineBySlug er regionbevisst', () => {
+  const b = getLineBySlug('buss-3', 'bergen');
+  assert.equal(b.regionId, 'bergen');
+  assert.equal(b.authority, 'SKY');
+  assert.equal(getLineBySlug('buss-3'), undefined);
+  // buss-20 finnes i begge regioner, med hver sin operatør
+  assert.equal(getLineBySlug('buss-20').authority, 'RUT');
+  assert.equal(getLineBySlug('buss-20', 'bergen').authority, 'SKY');
+  assert.equal(getLineBySlug('tog-r12', 'bergen'), undefined);
+  assert.ok(LINES.every((l) => l.regionId === 'oslo'));
+  assert.equal(getLineBySlug('t-bane-5', 'ukjent'), undefined);
+});
+
+test('indexed: Oslo alltid, Bergen bare med tekst', () => {
+  assert.ok(LINES.every((l) => l.indexed === true));
+  assert.equal(getLineBySlug('buss-3', 'bergen').indexed, false);
+});
+
+test('getLineText for Bergen uten tekstfil gir undefined, ukjent slug likeså', async () => {
+  assert.equal(await getLineText('buss-3', 'bergen'), undefined);
+  assert.equal(await getLineText('tog-r12', 'bergen'), undefined);
+  assert.ok(await getLineText('t-bane-5'));
+});
+
+test('linesForRegion: Bergen gir bare linjer med geometry (tram og flybuss)', () => {
+  const lines = linesForRegion(getRegion('bergen'));
+  assert.ok(lines.length >= 2);
+  assert.ok(lines.every((l) => l.geometry === true));
+  assert.ok(lines.some((l) => l.mode === 'tram'));
+  assert.ok(lines.every((l) => l.mode === 'tram' || l.mode === 'flybuss'));
+  assert.ok(linesForRegion(getRegion('oslo')).length > 40);
+});

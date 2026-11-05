@@ -628,7 +628,7 @@ export function updateMarkers(vehicles, visibleModes, opts = {}) {
     }
     // Lenke til linjesiden når linja har en (innholdssidene er der annonsene vises)
     const page = linePageFor(v, vehicleModeClass(v));
-    if (page) popupParts.push(`<a class="vehicle-popup-link" href="/linje/${page.slug}">Om ${e(page.title)} →</a>`);
+    if (page) popupParts.push(`<a class="vehicle-popup-link" href="${page.path}">Om ${e(page.title)} →</a>`);
     const popupHtml = popupParts.join('<br>');
     const tooltipText = e(late ? `${title} · ${late}` : title);
 

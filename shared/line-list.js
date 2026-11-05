@@ -3,7 +3,9 @@
  * Listen er håndkopiert fra server/line-catalog.js (test/line-search.test.js sjekker at de er like).
  */
 
-export const MODE_ORDER = ['metro', 'tram', 'rail', 'flytog', 'flybuss', 'bus'];
+import { findRegion, regionPath } from './regions.js';
+
+export const MODE_ORDER = ['metro', 'tram', 'rail', 'flytog', 'flybuss', 'bus', 'water'];
 
 export const MODE_COLORS = {
   bus: '#e63946',
@@ -171,18 +173,37 @@ export function lineSlug(l) {
   return `${SLUG_PREFIX[l.mode]}-${String(l.code).toLowerCase()}`;
 }
 
+// Genererte kataloger for andre regioner (egen Vite-chunk), fylt av linesFor.
+const loadedCatalogs = new Map();
+const CATALOG_LOADERS = { bergen: () => import('./lines/bergen.js') };
+
+/** Linjene i en region. Oslo synkront fra LINE_LIST; andre regioner lastes ved første kall. */
+export function linesFor(regionId = 'oslo') {
+  if (regionId === 'oslo') return LINE_LIST;
+  const load = Object.hasOwn(CATALOG_LOADERS, regionId) ? CATALOG_LOADERS[regionId] : null;
+  if (!load) return Promise.resolve([]);
+  return load().then((m) => {
+    const lines = m.default.map((l) => ({ aliases: [], ...l }));
+    loadedCatalogs.set(regionId, lines);
+    return lines;
+  });
+}
+
 /**
- * Linjesiden for et kjøretøy, eller null. Krever samme modus og linjekode (eller alias), og samme
- * operatør når kjøretøyet har linje-ID (buss 31 fra en annen operatør enn Ruter får ingen lenke).
+ * Linjesiden for et kjøretøy: { path, title } eller null. Krever samme modus og linjekode (eller alias),
+ * og samme operatør når kjøretøyet har linje-ID (buss 31 fra en annen operatør enn Ruter får ingen lenke).
+ * Andre regioner enn Oslo krever at linesFor(regionId) er ferdig lastet, ellers null.
  */
-export function linePageFor(v, mode) {
+export function linePageFor(v, mode, regionId = 'oslo') {
   const code = normLineCode(v?.line?.publicCode);
-  if (!code) return null;
+  const region = findRegion(regionId);
+  const list = regionId === 'oslo' ? LINE_LIST : loadedCatalogs.get(regionId);
+  if (!code || !region || !list) return null;
   const ref = vehicleLineRef(v);
-  const l = LINE_LIST.find(
+  const l = list.find(
     (x) => x.mode === mode && [x.code, ...(x.aliases || [])].some((c) => normLineCode(c) === code) && !(ref && x.authority && !ref.startsWith(`${x.authority}:`))
   );
-  return l ? { slug: lineSlug(l), title: l.title } : null;
+  return l ? { path: regionPath(region, `/linje/${l.slug || lineSlug(l)}`), title: l.title } : null;
 }
 
 /** Uthevingen for en valgt linje: { mode, codes (normalisert), authority|null }. */

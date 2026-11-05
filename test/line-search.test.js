@@ -5,6 +5,7 @@ import {
   LINE_LIST,
   lineSlug,
   linePageFor,
+  linesFor,
   matchLines,
   parseLineQuery,
   chipLabel,
@@ -111,12 +112,31 @@ test('lineSlug gir samme slug som server/line-catalog.js', () => {
 
 test('linePageFor: modus, kode/alias og operatør må stemme', () => {
   const v = (code, ref) => ({ line: { publicCode: code, ref } });
-  assert.equal(linePageFor(v('31', 'RUT:Line:31'), 'bus')?.slug, 'buss-31');
-  assert.equal(linePageFor(v('31'), 'bus')?.slug, 'buss-31');
+  assert.equal(linePageFor(v('31', 'RUT:Line:31'), 'bus')?.path, '/linje/buss-31');
+  assert.equal(linePageFor(v('31'), 'bus')?.path, '/linje/buss-31');
   assert.equal(linePageFor(v('31', 'SKY:Line:31'), 'bus'), null);
-  assert.equal(linePageFor(v('5', 'RUT:Line:5'), 'metro')?.slug, 't-bane-5');
+  assert.equal(linePageFor(v('5', 'RUT:Line:5'), 'metro')?.path, '/linje/t-bane-5');
   assert.equal(linePageFor(v('5', 'RUT:Line:5'), 'bus'), null);
-  assert.equal(linePageFor(v('RX20', 'VYG:Line:RX20'), 'rail')?.slug, 'tog-re20');
+  assert.equal(linePageFor(v('RX20', 'VYG:Line:RX20'), 'rail')?.path, '/linje/tog-re20');
   assert.equal(linePageFor(v('999'), 'bus'), null);
   assert.equal(linePageFor(v(''), 'bus'), null);
+});
+
+test('linePageFor for Bergen: sti med regionprefiks og SKY-operatør', async () => {
+  const v = (code, ref) => ({ line: { publicCode: code, ref } });
+  assert.equal(linePageFor(v('3', 'SKY:Line:3'), 'bus', 'bergen'), null, 'katalogen er ikke lastet ennå');
+  await linesFor('bergen');
+  const page = linePageFor(v('3', 'SKY:Line:3'), 'bus', 'bergen');
+  assert.equal(page?.path, '/bergen/linje/buss-3');
+  assert.equal(page?.title, 'Buss 3');
+  assert.equal(linePageFor(v('1', 'SKY:Line:1'), 'tram', 'bergen')?.path, '/bergen/linje/bybanen-1');
+  assert.equal(linePageFor(v('3', 'RUT:Line:3'), 'bus', 'bergen'), null);
+  assert.equal(linePageFor(v('3', 'SKY:Line:3'), 'bus'), null);
+});
+
+test('linesFor: Oslo synkront fra LINE_LIST, Bergen via dynamisk import', async () => {
+  assert.equal(linesFor('oslo'), LINE_LIST);
+  const b = await linesFor('bergen');
+  assert.ok(b.length > 100 && b.every((l) => l.authority));
+  assert.ok(b.some((l) => l.slug === 'buss-3' || l.code === '2'));
 });

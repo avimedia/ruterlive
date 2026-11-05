@@ -3,9 +3,10 @@
  * Introtekster ligger i content/line-intros.json (slug -> tekst), lengre tekster i content/linje/<slug>.html.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { CLIENT_NAME } from './entur-client.js';
+import bergenCatalog from '../shared/lines/bergen.js';
 
 const JP_URL = 'https://api.entur.io/journey-planner/v3/graphql';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -80,34 +81,57 @@ export const RAIL_REGIONS = [
   ['trondelag', 'Trøndelag og Nordland'],
 ];
 
+/** Oslo-katalogen (håndskrevet over). `region` er togregionen i oversikten; `regionId` er kartregionen. */
 export const LINES = RAW_LINES.map((l) => ({
   aliases: [],
   ...l,
+  regionId: 'oslo',
+  indexed: true,
   intro: intros[l.slug] ?? '',
 }));
 
-export function getLineBySlug(slug) {
-  return LINES.find((l) => l.slug === slug);
-}
-
-const lineTextCache = new Map(); // slug -> tekst ('' = mangler fil)
+const textUrl = (slug, regionId) =>
+  new URL(regionId === 'oslo' ? `../content/linje/${slug}.html` : `../content/${regionId}/linje/${slug}.html`, import.meta.url);
 
 /**
- * Håndskrevet tekst fra content/linje/<slug>.html (cachet). Bare slugs i LINES godtas;
- * ukjente slugs og manglende filer gir undefined.
+ * Genererte kataloger (shared/lines/<region>.js) for andre regioner. `indexed` er sant bare når linja
+ * har egen tekst, så sider uten tekst ikke havner i søkemotorer (se regionspesifikasjonen).
  */
-export async function getLineText(slug) {
-  if (typeof slug !== 'string' || !/^[a-z0-9-]+$/.test(slug) || !getLineBySlug(slug)) return undefined;
-  if (!lineTextCache.has(slug)) {
+const GENERATED = { bergen: bergenCatalog };
+export const REGION_LINES = Object.freeze({
+  oslo: LINES,
+  ...Object.fromEntries(
+    Object.entries(GENERATED).map(([regionId, lines]) => [
+      regionId,
+      lines.map((l) => ({ aliases: [], ...l, regionId, indexed: existsSync(textUrl(l.slug, regionId)), intro: '' })),
+    ]),
+  ),
+});
+
+export function getLineBySlug(slug, regionId = 'oslo') {
+  if (!Object.hasOwn(REGION_LINES, regionId)) return undefined;
+  return REGION_LINES[regionId].find((l) => l.slug === slug);
+}
+
+const lineTextCache = new Map(); // regionId:slug -> tekst ('' = mangler fil)
+
+/**
+ * Håndskrevet tekst fra content/linje/<slug>.html (Oslo) eller content/<region>/linje/<slug>.html (cachet).
+ * Bare slugs i regionens katalog godtas; ukjente slugs og manglende filer gir undefined.
+ */
+export async function getLineText(slug, regionId = 'oslo') {
+  if (typeof slug !== 'string' || !/^[a-z0-9-]+$/.test(slug) || !getLineBySlug(slug, regionId)) return undefined;
+  const key = `${regionId}:${slug}`;
+  if (!lineTextCache.has(key)) {
     try {
-      lineTextCache.set(slug, await readFile(new URL(`../content/linje/${slug}.html`, import.meta.url), 'utf8'));
+      lineTextCache.set(key, await readFile(textUrl(slug, regionId), 'utf8'));
     } catch (e) {
       if (e.code !== 'ENOENT') throw e;
-      console.warn(`[RuterLive] Mangler content/linje/${slug}.html`);
-      lineTextCache.set(slug, '');
+      if (regionId === 'oslo') console.warn(`[RuterLive] Mangler content/linje/${slug}.html`);
+      lineTextCache.set(key, '');
     }
   }
-  return lineTextCache.get(slug) || undefined;
+  return lineTextCache.get(key) || undefined;
 }
 
 /** Togtur, ikke buss for tog (railReplacementBus har transportMode bus). Mangler modus: tog. */
@@ -258,7 +282,7 @@ async function fetchLineStops(line, fetchFn, timeoutMs) {
 
 /** Henter alle stopplister sekvensielt for å varme cachen. */
 export async function prewarmLineStops() {
-  for (const line of LINES) {
+  for (const line of LINES.filter((l) => l.indexed)) {
     await getLineStops(line);
   }
   console.log('[RuterLive] Stopplister for linjesider forhåndshentet');

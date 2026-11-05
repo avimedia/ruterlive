@@ -18,7 +18,7 @@ import { mergeShapes, mergeVehicles, withRouteInfo, withoutDelay } from './live-
 import { makeJsonEntry, memoEntry } from './json-cache.js';
 import { buildVehiclesPayload } from './vehicles-payload.js';
 import { sortShapes, createThrottledSnapshot } from './shapes-version.js';
-import { LINES } from './line-catalog.js';
+import { LINES, REGION_LINES } from './line-catalog.js';
 import { DEFAULT_REGION } from '../shared/regions.js';
 
 const NO_SHAPES = Object.freeze([]);
@@ -46,10 +46,12 @@ export function parseRegionParam(query, visible = serverVisibleRegions()) {
 
 /**
  * Linjer med fast trasé fra JP. Oslo: katalogen uten tog utenfor Oslo (de har trasé fra rail-network.js).
- * Andre regioner: ingen ennå (Task 7 kobler inn den genererte katalogen).
+ * Andre regioner: linjene med `geometry: true` i den genererte katalogen (tram og flybuss; busser og båter
+ * får rute ved valg).
  */
 export function linesForRegion(region) {
-  return region.id === DEFAULT_REGION ? LINES.filter((l) => !l.national) : [];
+  if (region.id === DEFAULT_REGION) return LINES.filter((l) => !l.national);
+  return (REGION_LINES[region.id] ?? []).filter((l) => l.geometry === true);
 }
 
 /** Oslo sine statiske kart (togreserve og flybuss); andre regioner har ingen. */

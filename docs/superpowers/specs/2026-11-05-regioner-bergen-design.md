@@ -89,7 +89,8 @@ Alle regionsensitive endepunkter får `?region=` (standard `oslo`, så gamle kli
 
 Bergen-innhold (fakta sjekkes mot Entur før de skrives, ellers utelates de):
 
-- Linjesider: Bybanen 1 og 2, de 15–20 busslinjene med flest avganger, de største båtrutene, Flybussen Bergen hvis den finnes i Entur.
+- Linjesider for alle Skyss-linjer i Entur (buss, båt, Bybanen 1 og 2), unntatt bestillingslinjene («Skyss Bestilling», ingen fast rute), pluss Flybussen Bergen hvis den finnes i Entur. Katalogen bygges fra Entur JP med et skript (som `scripts/build-stop-catalog.mjs`), ikke for hånd.
+- Bare linjesider med egen tekst (20–30 stykker: Bybanen, de største buss- og båtlinjene, flybussen) står i sitemap og indekseres. De andre får `noindex`, så hundrevis av like, automatiske sider ikke gir «low value content» i AdSense. Siden får egen tekst → fjern `noindex`.
 - Holdeplassider: 8–12 knutepunkter (f.eks. Byparken, Bergen busstasjon, Flesland, Nesttun terminal, Åsane terminal, Strandkaien).
 - Guider: Bybanen i Bergen, båt og ferje med Skyss, til og fra Flesland.
 - Samme tekstregler som før: kort, uten standardinnledninger, fyllfraser, oppsummering eller oppdiktet forfatter. Byline «livetrafikk.no».

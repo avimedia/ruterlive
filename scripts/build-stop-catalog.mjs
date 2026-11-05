@@ -1,16 +1,27 @@
-// Bygger server/stop-catalog.json (holdeplassider). Kjøres manuelt ved behov:
-//   node scripts/build-stop-catalog.mjs
-// Henter alle T-banestasjoner og sentrale trikkestopp fra linjenes journey patterns i Entur JP,
+// Bygger server/stop-catalog.json (Oslo) eller server/stop-catalog-<region>.json (holdeplassider). Kjøres manuelt ved behov:
+//   node scripts/build-stop-catalog.mjs [--region bergen]
+// Oslo: alle T-banestasjoner og sentrale trikkestopp fra linjenes journey patterns i Entur JP,
 // pluss en kort liste knutepunkter for tog og buss (oppslag i Entur Geocoder).
+// Bergen: alle Bybanen-stopp fra JP pluss knutepunkter (Geocoder). Ingen stopp får `featured` her;
+// de velges senere sammen med egen tekst i content/bergen/holdeplass/.
 // Rundt 25 kall mot Entur totalt, med pause mellom hvert.
 import { writeFileSync } from 'node:fs';
-import { STOPS, slugify, stripStopSuffix } from '../server/stop-catalog.js';
+import { loadStops, slugify, stripStopSuffix } from '../server/stop-catalog.js';
+import { findRegion } from '../shared/regions.js';
 import { jpQuery } from '../server/line-catalog.js';
 
 const HEADERS = { 'ET-Client-Name': process.env.ENTUR_CLIENT_NAME || 'ruterlive-web' };
 
+const regionArg = process.argv.indexOf('--region');
+const regionId = regionArg > 0 ? process.argv[regionArg + 1] : 'oslo';
+const region = findRegion(regionId);
+if (!region) {
+  console.error(`Ukjent region: ${regionId}`);
+  process.exit(1);
+}
+
 // Behold «featured» fra eksisterende katalog (håndplukkede knutepunkter med egen tekst).
-const FEATURED_IDS = new Set(STOPS.filter((s) => s.featured).map((s) => s.id));
+const FEATURED_IDS = new Set(loadStops(regionId).filter((s) => s.featured).map((s) => s.id));
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const jp = async (query, variables) => {
   await pause(400);
@@ -18,16 +29,29 @@ const jp = async (query, variables) => {
 };
 
 // Knutepunkter for tog/buss/båt som ikke kommer med via T-bane/trikk. Navn som i Entur.
-const HUBS = [
-  'Oslo S', 'Nationaltheatret', 'Skøyen', 'Lysaker', 'Sandvika stasjon', 'Asker stasjon', 'Lillestrøm stasjon',
-  'Oslo lufthavn stasjon', 'Ski stasjon', 'Drammen stasjon', 'Bryn stasjon', 'Kolbotn stasjon', 'Strømmen stasjon',
-  'Jessheim stasjon', 'Oslo bussterminal', 'Aker brygge', 'Nesoddtangen', 'Lørenskog sentrum',
-];
+const HUBS_BY_REGION = {
+  oslo: [
+    'Oslo S', 'Nationaltheatret', 'Skøyen', 'Lysaker', 'Sandvika stasjon', 'Asker stasjon', 'Lillestrøm stasjon',
+    'Oslo lufthavn stasjon', 'Ski stasjon', 'Drammen stasjon', 'Bryn stasjon', 'Kolbotn stasjon', 'Strømmen stasjon',
+    'Jessheim stasjon', 'Oslo bussterminal', 'Aker brygge', 'Nesoddtangen', 'Lørenskog sentrum',
+  ],
+  bergen: [
+    'Bergen busstasjon', 'Bergen stasjon', 'Festplassen', 'Strandkaien', 'Olav Kyrres gate', 'Danmarksplass',
+    'Bergen lufthavn Flesland', 'Knarvik terminal', 'Voss stasjon', 'Straume terminal', 'Nesttun terminal',
+  ],
+};
+const HUBS = HUBS_BY_REGION[regionId] ?? [];
 
 const MODE_ORDER = ['metro', 'tram', 'rail', 'bus', 'water'];
 const MODE_MAP = { metro: 'metro', tram: 'tram', rail: 'rail', bus: 'bus', coach: 'bus', water: 'water' };
 
 async function lineIds() {
+  if (regionId !== 'oslo') {
+    // Andre regioner: alle bane- og trikkelinjer hos regionens operatører (Bybanen)
+    const auth = region.authorities.map((a) => `${a}:Authority:${a}`);
+    const data = await jp('query($a:[String]){ lines(authorities:$a, transportModes:[tram, metro]) { id publicCode transportMode } }', { a: auth });
+    return data?.lines ?? [];
+  }
   const codes = ['1', '2', '3', '4', '5', '11', '12', '13', '15', '17', '18', '19'];
   const data = await jp('query($codes:[String]){ lines(publicCodes:$codes) { id publicCode transportMode } }', { codes });
   return (data?.lines ?? []).filter((l) => String(l.id).startsWith('RUT:')).filter((l) => l.transportMode === 'metro' || l.transportMode === 'tram');
@@ -43,7 +67,7 @@ async function patternStops(line) {
 
 async function geocode(name) {
   await pause(400);
-  const url = `https://api.entur.io/geocoder/v1/autocomplete?text=${encodeURIComponent(name)}&layers=venue&size=3&focus.point.lat=59.91&focus.point.lon=10.75`;
+  const url = `https://api.entur.io/geocoder/v1/autocomplete?text=${encodeURIComponent(name)}&layers=venue&size=3&focus.point.lat=${region.center[0]}&focus.point.lon=${region.center[1]}`;
   const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(15000) });
   const json = await res.json();
   const f = (json.features ?? []).find((x) => String(x.properties?.id).startsWith('NSR:StopPlace:'));
@@ -83,8 +107,8 @@ for (const line of lines) {
     }
   }
 }
-// Trikk: stopp med minst tre linjer (sentrum) og endeholdeplasser.
-for (const [id, set] of tramCount) if (set.size >= 3) ids.add(id);
+// Trikk: stopp med minst tre linjer (sentrum) og endeholdeplasser. Utenfor Oslo er trikken en enkelt bane: alle stopp.
+for (const [id, set] of tramCount) if (set.size >= 3 || regionId !== 'oslo') ids.add(id);
 for (const id of tramEnds) ids.add(id);
 
 for (const name of HUBS) {
@@ -114,5 +138,5 @@ const catalog = info
     return FEATURED_IDS.has(s.id) ? { slug, ...s, featured: true } : { slug, ...s };
   });
 
-writeFileSync(new URL('../server/stop-catalog.json', import.meta.url), `[\n${catalog.map((s) => `  ${JSON.stringify(s)}`).join(',\n')}\n]\n`);
-console.log(`${catalog.length} holdeplasser skrevet`);
+writeFileSync(new URL(regionId === 'oslo' ? '../server/stop-catalog.json' : `../server/stop-catalog-${regionId}.json`, import.meta.url), `[\n${catalog.map((s) => `  ${JSON.stringify(s)}`).join(',\n')}\n]\n`);
+console.log(`${catalog.length} holdeplasser skrevet (${regionId})`);

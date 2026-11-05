@@ -25,7 +25,15 @@ import {
 
 // Regionens linjekatalog; Oslo ligger klar, andre regioner lastes (egen chunk) ved oppstart
 let regionLines = currentRegion().id === 'oslo' ? LINE_LIST : [];
-Promise.resolve(linesFor(currentRegion().id)).then((l) => { regionLines = l; }).catch(() => {});
+// Løses når katalogen er lastet; avvises aldri (feil gir tom liste, aldri Oslo-linjer)
+const regionLinesReady = Promise.resolve(linesFor(currentRegion().id))
+  .then((l) => { regionLines = l; return true; })
+  .catch(() => false);
+
+/** Kalles når en ikke-Oslo-katalog er lastet (Oslo er klar med en gang). */
+export function onRegionLinesLoaded(cb) {
+  if (currentRegion().id !== 'oslo') regionLinesReady.then((ok) => { if (ok) cb(); });
+}
 
 let vehicles = [];
 let shapes = [];
@@ -207,8 +215,12 @@ export function getActiveLine() {
 
 /** ?linje=31 ved oppstart. Ruter og kjøretøy kommer senere; zoomen skjer når de er lastet. */
 export function applyLineFromUrl() {
-  const line = parseLineParam(window.location.search);
-  if (line) selectLine(line);
+  const apply = () => {
+    const line = parseLineParam(window.location.search, regionLines);
+    if (line) selectLine(line);
+  };
+  if (currentRegion().id === 'oslo') apply();
+  else regionLinesReady.then((ok) => { if (ok) apply(); });
 }
 
 function showChip(line) {

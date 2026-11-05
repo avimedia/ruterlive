@@ -3,7 +3,7 @@
  */
 
 import { focusStopFromSearch } from './routes.js';
-import { searchLines, selectLine, initLineChip } from './line-search.js';
+import { searchLines, selectLine, initLineChip, onRegionLinesLoaded } from './line-search.js';
 import { MODE_COLORS } from '../shared/line-list.js';
 import { getMap } from './map.js';
 import { currentRegion, withRegion } from './region.js';
@@ -90,6 +90,9 @@ export function initStopSearch() {
     const pos = `&lat=${c.lat.toFixed(3)}&lng=${c.lng.toFixed(3)}`;
     return withRegion(`/api/stops-search?q=${encodeURIComponent(q)}${pos}`);
   }
+
+  // Skrev brukeren før regionens linjekatalog var lastet: kjør søket på nytt
+  onRegionLinesLoaded(() => { if (input.value.trim()) input.dispatchEvent(new Event('input')); });
 
   input.addEventListener('input', () => {
     clearTimeout(debounceTimer);

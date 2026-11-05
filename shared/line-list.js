@@ -149,10 +149,10 @@ export function lineCodes(l) {
 }
 
 /** ?linje=31 gir første linje med nøyaktig kode (eller null). Brukes av applyUrlParams. */
-export function parseLineParam(search) {
+export function parseLineParam(search, lines = LINE_LIST) {
   const raw = new URLSearchParams(search || '').get('linje');
   if (!raw || raw.length > 20) return null;
-  return matchLines(raw, [], { exactOnly: true })[0] ?? null;
+  return matchLines(raw, [], { exactOnly: true, lines })[0] ?? null;
 }
 
 /** Linjekode slik kjøretøy og ruter sammenlignes: store bokstaver, uten «-2»-suffiks og ledende nuller. */

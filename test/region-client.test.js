@@ -32,3 +32,15 @@ test('viewKeyFor: Oslo beholder gammel nøkkel, andre får egen', () => {
   assert.equal(viewKeyFor(REGIONS.oslo, 'ruterlive-view'), 'ruterlive-view');
   assert.equal(viewKeyFor(REGIONS.bergen, 'ruterlive-view'), 'ruterlive-view-bergen');
 });
+
+test('parseLineParam: bruker gitt linjeliste, tom liste gir null', async () => {
+  const { parseLineParam, linesFor } = await import('../shared/line-list.js');
+  const bergen = await linesFor('bergen');
+  const l = parseLineParam('?linje=FB50', bergen);
+  assert.equal(l.code, 'FB50');
+  assert.equal(l.authority, 'NWY');
+  assert.equal(parseLineParam('?linje=FB50', []), null);
+  assert.equal(parseLineParam('?linje=1', []), null);
+  assert.equal(parseLineParam('?linje=1', bergen).mode, 'tram');
+  assert.equal(parseLineParam('?linje=1', bergen).slug, 'bybanen-1');
+});

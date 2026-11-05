@@ -1,6 +1,6 @@
 /**
  * Kodeområder for avvik (SIRI SX), gruppert i områder med norske navn.
- * Brukes av /avvik og av regionfilteret. Ukjente kodeområder havner i «Andre».
+ * Brukes av /avvik, regionfilteret og kartets avviksknapp (js/situations.js). Ukjente kodeområder havner i «Andre».
  */
 
 // Kodeområder som regnes som tog og vises i alle regioner
@@ -31,4 +31,30 @@ const OTHER = SITUATION_AREAS.find((a) => a.id === 'other');
 /** Området et kodeområde hører til; ukjente gir «Andre». */
 export function areaFor(codespace) {
   return SITUATION_AREAS.find((a) => a.codespaces.includes(codespace)) || OTHER;
+}
+/**
+ * Oppslagsnøkler for en katalogelinje (Ruling 2): `refs` = katalogens `ref` og `<kodeområde>:Line:<kode>`,
+ * `codes` = `<kodeområde>|<KODE>` som reserve når lineRef-en har en annen intern ID enn koden.
+ * Kode omfatter aliaser, kodeområde omfatter CODESPACE_ALIASES (Vy-tog er NSB).
+ */
+export function lineRefKeys(line) {
+  const codes = [line.code, ...(line.aliases || [])].map((c) => String(c ?? '').toUpperCase()).filter(Boolean);
+  const spaces = [line.authority, ...(CODESPACE_ALIASES[line.authority] || [])];
+  const refs = new Set(line.ref ? [line.ref] : []);
+  const codeKeys = [];
+  for (const sp of spaces) {
+    for (const c of codes) {
+      refs.add(`${sp}:Line:${c}`);
+      codeKeys.push(`${sp}|${c}`);
+    }
+  }
+  return { refs: [...refs], codes: codeKeys };
+}
+
+/** Om avviket gjelder linja med nøklene fra lineRefKeys: lineRef, eller avvikets kodeområde + kode. */
+export function situationOnLine(s, { refs, codes }) {
+  const refSet = refs instanceof Set ? refs : new Set(refs);
+  const codeSet = codes instanceof Set ? codes : new Set(codes);
+  return (s?.lines || []).some((l) => refSet.has(l.ref)
+    || codeSet.has(`${s.codespace}|${String(l.code ?? '').toUpperCase()}`));
 }

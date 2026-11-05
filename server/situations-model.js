@@ -2,9 +2,9 @@
  * Avvik (SIRI SX) fra Entur Vehicles-API: normalisering, gyldighet, sortering og indekser.
  * Ren modul uten nettverk.
  */
-import { RAIL_CODESPACES, CODESPACE_ALIASES } from '../shared/situation-areas.js';
+import { RAIL_CODESPACES, lineRefKeys } from '../shared/situation-areas.js';
 
-export { RAIL_CODESPACES };
+export { RAIL_CODESPACES, lineRefKeys };
 
 const SEVERITY_RANK = { verySevere: 0, severe: 1, normal: 2, slight: 3, undefined: 4, noImpact: 5 };
 const rank = (s) => SEVERITY_RANK[s] ?? SEVERITY_RANK.undefined;
@@ -121,25 +121,6 @@ export const hasTargets = (s) => s.lines.length > 0 || s.stops.length > 0;
 /** Avvik som kan listes per område (med linjer eller holdeplasser). */
 export function listableSituations(index) {
   return index.all.filter(hasTargets);
-}
-
-/**
- * Oppslagsnøkler for en katalogelinje (Ruling 2): `refs` = katalogens `ref` og `<kodeområde>:Line:<kode>`,
- * `codes` = `<kodeområde>|<KODE>` som reserve når lineRef-en har en annen intern ID enn koden.
- * Kode omfatter aliaser, kodeområde omfatter CODESPACE_ALIASES (Vy-tog er NSB).
- */
-export function lineRefKeys(line) {
-  const codes = [line.code, ...(line.aliases || [])].map((c) => String(c ?? '').toUpperCase()).filter(Boolean);
-  const spaces = [line.authority, ...(CODESPACE_ALIASES[line.authority] || [])];
-  const refs = new Set(line.ref ? [line.ref] : []);
-  const codeKeys = [];
-  for (const sp of spaces) {
-    for (const c of codes) {
-      refs.add(`${sp}:Line:${c}`);
-      codeKeys.push(`${sp}|${c}`);
-    }
-  }
-  return { refs: [...refs], codes: codeKeys };
 }
 
 /** Avvik for en katalogelinje, se lineRefKeys. */

@@ -22,6 +22,7 @@ import {
   normLineCode,
   preferredAuthority,
 } from '../shared/line-list.js';
+import { lineRefKeys, CODESPACE_ALIASES } from '../shared/situation-areas.js';
 
 // Regionens linjekatalog; Oslo ligger klar, andre regioner lastes (egen chunk) ved oppstart
 let regionLines = currentRegion().id === 'oslo' ? LINE_LIST : [];
@@ -207,6 +208,23 @@ export function clearLine({ keepChip = false } = {}) {
   setLineHighlight(null);
   if (!keepChip) hideChip();
   return had;
+}
+
+/**
+ * Linja et avvik peker på ({ ref, code } + avvikets kodeområde), til selectLine: først regionkatalogen
+ * (samme nøkler som linjesidene), så linjer som er live nå med samme kode. null når den ikke finnes.
+ */
+export function findSituationLine(l, codespace) {
+  const code = String(l?.code ?? '').toUpperCase();
+  const codeKey = code && codespace ? `${codespace}|${code}` : null;
+  for (const line of regionLines) {
+    const { refs, codes } = lineRefKeys(line);
+    if ((l?.ref && refs.includes(l.ref)) || (codeKey && codes.includes(codeKey))) return line;
+  }
+  if (!code) return null;
+  const sameSpace = (a) => !a || !codespace || a === codespace || (CODESPACE_ALIASES[a] || []).includes(codespace);
+  const live = liveCodes.find((e) => normLineCode(e.code) === normLineCode(code) && sameSpace(e.authority));
+  return live ? { code: live.code, mode: live.mode, title: `${modeLabel(live.mode)} ${live.code}`, aliases: [], authority: live.authority || null } : null;
 }
 
 export function getActiveLine() {

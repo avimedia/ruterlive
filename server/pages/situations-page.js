@@ -3,46 +3,11 @@
 import { breadcrumbLd, escapeHtml, renderPage } from './layout.js';
 import { listableSituations, isRelevant } from '../situations-model.js';
 import { SITUATION_AREAS, areaFor } from '../../shared/situation-areas.js';
+import { SEVERITY_LABEL, formatValidityPeriod, timeOf } from '../../shared/situation-format.js';
 
-const TZ = 'Europe/Oslo';
+export { formatValidityPeriod };
+
 const PATH = '/avvik';
-
-// Entur sine alvorlighetsgrader; «undefined» får ingen merkelapp
-const SEVERITY_LABEL = {
-  verySevere: 'Svært alvorlig',
-  severe: 'Alvorlig',
-  normal: 'Normal',
-  slight: 'Liten',
-  noImpact: 'Ingen påvirkning',
-};
-
-const dateFmt = new Intl.DateTimeFormat('nb-NO', { timeZone: TZ, day: 'numeric', month: 'short', year: 'numeric' });
-const timeFmt = new Intl.DateTimeFormat('nb-NO', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-
-function dateParts(ms) {
-  const p = Object.fromEntries(dateFmt.formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
-  return { day: p.day, month: p.month, year: p.year };
-}
-
-const timeOf = (ms) => timeFmt.format(new Date(ms)).replace(':', '.');
-
-/** «5. nov.», med år når det ikke er inneværende år. */
-function dayText(ms, now) {
-  const d = dateParts(ms);
-  const year = d.year === dateParts(now).year ? '' : ` ${d.year}`;
-  return `${d.day}. ${d.month}${year}`;
-}
-
-const sameDay = (a, b) => dateFmt.format(new Date(a)) === dateFmt.format(new Date(b));
-
-/** «Gjelder fra 5. nov. kl. 08.00 til 20. nov.»; åpen slutt gir «inntil videre». */
-export function formatValidityPeriod({ start, end }, now) {
-  if (start == null && end == null) return 'Gjelder inntil videre';
-  if (start == null) return `Gjelder til ${dayText(end, now)}`;
-  const from = `Gjelder fra ${dayText(start, now)} kl. ${timeOf(start)}`;
-  if (end == null) return `${from} inntil videre`;
-  return sameDay(start, end) ? `${from} til kl. ${timeOf(end)}` : `${from} til ${dayText(end, now)}`;
-}
 
 const MAX_PERIODS = 3;
 

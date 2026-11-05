@@ -17,6 +17,7 @@ import { updateMarkers, applyFilter, getVehicleCounts, refreshMarkerIcons, onMar
 import { initFollowButton, setFollowVehicle } from './follow.js';
 import { initVehicleBar, setVehicleBarVehicle } from './vehicle-bar.js';
 import { initDepartureFocus } from './departure-focus.js';
+import { initSituationsPanel } from './situations-panel.js';
 import { initLayers, getVisibleModes, updateVehicleCount, setRetryHandler } from './layers.js';
 import { setLineSearchData } from './line-search.js';
 import { updateRouteLines, updateSelectedVehicleSplit } from './routes.js';
@@ -171,6 +172,7 @@ initFollowButton();
 initVehicleBar();
 initDepartureFocus();
 initLocate();
+initSituationsPanel();
 const map = getMap();
 if (map) {
   map.on('click', () => {

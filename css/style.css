@@ -889,10 +889,9 @@ body {
     font-size: 1.125rem;
   }
 
-  /* Utvidet lagvelger under toppraden (logokort 3,25rem + kant), så den ikke dekker pillen */
+  /* Utvidet lagvelger øverst til høyre når den får plass ved siden av toppraden (≈ 231 px + 148 px panel) */
   #layers-panel:not(.collapsed) {
-    top: calc(max(0.5rem, env(safe-area-inset-top)) + 3.375rem + 0.5rem);
-    max-height: calc(100dvh - max(0.5rem, env(safe-area-inset-top)) - 3.375rem - 1.5rem);
+    max-height: calc(100dvh - max(0.5rem, env(safe-area-inset-top)) - 1rem);
     overflow-y: auto;
   }
 
@@ -955,6 +954,14 @@ body {
     background: currentColor;
     -webkit-mask: var(--layers-icon) center / contain no-repeat;
     mask: var(--layers-icon) center / contain no-repeat;
+  }
+}
+
+/* Smale telefoner: utvidet lagvelger under toppraden (logokort 3,25rem + kant), så den ikke dekker pillen */
+@media (max-width: 386px) {
+  #layers-panel:not(.collapsed) {
+    top: calc(max(0.5rem, env(safe-area-inset-top)) + 3.375rem + 0.5rem);
+    max-height: calc(100dvh - max(0.5rem, env(safe-area-inset-top)) - 3.375rem - 1.5rem);
   }
 }
 
